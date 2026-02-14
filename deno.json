@@ -1,6 +1,7 @@
 {
   "name": "@ikuradon/tsunagiya",
   "version": "0.1.0",
+  "license": "MIT",
   "exports": {
     ".": "./src/mod.ts",
     "./testing": "./src/testing/mod.ts"

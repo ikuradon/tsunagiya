@@ -1,10 +1,8 @@
-name: Publish to JSR
-
+name: Publish
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   publish:
@@ -13,10 +11,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - run: deno task check
-      - run: deno task test
-      - run: deno publish
+      - uses: actions/checkout@v6
+      - name: Publish package
+        run: npx jsr publish
