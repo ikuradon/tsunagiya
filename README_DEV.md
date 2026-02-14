@@ -22,12 +22,16 @@ deno task check # 型チェック + lint + format
 
 1. ROADMAP.mdのPhase 1タスクを1つずつ実装
 2. 実装と同時にテストを書く
-3. モジュール完成後に自己チェック:
+3. モジュール完成後に自己チェック（**必ずこの順序**）:
+   - `deno task fmt` - コード自動整形
    - `deno task test` - テスト実行
-   - `deno task check` - 品質確認（lint + 型チェック）
+   - `deno task check` - 品質確認（型チェック + lint + format確認）
    - エラーがあれば自分で修正
+   - 手動修正した場合は再度 `deno task fmt` 実行
 4. 全チェックパス後にcommit
 5. Phase完了時にsupervisor（かにこ）に報告
+
+**重要:** `deno task fmt` を必ず最初に実行すること！formatエラーを防ぐため。
 
 ### 4. コマンド一覧
 
