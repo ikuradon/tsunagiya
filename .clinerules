@@ -7,10 +7,13 @@ Read CLAUDE.md and REQUIREMENTS.md before starting any implementation.
 1. Follow the phase order in ROADMAP.md
 2. Implement one module at a time
 3. Write tests alongside implementation
-4. Run `deno task check` after each module
-5. Fix any lint/type errors automatically
-6. Commit when quality checks pass
-7. Report phase completion to supervisor (kaniko)
+4. Run `deno task fmt` after each module (auto-format)
+5. Run `deno task test` (all tests must pass)
+6. Run `deno task check` (type-check + lint + format check)
+7. Fix any errors automatically
+8. Run `deno task fmt` again if manual fixes were made
+9. Commit when all checks pass
+10. Report phase completion to supervisor (kaniko)
 
 ## Code Style
 - TypeScript strict mode
@@ -42,10 +45,15 @@ Read CLAUDE.md and REQUIREMENTS.md before starting any implementation.
 
 ## Quality Assurance (Self-Check)
 After implementing each module:
-1. Run `deno task test` - all tests must pass
-2. Run `deno task check` - no errors allowed
-3. Fix any issues before moving to next module
-4. Commit when all checks pass
+1. Run `deno task fmt` - auto-format all code
+2. Run `deno task test` - all tests must pass
+3. Run `deno task check` - no errors allowed (type-check + lint + format check)
+4. Fix any issues before moving to next module
+5. Run `deno task fmt` again if any manual fixes were made
+6. Commit when all checks pass
+
+**CRITICAL:** Always run `deno task fmt` before `deno task check` to avoid format errors.
+Never commit code that fails `deno task check`.
 
 ## Progress Reporting
 Report to supervisor (kaniko) when:
