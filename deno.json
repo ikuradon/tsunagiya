@@ -1,0 +1,22 @@
+{
+  "name": "@ikuradon/tsunagiya",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./testing": "./src/testing/mod.ts"
+  },
+  "tasks": {
+    "test": "deno test tests/",
+    "check": "deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
+    "fmt": "deno fmt"
+  },
+  "compilerOptions": {
+    "strict": true
+  },
+  "publish": {
+    "include": ["src/", "README.md", "LICENSE", "deno.json"]
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.18"
+  }
+}
