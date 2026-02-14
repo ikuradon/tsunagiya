@@ -4,7 +4,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  test-deno:
+    name: Test on Deno
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -13,3 +14,52 @@ jobs:
           deno-version: v2.x
       - run: deno task check
       - run: deno task test
+
+  test-node:
+    name: Test on Node.js
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: |
+          npm install -g tsx
+          npx jsr add @ikuradon/tsunagiya --dev
+      - name: Test basic import
+        run: |
+          cat > test-node.mjs << 'EOF'
+          import { MockPool } from '@ikuradon/tsunagiya';
+          const pool = new MockPool();
+          console.log('✓ MockPool imported successfully');
+          pool.install();
+          console.log('✓ pool.install() works');
+          pool.uninstall();
+          console.log('✓ pool.uninstall() works');
+          EOF
+          node test-node.mjs
+
+  test-bun:
+    name: Test on Bun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bunx jsr add @ikuradon/tsunagiya --dev
+      - name: Test basic import
+        run: |
+          cat > test-bun.mjs << 'EOF'
+          import { MockPool } from '@ikuradon/tsunagiya';
+          const pool = new MockPool();
+          console.log('✓ MockPool imported successfully');
+          pool.install();
+          console.log('✓ pool.install() works');
+          pool.uninstall();
+          console.log('✓ pool.uninstall() works');
+          EOF
+          bun test-bun.mjs
