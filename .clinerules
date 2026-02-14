@@ -1,0 +1,56 @@
+# tsunagiya - Claude Code Rules
+
+## Project Context
+Read CLAUDE.md and REQUIREMENTS.md before starting any implementation.
+
+## Development Workflow
+1. Follow the phase order in ROADMAP.md
+2. Implement one module at a time
+3. Write tests alongside implementation
+4. Run `deno task check` after each module
+5. Fix any lint/type errors automatically
+6. Commit when quality checks pass
+7. Report phase completion to supervisor (kaniko)
+
+## Code Style
+- TypeScript strict mode
+- No `any`, use `unknown`
+- Pure functions for filters (no side effects)
+- JSDoc comments for public APIs (Japanese OK)
+- Error messages in English
+
+## Testing
+- Every new feature needs tests
+- Use `Deno.test` for all tests
+- Always call `pool.uninstall()` in `finally` blocks
+- Test file naming: `*_test.ts`
+
+## File Organization
+- Core logic: `src/*.ts`
+- Testing helpers: `src/testing/*.ts`
+- Tests: `tests/*.ts`
+- Re-export from `src/mod.ts` and `src/testing/mod.ts`
+
+## Git Commits
+- Conventional commits format: `feat:`, `fix:`, `test:`, `docs:`
+- Add Co-authored-by line: `Co-authored-by: kaniko (claude-code) <kaniko@openclaw.local>`
+
+## Constraints
+- Zero external dependencies (Deno std only)
+- Node.js compatibility (avoid Deno-specific APIs in core logic)
+- No crypto implementation (EventBuilder uses mock signatures)
+
+## Quality Assurance (Self-Check)
+After implementing each module:
+1. Run `deno task test` - all tests must pass
+2. Run `deno task check` - no errors allowed
+3. Fix any issues before moving to next module
+4. Commit when all checks pass
+
+## Progress Reporting
+Report to supervisor (kaniko) when:
+- Completing a phase
+- Encountering blocking issues
+- Finishing the entire implementation
+
+Supervisor will post updates to Discord thread.

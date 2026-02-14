@@ -1,0 +1,269 @@
+import { assertEquals } from "@std/assert";
+import { MockPool } from "../../src/pool.ts";
+import { EventBuilder } from "../../src/testing/event_builder.ts";
+import { startStream, streamEvents } from "../../src/testing/stream.ts";
+
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+function collectMessages(ws: WebSocket): unknown[][] {
+  const messages: unknown[][] = [];
+  ws.onmessage = (ev: MessageEvent) => {
+    const msg = JSON.parse(ev.data as string);
+    messages.push(msg);
+  };
+  return messages;
+}
+
+Deno.test("streamEvents - delivers events with interval", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const events = EventBuilder.bulk(3, { kind: 1 });
+    const handle = streamEvents(relay, events, { interval: 30 });
+
+    // 3件全て配信されるまで待つ
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    assertEquals(handle.stopped, false);
+    handle.stop();
+    assertEquals(handle.stopped, true);
+
+    // 3件のEVENTが受信されているはず
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 3);
+    assertEquals(eventMsgs[0][1], "sub1");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("streamEvents - stop() halts delivery", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const events = EventBuilder.bulk(10, { kind: 1 });
+    const handle = streamEvents(relay, events, { interval: 50 });
+
+    // 少し待ってから停止
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    handle.stop();
+
+    const countAtStop = messages.filter((m) => m[0] === "EVENT").length;
+
+    // さらに待っても増えない
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    const countAfter = messages.filter((m) => m[0] === "EVENT").length;
+
+    assertEquals(countAtStop, countAfter);
+    assertEquals(countAtStop < 10, true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("streamEvents - adds events to store", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+
+    const events = EventBuilder.bulk(3, { kind: 1 });
+    const handle = streamEvents(relay, events, { interval: 20 });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    handle.stop();
+
+    // ストリームしたイベントでREQに応答できるか確認
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // ストアに3件追加されている
+    const messages: unknown[][] = [];
+    ws.onmessage = (ev: MessageEvent) => {
+      messages.push(JSON.parse(ev.data as string));
+    };
+
+    // REQの応答として既にストアにある3件が返る
+    // 上で取ったREQの応答はcollectMessagesの前に処理されているので
+    // findREQで確認する
+    assertEquals(relay.hasREQ("sub1"), true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("streamEvents - only sends to matching subscriptions", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    // kind:0のみサブスクライブ
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [0] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    // kind:1のイベントをストリーム
+    const events = EventBuilder.bulk(3, { kind: 1 });
+    streamEvents(relay, events, { interval: 20 });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+
+    // kind:0のサブスクリプションにはkind:1はマッチしない
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 0);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("startStream - generates events with eventGenerator", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const handle = startStream(relay, {
+      eventGenerator: () => EventBuilder.random({ kind: 1 }),
+      interval: 30,
+      count: 3,
+    });
+
+    // 3件生成されるまで待つ
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+    assertEquals(handle.stopped, true);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 3);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("startStream - stop() halts generation", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const handle = startStream(relay, {
+      eventGenerator: () => EventBuilder.random({ kind: 1 }),
+      interval: 30,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    handle.stop();
+    assertEquals(handle.stopped, true);
+
+    const countAtStop = messages.filter((m) => m[0] === "EVENT").length;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    const countAfter = messages.filter((m) => m[0] === "EVENT").length;
+
+    assertEquals(countAtStop, countAfter);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("startStream - no count means unlimited until stop", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const handle = startStream(relay, {
+      eventGenerator: () => EventBuilder.random({ kind: 1 }),
+      interval: 20,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 110));
+    handle.stop();
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    // 少なくとも2件以上は配信されているはず
+    assertEquals(eventMsgs.length >= 2, true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});

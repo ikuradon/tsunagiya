@@ -1,0 +1,278 @@
+import { assertEquals } from "@std/assert";
+import { EventBuilder } from "../../src/testing/event_builder.ts";
+
+// ===== 基本ビルダー =====
+
+Deno.test("EventBuilder - kind1() builds kind:1 event", () => {
+  const event = EventBuilder.kind1().content("hello").build();
+  assertEquals(event.kind, 1);
+  assertEquals(event.content, "hello");
+  assertEquals(event.id.length, 64);
+  assertEquals(event.pubkey.length, 64);
+  assertEquals(event.sig.length, 128);
+  assertEquals(typeof event.created_at, "number");
+});
+
+Deno.test("EventBuilder - kind0() builds kind:0 event", () => {
+  const event = EventBuilder.kind0().build();
+  assertEquals(event.kind, 0);
+});
+
+Deno.test("EventBuilder - kind(n) builds arbitrary kind", () => {
+  const event = EventBuilder.kind(42).build();
+  assertEquals(event.kind, 42);
+});
+
+Deno.test("EventBuilder - tag() adds tags", () => {
+  const event = EventBuilder.kind1()
+    .tag("e", "event123", "wss://relay.com", "reply")
+    .tag("p", "pubkey456")
+    .build();
+
+  assertEquals(event.tags.length, 2);
+  assertEquals(event.tags[0], ["e", "event123", "wss://relay.com", "reply"]);
+  assertEquals(event.tags[1], ["p", "pubkey456"]);
+});
+
+Deno.test("EventBuilder - pubkey() and id() set fields", () => {
+  const event = EventBuilder.kind1()
+    .pubkey("mypubkey")
+    .id("myid")
+    .build();
+  assertEquals(event.pubkey, "mypubkey");
+  assertEquals(event.id, "myid");
+});
+
+Deno.test("EventBuilder - createdAt() sets timestamp", () => {
+  const event = EventBuilder.kind1().createdAt(1700000000).build();
+  assertEquals(event.created_at, 1700000000);
+});
+
+Deno.test("EventBuilder - sign() generates mock signature", () => {
+  const event = EventBuilder.kind1().sign("privkey").build();
+  assertEquals(event.sig.length, 128);
+});
+
+// ===== corrupt =====
+
+Deno.test("EventBuilder - corrupt() corrupts specified fields", () => {
+  const event = EventBuilder.kind1()
+    .content("test")
+    .corrupt({ id: true, sig: true })
+    .build();
+
+  assertEquals(event.id.startsWith("corrupted_"), true);
+  assertEquals(event.sig.startsWith("corrupted_"), true);
+  assertEquals(event.content, "test");
+});
+
+Deno.test("EventBuilder - corrupt({ created_at }) sets -1", () => {
+  const event = EventBuilder.kind1()
+    .corrupt({ created_at: true })
+    .build();
+  assertEquals(event.created_at, -1);
+});
+
+// ===== Common Tags =====
+
+Deno.test("EventBuilder - geohash() adds g tag", () => {
+  const event = EventBuilder.kind1().geohash("9q8yy").build();
+  assertEquals(event.tags[0], ["g", "9q8yy"]);
+});
+
+Deno.test("EventBuilder - emoji() adds emoji tag", () => {
+  const event = EventBuilder.kind1()
+    .emoji("fire", "https://example.com/fire.png")
+    .build();
+  assertEquals(event.tags[0], [
+    "emoji",
+    "fire",
+    "https://example.com/fire.png",
+  ]);
+});
+
+// ===== random =====
+
+Deno.test("EventBuilder - random() generates valid event", () => {
+  const event = EventBuilder.random({ kind: 1 });
+  assertEquals(event.kind, 1);
+  assertEquals(event.id.length, 64);
+  assertEquals(event.content.startsWith("random:"), true);
+});
+
+Deno.test("EventBuilder - random() with pubkey", () => {
+  const event = EventBuilder.random({ pubkey: "mypub" });
+  assertEquals(event.pubkey, "mypub");
+});
+
+// ===== bulk =====
+
+Deno.test("EventBuilder - bulk() generates multiple events", () => {
+  const events = EventBuilder.bulk(5, { kind: 1 });
+  assertEquals(events.length, 5);
+  for (const event of events) {
+    assertEquals(event.kind, 1);
+  }
+  // 全てユニークなID
+  const ids = new Set(events.map((e) => e.id));
+  assertEquals(ids.size, 5);
+});
+
+// ===== timeline =====
+
+Deno.test("EventBuilder - timeline() generates sequential events", () => {
+  const events = EventBuilder.timeline(3, {
+    kind: 1,
+    interval: 60,
+    startTime: 1700000000,
+  });
+
+  assertEquals(events.length, 3);
+  assertEquals(events[0].created_at, 1700000000);
+  assertEquals(events[1].created_at, 1700000060);
+  assertEquals(events[2].created_at, 1700000120);
+});
+
+// ===== thread =====
+
+Deno.test("EventBuilder - thread() generates reply chain", () => {
+  const events = EventBuilder.thread(4);
+
+  assertEquals(events.length, 4);
+  // rootにはタグなし
+  assertEquals(events[0].tags.length, 0);
+
+  // reply1はrootを参照
+  const reply1Tags = events[1].tags;
+  assertEquals(
+    reply1Tags.some((t) => t[0] === "e" && t[1] === events[0].id),
+    true,
+  );
+  assertEquals(
+    reply1Tags.some((t) => t[0] === "p" && t[1] === events[0].pubkey),
+    true,
+  );
+
+  // reply3はrootとreply2を参照
+  const reply3Tags = events[3].tags;
+  assertEquals(
+    reply3Tags.some((t) =>
+      t[0] === "e" && t[1] === events[0].id && t[3] === "root"
+    ),
+    true,
+  );
+  assertEquals(
+    reply3Tags.some((t) =>
+      t[0] === "e" && t[1] === events[2].id && t[3] === "reply"
+    ),
+    true,
+  );
+});
+
+// ===== withReactions =====
+
+Deno.test("EventBuilder - withReactions() generates post + reactions", () => {
+  const [post, reactions] = EventBuilder.withReactions(3);
+
+  assertEquals(post.kind, 1);
+  assertEquals(reactions.length, 3);
+  for (const r of reactions) {
+    assertEquals(r.kind, 7);
+    assertEquals(r.content, "+");
+    assertEquals(r.tags.some((t) => t[0] === "e" && t[1] === post.id), true);
+    assertEquals(
+      r.tags.some((t) => t[0] === "p" && t[1] === post.pubkey),
+      true,
+    );
+  }
+});
+
+// ===== NIP別テンプレート =====
+
+Deno.test("EventBuilder - metadata() creates kind:0 with JSON content", () => {
+  const event = EventBuilder.metadata({
+    name: "Alice",
+    about: "Nostr user",
+    picture: "https://example.com/avatar.png",
+  });
+
+  assertEquals(event.kind, 0);
+  const profile = JSON.parse(event.content);
+  assertEquals(profile.name, "Alice");
+  assertEquals(profile.about, "Nostr user");
+});
+
+Deno.test("EventBuilder - contacts() creates kind:3 with p tags", () => {
+  const event = EventBuilder.contacts(["pub1", "pub2", "pub3"]);
+  assertEquals(event.kind, 3);
+  assertEquals(event.tags.length, 3);
+  assertEquals(event.tags[0], ["p", "pub1"]);
+  assertEquals(event.tags[2], ["p", "pub3"]);
+});
+
+Deno.test("EventBuilder - dm() creates kind:4 builder", () => {
+  const event = EventBuilder.dm("recipient", "secret").build();
+  assertEquals(event.kind, 4);
+  assertEquals(event.content, "mock-encrypted:secret");
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === "recipient"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - groupMessage() creates kind:9 with h tag", () => {
+  const event = EventBuilder.groupMessage("mygroup").content("hello").build();
+  assertEquals(event.kind, 9);
+  assertEquals(event.tags[0], ["h", "mygroup"]);
+});
+
+Deno.test("EventBuilder - zapRequest() creates kind:9734", () => {
+  const event = EventBuilder.zapRequest({
+    amount: 1000,
+    relays: ["wss://relay.example.com"],
+    lnurl: "lnurl1...",
+    eventId: "target-event",
+    recipientPubkey: "recipient-pub",
+  });
+
+  assertEquals(event.kind, 9734);
+  assertEquals(
+    event.tags.some((t) => t[0] === "amount" && t[1] === "1000"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "lnurl" && t[1] === "lnurl1..."),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "relays" && t[1] === "wss://relay.example.com"
+    ),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "e" && t[1] === "target-event"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === "recipient-pub"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - nip07Request() creates kind:24133", () => {
+  const event = EventBuilder.nip07Request();
+  assertEquals(event.kind, 24133);
+});
+
+// ===== build() produces independent copies =====
+
+Deno.test("EventBuilder - build() returns independent objects", () => {
+  const builder = EventBuilder.kind1().tag("e", "id1");
+  const event1 = builder.build();
+  const event2 = builder.build();
+
+  // タグを変更しても影響しない
+  event1.tags[0][1] = "modified";
+  assertEquals(event2.tags[0][1], "id1");
+});
