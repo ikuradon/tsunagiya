@@ -8,17 +8,21 @@
     "./testing": "./src/testing/mod.ts"
   },
   "tasks": {
-    "test": "deno test --ignore=tests/e2e tests/",
-    "test:e2e": "deno test -A tests/e2e/",
-    "test:e2e:client": "deno test -A tests/e2e/e2e_client_test.ts",
-    "test:e2e:nostr-tools": "deno test -A tests/e2e/e2e_nostr_tools_test.ts",
-    "test:e2e:ndk": "deno test -A tests/e2e/e2e_ndk_test.ts",
-    "test:e2e:rx-nostr": "deno test -A tests/e2e/e2e_rx_nostr_test.ts",
-    "test:e2e:nostr-fetch": "deno test -A tests/e2e/e2e_nostr_fetch_test.ts",
-    "test:all": "deno test -A tests/",
-    "check": "deno check src/mod.ts src/testing/mod.ts examples/client/mod.ts && deno lint && deno fmt --check",
-    "fmt": "deno fmt",
-    "client": "deno run --allow-net examples/client/cli.ts"
+    "test": "deno test --ignore=examples tests/",
+    "test:all": "deno test -A tests/ examples/",
+    "example": "deno test -A examples/",
+    "example:basic": "deno test -A examples/basic/",
+    "example:nostr-tools": "deno test -A examples/nostr-tools/",
+    "example:ndk": "deno test -A examples/ndk/",
+    "example:rx-nostr": "deno test -A examples/rx-nostr/",
+    "example:nostr-fetch": "deno test -A examples/nostr-fetch/",
+    "run:basic": "deno run --allow-net examples/basic/client.ts",
+    "run:nostr-tools": "deno run -A examples/nostr-tools/client.ts",
+    "run:ndk": "deno run -A examples/ndk/client.ts",
+    "run:rx-nostr": "deno run -A examples/rx-nostr/client.ts",
+    "run:nostr-fetch": "deno run -A examples/nostr-fetch/client.ts",
+    "check": "deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
+    "fmt": "deno fmt"
   },
   "compilerOptions": {
     "strict": true
