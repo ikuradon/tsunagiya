@@ -1,6 +1,6 @@
 {
   "name": "@ikuradon/tsunagiya",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Nostr relay mock library for testing. Intercepts WebSocket to test existing Nostr clients without code changes. Supports NIP-01, NIP-42, unstable relay simulation, and test helpers.",
   "license": "MIT",
   "exports": {
@@ -9,8 +9,10 @@
   },
   "tasks": {
     "test": "deno test tests/",
-    "check": "deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
-    "fmt": "deno fmt"
+    "test:e2e": "deno test -A tests/e2e/e2e_client_test.ts",
+    "check": "deno check src/mod.ts src/testing/mod.ts examples/client/mod.ts && deno lint && deno fmt --check",
+    "fmt": "deno fmt",
+    "client": "deno run --allow-net examples/client/cli.ts"
   },
   "compilerOptions": {
     "strict": true

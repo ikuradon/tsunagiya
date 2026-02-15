@@ -1,10 +1,10 @@
 # NIP 対応状況
 
-tsunagiya v0.1.0 の NIP（Nostr Implementation Possibilities）対応状況。
+tsunagiya v0.2.0 の NIP（Nostr Implementation Possibilities）対応状況。
 
 ---
 
-## サポート済み NIP（v0.1.0）
+## サポート済み NIP（v0.2.0）
 
 ### NIP-01: Basic Protocol ✅ 完全対応
 
@@ -72,6 +72,35 @@ const dm = EventBuilder.dm("recipient-pubkey", "hello").build();
 
 ---
 
+### NIP-09: Event Deletion ✅ 完全対応
+
+kind:5 削除リクエストの処理に対応。`e` タグによるイベント ID 指定、`a`
+タグによるアドレス指定（Replaceable / Parameterized
+Replaceable）の両方をサポート。
+
+削除されたイベントは `deletedIds` で追跡され、再投稿が拒否される。
+
+```typescript
+// イベントIDで削除
+const deletion = EventBuilder.deletion(["target-event-id1", "target-event-id2"])
+  .pubkey(authorPubkey)
+  .build();
+relay.store(deletion);
+
+// アドレス指定で削除（Parameterized Replaceable イベント）
+const addrDeletion = EventBuilder.deletionByAddress([
+  "30023:pubkey:article-slug",
+])
+  .pubkey(authorPubkey)
+  .build();
+relay.store(addrDeletion);
+
+// 削除済みイベントの確認
+console.log(relay.deletedIds); // Set { "target-event-id1", "target-event-id2" }
+```
+
+---
+
 ### NIP-10: Reply Threading ✅ テンプレート対応
 
 EventBuilder の `thread()` メソッドで NIP-10 準拠のリプライチェーンを生成。
@@ -81,6 +110,66 @@ const thread = EventBuilder.thread(5);
 // thread[0]: root（タグなし）
 // thread[1]: reply（["e", root.id, "", "root"], ["p", root.pubkey]）
 // thread[2]: reply（["e", root.id, "", "root"], ["e", thread[1].id, "", "reply"], ["p", thread[1].pubkey]）
+```
+
+---
+
+### NIP-16: Event Treatment ✅ 完全対応
+
+イベントの `kind` 値に基づく種別判定と、種別ごとのストア処理に対応。
+
+| 種別                      | kind 範囲      | ストア挙動                                        |
+| ------------------------- | -------------- | ------------------------------------------------- |
+| Regular                   | 0-9999, 40000+ | 通常通り追加                                      |
+| Replaceable               | 10000-19999    | 同一 kind+pubkey の古いイベントを削除し追加       |
+| Ephemeral                 | 20000-29999    | ストアに追加せず、ブロードキャストのみ            |
+| Parameterized Replaceable | 30000-39999    | 同一 kind+pubkey+d-tag の古いイベントを削除し追加 |
+
+```typescript
+import { classifyEvent, isEphemeral, isReplaceable } from "@ikuradon/tsunagiya";
+
+classifyEvent(1); // "regular"
+classifyEvent(10002); // "replaceable"
+classifyEvent(20001); // "ephemeral"
+classifyEvent(30023); // "parameterized_replaceable"
+
+isReplaceable(10002); // true
+isEphemeral(20001); // true
+```
+
+---
+
+### NIP-33: Parameterized Replaceable Events ✅ 完全対応
+
+`d` タグによるパラメータ化された Replaceable イベントの管理に対応。同一
+`kind:pubkey:d-tag`
+の組み合わせで一意に識別され、より新しいイベントで置換される。
+
+```typescript
+import {
+  getParameterizedId,
+  isParameterizedReplaceable,
+} from "@ikuradon/tsunagiya";
+
+isParameterizedReplaceable(30023); // true
+
+const article = EventBuilder.kind(30023)
+  .tag("d", "my-article")
+  .pubkey("author-pubkey")
+  .content("article content")
+  .build();
+
+getParameterizedId(article); // "30023:author-pubkey:my-article"
+
+// ストアは自動的に古いバージョンを置換
+relay.store(article); // true
+const updated = EventBuilder.kind(30023)
+  .tag("d", "my-article")
+  .pubkey("author-pubkey")
+  .createdAt(article.created_at + 60)
+  .content("updated content")
+  .build();
+relay.store(updated); // true（古いバージョンが削除される）
 ```
 
 ---
@@ -144,6 +233,73 @@ relay.requireAuth((authEvent) => {
 
 ---
 
+### NIP-45: COUNT ✅ 完全対応
+
+`["COUNT", subId, ...filters]`
+メッセージへの応答に対応。ストアに対してフィルタリングし、マッチするイベント数を返す。カスタムハンドラーでの応答カスタマイズも可能。
+
+```typescript
+const relay = pool.relay("wss://relay.example.com");
+
+// ストアにイベントを追加
+for (const event of EventBuilder.bulk(50, { kind: 1 })) {
+  relay.store(event);
+}
+
+pool.install();
+try {
+  const ws = new WebSocket("wss://relay.example.com");
+  ws.onopen = () => {
+    ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    // → ["COUNT", "count1", { count: 50 }]
+  };
+} finally {
+  pool.uninstall();
+}
+
+// カスタムハンドラー
+relay.onCOUNT((subId, filters) => {
+  return { count: 42 };
+});
+```
+
+---
+
+### NIP-50: Search ✅ 完全対応
+
+フィルターの `search` フィールドに対応。`content`
+の部分一致（大文字小文字非区別）でマッチングを行う。
+
+```typescript
+import { FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+const relay = pool.relay("wss://relay.example.com");
+
+relay.store(EventBuilder.kind1().content("Hello Nostr World").build());
+relay.store(EventBuilder.kind1().content("goodbye").build());
+
+pool.install();
+try {
+  const ws = new WebSocket("wss://relay.example.com");
+  ws.onopen = () => {
+    // search フィルターを使用
+    ws.send(JSON.stringify(["REQ", "search1", { search: "nostr" }]));
+    // → "Hello Nostr World" のみマッチ
+  };
+} finally {
+  pool.uninstall();
+}
+
+// FilterBuilder でも生成可能
+const filter = FilterBuilder.search("nostr");
+// → { search: "nostr" }
+```
+
+---
+
 ### NIP-52: Geohash ✅ タグ対応
 
 ```typescript
@@ -170,15 +326,13 @@ const zap = EventBuilder.zapRequest({
 
 ---
 
-## 実装予定 NIP（v0.2.0 以降）
+## 実装予定 NIP（v0.3.0 以降）
 
-| NIP    | 内容                | 予定バージョン | 概要                                    |
-| ------ | ------------------- | -------------- | --------------------------------------- |
-| NIP-11 | Relay Information   | v0.2.0         | `GET /` で返す relay info のモック      |
-| NIP-45 | COUNT               | v0.2.0         | `["COUNT", subId, ...filters]` への応答 |
-| NIP-50 | Search              | v0.2.0         | `search` フィルターフィールドの対応     |
-| NIP-65 | Relay List Metadata | v0.3.0         | kind:10002 イベントのテンプレート       |
-| NIP-94 | File Metadata       | v0.3.0         | kind:1063 のテンプレート                |
+| NIP    | 内容                | 予定バージョン | 概要                               |
+| ------ | ------------------- | -------------- | ---------------------------------- |
+| NIP-11 | Relay Information   | v0.3.0         | `GET /` で返す relay info のモック |
+| NIP-65 | Relay List Metadata | v0.3.0         | kind:10002 イベントのテンプレート  |
+| NIP-94 | File Metadata       | v0.3.0         | kind:1063 のテンプレート           |
 
 ---
 

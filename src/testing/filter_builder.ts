@@ -59,4 +59,13 @@ export class FilterBuilder {
   static reactions(eventId: string): NostrFilter {
     return { kinds: [7], "#e": [eventId] };
   }
+
+  /**
+   * 検索フィルター (NIP-50)
+   *
+   * @param keyword 検索キーワード
+   */
+  static search(keyword: string): NostrFilter {
+    return { search: keyword };
+  }
 }

@@ -54,6 +54,15 @@ export function matchFilter(event: NostrEvent, filter: NostrFilter): boolean {
     }
   }
 
+  // NIP-50: search (content の部分一致、大文字小文字非区別)
+  if (filter.search !== undefined) {
+    if (
+      !event.content.toLowerCase().includes(filter.search.toLowerCase())
+    ) {
+      return false;
+    }
+  }
+
   // タグフィルター (#e, #p 等)
   for (const key of Object.keys(filter)) {
     if (key.startsWith("#") && key.length >= 2) {

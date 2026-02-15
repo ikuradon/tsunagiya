@@ -315,6 +315,34 @@ export class EventBuilder {
     return [post, reactions];
   }
 
+  // ===== NIP-09 削除リクエスト =====
+
+  /**
+   * 削除リクエスト (kind:5) ビルダーを作成する (NIP-09)
+   *
+   * @param eventIds 削除対象のイベントID配列
+   */
+  static deletion(eventIds: string[]): EventBuilder {
+    const builder = new EventBuilder(5);
+    for (const id of eventIds) {
+      builder.tag("e", id);
+    }
+    return builder;
+  }
+
+  /**
+   * アドレス指定の削除リクエスト (kind:5) ビルダーを作成する (NIP-09)
+   *
+   * @param addresses 削除対象のアドレス配列 (kind:pubkey:d-tag 形式)
+   */
+  static deletionByAddress(addresses: string[]): EventBuilder {
+    const builder = new EventBuilder(5);
+    for (const addr of addresses) {
+      builder.tag("a", addr);
+    }
+    return builder;
+  }
+
   // ===== NIP別テンプレート =====
 
   /**

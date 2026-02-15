@@ -48,6 +48,11 @@ Deno.test("fetch events from relay", async () => {
 - 不安定リレーのシミュレート（レイテンシ、エラー率、切断）
 - NIP-42 AUTH チャレンジ/レスポンス
 - 送信メッセージの記録・検証ヘルパー
+- NIP-16 イベント種別自動処理（Regular/Replaceable/Ephemeral）
+- NIP-33 Parameterized Replaceable Events
+- NIP-09 Event Deletion Request
+- NIP-45 COUNT メッセージ対応
+- NIP-50 検索フィルター対応
 - テスト支援ヘルパー（EventBuilder, FilterBuilder, assertions）
 - リアルタイムストリーム・スナップショット
 - ログ機能（console / カスタムハンドラー）
@@ -180,6 +185,48 @@ relay.findCLOSE("sub1"); // CLOSE検索
 relay.connectionCount; // アクティブ接続数
 ```
 
+### NIP-16/33 イベント種別
+
+```typescript
+import {
+  classifyEvent,
+  isEphemeral,
+  isParameterizedReplaceable,
+  isReplaceable,
+} from "@ikuradon/tsunagiya";
+
+classifyEvent(10000); // "replaceable"
+classifyEvent(20000); // "ephemeral"
+classifyEvent(30000); // "parameterized_replaceable"
+```
+
+### NIP-09 削除リクエスト
+
+```typescript
+import { EventBuilder } from "@ikuradon/tsunagiya/testing";
+
+// kind:5 削除リクエストイベントを生成
+const deletion = EventBuilder.deletion(["event-id-1", "event-id-2"])
+  .content("spam")
+  .build();
+
+relay.store(deletion);
+// ストア内の対象イベントが自動的に削除される
+```
+
+### NIP-45 COUNT
+
+```typescript
+// COUNTハンドラーのカスタマイズ
+relay.onCOUNT((subId, filters) => {
+  return { count: 42 };
+});
+
+// クライアントから COUNT メッセージを送信
+ws.send(JSON.stringify(["COUNT", "sub1", { kinds: [1] }]));
+// => ["COUNT", "sub1", {"count": 42}]
+```
+
 ### スナップショット
 
 ```typescript
@@ -278,6 +325,9 @@ FilterBuilder.mentions("pubkey");
 
 FilterBuilder.reactions("eventId");
 // => { kinds: [7], "#e": ["eventId"] }
+
+FilterBuilder.search("nostr");
+// => { search: "nostr" }
 ```
 
 ### アサーションヘルパー
@@ -333,16 +383,21 @@ restore(relay, snap);
 
 ## 対応NIP
 
-| NIP    | 内容            | 対応状況                            |
-| ------ | --------------- | ----------------------------------- |
-| NIP-01 | Basic Protocol  | EVENT, REQ, CLOSE, EOSE, OK, NOTICE |
-| NIP-04 | Encrypted DM    | EventBuilder テンプレート           |
-| NIP-10 | Reply Threading | EventBuilder e/p タグ               |
-| NIP-29 | Group Chat      | EventBuilder テンプレート           |
-| NIP-30 | Custom Emoji    | EventBuilder emoji タグ             |
-| NIP-42 | AUTH            | チャレンジ/レスポンス               |
-| NIP-52 | Geohash         | EventBuilder geohash タグ           |
-| NIP-57 | Zap Request     | EventBuilder テンプレート           |
+| NIP    | 内容                      | 対応状況                               |
+| ------ | ------------------------- | -------------------------------------- |
+| NIP-01 | Basic Protocol            | EVENT, REQ, CLOSE, EOSE, OK, NOTICE    |
+| NIP-04 | Encrypted DM              | EventBuilder テンプレート              |
+| NIP-09 | Event Deletion            | kind:5 削除リクエスト処理              |
+| NIP-10 | Reply Threading           | EventBuilder e/p タグ                  |
+| NIP-16 | Event Treatment           | Regular/Replaceable/Ephemeral 自動処理 |
+| NIP-29 | Group Chat                | EventBuilder テンプレート              |
+| NIP-30 | Custom Emoji              | EventBuilder emoji タグ                |
+| NIP-33 | Parameterized Replaceable | kind+pubkey+d-tag 置き換え             |
+| NIP-42 | AUTH                      | チャレンジ/レスポンス                  |
+| NIP-45 | COUNT                     | COUNT メッセージ対応                   |
+| NIP-50 | Search                    | content 部分一致検索                   |
+| NIP-52 | Geohash                   | EventBuilder geohash タグ              |
+| NIP-57 | Zap Request               | EventBuilder テンプレート              |
 
 ## ドキュメント
 

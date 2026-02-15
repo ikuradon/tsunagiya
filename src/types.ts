@@ -38,6 +38,8 @@ export interface NostrFilter {
   until?: number;
   /** 返却数上限 */
   limit?: number;
+  /** NIP-50: 検索キーワード */
+  search?: string;
   /** タグフィルター (#e, #p 等) */
   [key: `#${string}`]: string[] | undefined;
 }
@@ -51,7 +53,8 @@ export type ClientMessage =
   | ["EVENT", NostrEvent]
   | ["REQ", string, ...NostrFilter[]]
   | ["CLOSE", string]
-  | ["AUTH", NostrEvent];
+  | ["AUTH", NostrEvent]
+  | ["COUNT", string, ...NostrFilter[]];
 
 /**
  * Nostrメッセージ型 (リレー → クライアント)
@@ -64,7 +67,8 @@ export type RelayMessage =
   | ["EOSE", string]
   | ["CLOSED", string, string]
   | ["NOTICE", string]
-  | ["AUTH", string];
+  | ["AUTH", string]
+  | ["COUNT", string, { count: number }];
 
 /** ログエントリ */
 export interface LogEntry {
@@ -123,6 +127,12 @@ export type AuthValidator = (
   authEvent: NostrEvent,
 ) => boolean | Promise<boolean>;
 
+/** COUNTハンドラー型 */
+export type COUNTHandler = (
+  subId: string,
+  filters: NostrFilter[],
+) => { count: number } | Promise<{ count: number }>;
+
 /** ログレベル */
 export type LogLevel = "silent" | "error" | "info" | "debug";
 
@@ -158,4 +168,6 @@ export interface RelaySnapshot {
   store: NostrEvent[];
   /** 受信メッセージログ */
   received: ClientMessage[];
+  /** 削除済みイベントID */
+  deletedIds?: string[];
 }

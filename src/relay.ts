@@ -10,6 +10,7 @@
 import type {
   AuthValidator,
   ClientMessage,
+  COUNTHandler,
   EVENTHandler,
   MockRelayOptions,
   NostrEvent,
@@ -19,6 +20,12 @@ import type {
   REQHandler,
 } from "./types.ts";
 import { filterEvents, matchFilters } from "./filter.ts";
+import {
+  classifyEvent,
+  getParameterizedId,
+  isParameterizedReplaceable,
+  isReplaceable,
+} from "./event_kind.ts";
 import { AuthState } from "./auth.ts";
 import { createLogger, type Logger } from "./logger.ts";
 import type { MockWebSocket } from "./websocket.ts";
@@ -52,11 +59,13 @@ export class MockRelay {
   > = new Map();
   #reqHandler: REQHandler | null = null;
   #eventHandler: EVENTHandler | null = null;
+  #countHandler: COUNTHandler | null = null;
   #refused = false;
   #authState: AuthState = new AuthState();
   #pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
   #logger: Logger | null = null;
   #errors: string[] = [];
+  #deletedIds: Set<string> = new Set();
 
   constructor(url: string, options: MockRelayOptions = {}) {
     this.url = url;
@@ -70,9 +79,58 @@ export class MockRelay {
    * イベントをストアに登録する
    *
    * REQ受信時の自動マッチングに使用される。
+   * NIP-16 に基づき、イベント種別に応じた処理を行う:
+   * - Regular: 通常通り追加
+   * - Replaceable: 同一 kind+pubkey の古いイベントを削除し追加（古い場合は無視）
+   * - Ephemeral: ストアに追加せず、ブロードキャストのみ
+   * - Parameterized Replaceable: 同一 kind+pubkey+d-tag の古いイベントを削除し追加
+   *
+   * @returns ストアに追加された場合 true、無視された場合 false
    */
-  store(event: NostrEvent): void {
+  store(event: NostrEvent): boolean {
+    // 削除済みイベントは拒否
+    if (this.#deletedIds.has(event.id)) return false;
+
+    const kind = classifyEvent(event.kind);
+
+    if (kind === "ephemeral") {
+      // Ephemeral: ストアに追加せず、ブロードキャストのみ
+      this._broadcastEvent(event);
+      return false;
+    }
+
+    if (kind === "replaceable") {
+      const existing = this.#store.find(
+        (e) => e.kind === event.kind && e.pubkey === event.pubkey,
+      );
+      if (existing) {
+        if (event.created_at <= existing.created_at) return false;
+        this.#store = this.#store.filter(
+          (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
+        );
+      }
+      this.#store.push(event);
+      return true;
+    }
+
+    if (kind === "parameterized_replaceable") {
+      const newParamId = getParameterizedId(event);
+      const existing = this.#store.find((e) => {
+        return getParameterizedId(e) === newParamId;
+      });
+      if (existing) {
+        if (event.created_at <= existing.created_at) return false;
+        this.#store = this.#store.filter(
+          (e) => getParameterizedId(e) !== newParamId,
+        );
+      }
+      this.#store.push(event);
+      return true;
+    }
+
+    // Regular
     this.#store.push(event);
+    return true;
   }
 
   /**
@@ -91,6 +149,16 @@ export class MockRelay {
    */
   onEVENT(handler: EVENTHandler): void {
     this.#eventHandler = handler;
+  }
+
+  /**
+   * COUNTハンドラーを設定する
+   *
+   * クライアントからCOUNTメッセージを受信したときの処理をカスタマイズする。
+   * 未設定の場合、ストアに対してフィルタリングし、マッチ数を返す。
+   */
+  onCOUNT(handler: COUNTHandler): void {
+    this.#countHandler = handler;
   }
 
   // ===== エラーケース =====
@@ -246,6 +314,37 @@ export class MockRelay {
     return undefined;
   }
 
+  /**
+   * 特定サブスクリプションIDのCOUNTを検索する
+   * @returns ["COUNT", subId, ...filters] または undefined
+   */
+  findCOUNT(
+    subId: string,
+  ): ["COUNT", string, ...NostrFilter[]] | undefined {
+    const found = this.#received.find(
+      (r) => r.message[0] === "COUNT" && r.message[1] === subId,
+    );
+    if (found && found.message[0] === "COUNT") {
+      return found.message as ["COUNT", string, ...NostrFilter[]];
+    }
+    return undefined;
+  }
+
+  /** COUNTメッセージの受信数 */
+  countCOUNTs(): number {
+    return this.#received.filter((r) => r.message[0] === "COUNT").length;
+  }
+
+  /** 特定サブスクリプションIDのCOUNTが存在するか */
+  hasCOUNT(subId: string): boolean {
+    return this.findCOUNT(subId) !== undefined;
+  }
+
+  /** 削除済みイベントIDの一覧 */
+  get deletedIds(): ReadonlySet<string> {
+    return this.#deletedIds;
+  }
+
   /** 現在のアクティブ接続数 */
   get connectionCount(): number {
     return this.#connections.size;
@@ -287,6 +386,7 @@ export class MockRelay {
         }
         return [...msg] as ClientMessage;
       }),
+      deletedIds: [...this.#deletedIds],
     };
   }
 
@@ -311,6 +411,7 @@ export class MockRelay {
         : [...msg] as ClientMessage,
       socket: null as unknown as MockWebSocket,
     }));
+    this.#deletedIds = new Set(snap.deletedIds ?? []);
   }
 
   /**
@@ -324,9 +425,11 @@ export class MockRelay {
     this.#subscriptions.clear();
     this.#reqHandler = null;
     this.#eventHandler = null;
+    this.#countHandler = null;
     this.#refused = false;
     this.#authState.reset();
     this.#errors = [];
+    this.#deletedIds.clear();
     for (const timer of this.#pendingTimers) {
       clearTimeout(timer);
     }
@@ -468,6 +571,9 @@ export class MockRelay {
       case "AUTH":
         this.#handleAuth(ws, parsed[1]);
         break;
+      case "COUNT":
+        this.#handleCount(ws, parsed[1], parsed.slice(2) as NostrFilter[]);
+        break;
     }
   }
 
@@ -477,9 +583,66 @@ export class MockRelay {
     if (this.#eventHandler) {
       response = await this.#eventHandler(event);
     } else {
-      // デフォルト: 受理してストアに追加
-      this.#store.push(event);
-      response = ["OK", event.id, true, ""];
+      // 削除済みイベントの再投稿を拒否
+      if (this.#deletedIds.has(event.id)) {
+        response = ["OK", event.id, false, "blocked: event was deleted"];
+      } else if (event.kind === 5) {
+        // NIP-09: 削除リクエスト処理
+        this.#handleDeletion(event);
+        this.#store.push(event);
+        response = ["OK", event.id, true, ""];
+      } else {
+        const kind = classifyEvent(event.kind);
+        if (kind === "ephemeral") {
+          // Ephemeral: ストアに追加せず、ブロードキャストのみ
+          this._broadcastEvent(event);
+          response = ["OK", event.id, true, ""];
+        } else if (kind === "replaceable") {
+          const existing = this.#store.find(
+            (e) => e.kind === event.kind && e.pubkey === event.pubkey,
+          );
+          if (existing && event.created_at <= existing.created_at) {
+            response = [
+              "OK",
+              event.id,
+              true,
+              "duplicate: already have a newer event",
+            ];
+          } else {
+            this.#store = this.#store.filter(
+              (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
+            );
+            this.#store.push(event);
+            this._broadcastEvent(event);
+            response = ["OK", event.id, true, ""];
+          }
+        } else if (kind === "parameterized_replaceable") {
+          const newParamId = getParameterizedId(event);
+          const existing = this.#store.find(
+            (e) => getParameterizedId(e) === newParamId,
+          );
+          if (existing && event.created_at <= existing.created_at) {
+            response = [
+              "OK",
+              event.id,
+              true,
+              "duplicate: already have a newer event",
+            ];
+          } else {
+            this.#store = this.#store.filter(
+              (e) => getParameterizedId(e) !== newParamId,
+            );
+            this.#store.push(event);
+            this._broadcastEvent(event);
+            response = ["OK", event.id, true, ""];
+          }
+        } else {
+          // Regular
+          this.#store.push(event);
+          this._broadcastEvent(event);
+          response = ["OK", event.id, true, ""];
+        }
+      }
     }
 
     if (!response[2] && response[3]) {
@@ -535,6 +698,76 @@ export class MockRelay {
     );
     const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
     ws._receiveMessage(JSON.stringify(ok));
+  }
+
+  #handleDeletion(deletionEvent: NostrEvent): void {
+    for (const tag of deletionEvent.tags) {
+      if (tag[0] === "e" && tag[1]) {
+        const targetId = tag[1];
+        const target = this.#store.find((e) => e.id === targetId);
+        if (target && target.pubkey === deletionEvent.pubkey) {
+          this.#store = this.#store.filter((e) => e.id !== targetId);
+          this.#deletedIds.add(targetId);
+        }
+      }
+      if (tag[0] === "a" && tag[1]) {
+        // a-tag format: kind:pubkey:d-tag
+        const parts = tag[1].split(":");
+        if (parts.length >= 3) {
+          const aKind = parseInt(parts[0], 10);
+          const aPubkey = parts[1];
+          const aDtag = parts.slice(2).join(":");
+          // pubkey 一致チェック
+          if (aPubkey === deletionEvent.pubkey) {
+            const target = this.#store.find((e) => {
+              if (
+                e.kind === aKind && e.pubkey === aPubkey &&
+                isParameterizedReplaceable(e.kind)
+              ) {
+                const dValue = e.tags.find((t) => t[0] === "d")?.[1] ?? "";
+                return dValue === aDtag;
+              }
+              if (
+                e.kind === aKind && e.pubkey === aPubkey &&
+                isReplaceable(e.kind)
+              ) {
+                return true;
+              }
+              return false;
+            });
+            if (target) {
+              this.#deletedIds.add(target.id);
+              this.#store = this.#store.filter((e) => e.id !== target.id);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  async #handleCount(
+    ws: MockWebSocket,
+    subId: string,
+    filters: NostrFilter[],
+  ): Promise<void> {
+    let result: { count: number };
+
+    if (this.#countHandler) {
+      result = await this.#countHandler(subId, filters);
+    } else {
+      // デフォルト: ストアに対してフィルタリングし、マッチ数を返す
+      const matchedIds = new Set<string>();
+      for (const filter of filters) {
+        const matched = filterEvents(this.#store, filter);
+        for (const event of matched) {
+          matchedIds.add(event.id);
+        }
+      }
+      result = { count: matchedIds.size };
+    }
+
+    const msg: RelayMessage = ["COUNT", subId, result];
+    this.#sendWithLatency(ws, msg);
   }
 
   // ===== 認証チェック =====
