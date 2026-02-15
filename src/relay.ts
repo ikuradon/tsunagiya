@@ -56,6 +56,7 @@ export class MockRelay {
   #authState: AuthState = new AuthState();
   #pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
   #logger: Logger | null = null;
+  #errors: string[] = [];
 
   constructor(url: string, options: MockRelayOptions = {}) {
     this.url = url;
@@ -250,6 +251,11 @@ export class MockRelay {
     return this.#connections.size;
   }
 
+  /** 発生したエラーレスポンスのログ */
+  get errors(): ReadonlyArray<string> {
+    return this.#errors;
+  }
+
   /** ロガーインスタンス（設定済みの場合） */
   get logger(): Logger | null {
     return this.#logger;
@@ -320,6 +326,7 @@ export class MockRelay {
     this.#eventHandler = null;
     this.#refused = false;
     this.#authState.reset();
+    this.#errors = [];
     for (const timer of this.#pendingTimers) {
       clearTimeout(timer);
     }
@@ -421,9 +428,31 @@ export class MockRelay {
 
     // エラー率チェック
     if (this.#shouldError()) {
-      const notice: RelayMessage = ["NOTICE", "error: simulated error"];
+      const msg = "error: simulated error";
+      const notice: RelayMessage = ["NOTICE", msg];
+      this.#errors.push(msg);
       this.#sendWithLatency(ws, notice);
       return;
+    }
+
+    // AUTH enforcement: 認証必須リレーで未認証の場合、REQ/EVENT を拒否
+    if (
+      this.#requiresAuthentication() && !this.#authState.isAuthenticated(ws)
+    ) {
+      if (parsed[0] === "EVENT") {
+        const msg = "auth-required: authentication required";
+        const ok: RelayMessage = ["OK", parsed[1].id, false, msg];
+        this.#errors.push(msg);
+        this.#sendWithLatency(ws, ok);
+        return;
+      }
+      if (parsed[0] === "REQ") {
+        const msg = "auth-required: authentication required";
+        const closed: RelayMessage = ["CLOSED", parsed[1], msg];
+        this.#errors.push(msg);
+        this.#sendWithLatency(ws, closed);
+        return;
+      }
     }
 
     switch (parsed[0]) {
@@ -451,6 +480,10 @@ export class MockRelay {
       // デフォルト: 受理してストアに追加
       this.#store.push(event);
       response = ["OK", event.id, true, ""];
+    }
+
+    if (!response[2] && response[3]) {
+      this.#errors.push(response[3]);
     }
 
     this.#sendWithLatency(ws, response);
@@ -502,6 +535,12 @@ export class MockRelay {
     );
     const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
     ws._receiveMessage(JSON.stringify(ok));
+  }
+
+  // ===== 認証チェック =====
+
+  #requiresAuthentication(): boolean {
+    return this.options.requiresAuth === true || this.#authState.hasValidator;
   }
 
   // ===== レイテンシ・不安定性 =====

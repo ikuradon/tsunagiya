@@ -237,6 +237,146 @@ Deno.test("AUTH - wrong kind is rejected", async () => {
   }
 });
 
+Deno.test("AUTH - rejects REQ from unauthenticated connection", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    // AUTHチャレンジを受信するのを待つ
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 認証せずにREQを送信
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // CLOSED応答を受信するはず（AUTH + CLOSED = 2メッセージ）
+    assertEquals(messages.length, 2);
+    const closedMsg = JSON.parse(messages[1]);
+    assertEquals(closedMsg[0], "CLOSED");
+    assertEquals(closedMsg[1], "sub1");
+    assertEquals(
+      (closedMsg[2] as string).startsWith("auth-required:"),
+      true,
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - rejects EVENT from unauthenticated connection", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 認証せずにEVENTを送信
+    const event: NostrEvent = {
+      id: "test-event-1",
+      pubkey: "pub1",
+      kind: 1,
+      content: "hello",
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [],
+      sig: "sig1",
+    };
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // OK:false応答を受信するはず（AUTH + OK = 2メッセージ）
+    assertEquals(messages.length, 2);
+    const okMsg = JSON.parse(messages[1]);
+    assertEquals(okMsg[0], "OK");
+    assertEquals(okMsg[1], "test-event-1");
+    assertEquals(okMsg[2], false);
+    assertEquals(
+      (okMsg[3] as string).startsWith("auth-required:"),
+      true,
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - allows REQ after successful authentication", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  relay.requireAuth((authEvent) => {
+    return authEvent.tags.some(
+      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    );
+  });
+
+  // ストアにイベントを追加
+  relay.store({
+    id: "stored-event",
+    pubkey: "pub1",
+    kind: 1,
+    content: "test",
+    created_at: 1700000000,
+    tags: [],
+    sig: "sig1",
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    // チャレンジ受信
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    const authMsg = JSON.parse(messages[0]);
+    const challenge = authMsg[1] as string;
+
+    // 認証
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 認証成功を確認
+    const okMsg = JSON.parse(messages[1]);
+    assertEquals(okMsg[2], true);
+
+    // 認証後にREQを送信
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // EVENT + EOSE が返ってくるはず
+    const eventMsg = JSON.parse(messages[2]);
+    assertEquals(eventMsg[0], "EVENT");
+    assertEquals(eventMsg[2].id, "stored-event");
+
+    const eoseMsg = JSON.parse(messages[3]);
+    assertEquals(eoseMsg[0], "EOSE");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("AUTH - requireAuth on existing connection sends challenge", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
