@@ -26,11 +26,20 @@
 export { MockPool } from "./pool.ts";
 export { MockRelay } from "./relay.ts";
 export { filterEvents, matchFilter, matchFilters } from "./filter.ts";
+export {
+  classifyEvent,
+  getParameterizedId,
+  isEphemeral,
+  isParameterizedReplaceable,
+  isReplaceable,
+} from "./event_kind.ts";
+export type { EventKind } from "./event_kind.ts";
 export { AuthState, generateChallenge } from "./auth.ts";
 export { createLogger, Logger } from "./logger.ts";
 export type {
   AuthValidator,
   ClientMessage,
+  COUNTHandler,
   EVENTHandler,
   LogEntry,
   LogHandler,

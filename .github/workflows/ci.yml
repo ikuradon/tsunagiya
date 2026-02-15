@@ -63,3 +63,33 @@ jobs:
           console.log('✓ pool.uninstall() works');
           EOF
           bun test-bun.mjs
+
+  e2e:
+    name: E2E Test (${{ matrix.runtime }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - runtime: deno
+            command: deno test -A tests/e2e/e2e_client_test.ts
+          - runtime: node
+            command: npx tsx tests/e2e/e2e_client_test.ts
+          - runtime: bun
+            command: bun run tests/e2e/e2e_client_test.ts
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        if: matrix.runtime == 'deno'
+        with:
+          deno-version: v2.x
+      - uses: actions/setup-node@v4
+        if: matrix.runtime == 'node'
+        with:
+          node-version: 22.x
+      - name: Install tsx
+        if: matrix.runtime == 'node'
+        run: npm install -g tsx
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.runtime == 'bun'
+      - name: Run E2E tests
+        run: ${{ matrix.command }}

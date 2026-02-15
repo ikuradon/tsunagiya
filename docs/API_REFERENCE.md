@@ -1,6 +1,6 @@
 # API リファレンス
 
-tsunagiya v0.1.0 の全クラス・関数・型の詳細リファレンス。
+tsunagiya v0.2.0 の全クラス・関数・型の詳細リファレンス。
 
 ## 目次
 
@@ -8,6 +8,7 @@ tsunagiya v0.1.0 の全クラス・関数・型の詳細リファレンス。
   - [MockPool](#mockpool)
   - [MockRelay](#mockrelay)
   - [フィルター関数](#フィルター関数)
+  - [イベント種別関数](#イベント種別関数)
   - [AUTH関連](#auth関連)
   - [Logger](#logger)
 - [テストモジュール (`@ikuradon/tsunagiya/testing`)](#テストモジュール)
@@ -25,9 +26,14 @@ tsunagiya v0.1.0 の全クラス・関数・型の詳細リファレンス。
 ```typescript
 import {
   AuthState,
+  classifyEvent,
   createLogger,
   filterEvents,
   generateChallenge,
+  getParameterizedId,
+  isEphemeral,
+  isParameterizedReplaceable,
+  isReplaceable,
   Logger,
   matchFilter,
   matchFilters,
@@ -123,13 +129,26 @@ URL 単位で動作する仮想リレー。
 | `received`        | `ClientMessage[]` (readonly)       | 全受信メッセージ               |
 | `connectionCount` | `number` (readonly)                | アクティブ接続数               |
 | `errors`          | `ReadonlyArray<string>` (readonly) | 発生したエラーレスポンスのログ |
+| `deletedIds`      | `ReadonlySet<string>` (readonly)   | 削除済みイベントID (NIP-09)    |
 | `logger`          | `Logger \| null` (readonly)        | ロガーインスタンス             |
 
 #### ストア・ハンドラー
 
-##### `store(event: NostrEvent): void`
+##### `store(event: NostrEvent): boolean`
 
 イベントをストアに登録する。REQ 受信時の自動マッチングに使用される。
+
+NIP-16 に基づき、イベント種別に応じた処理を行う:
+
+- **Regular** (kind 0-9999, 40000+): 通常通り追加
+- **Replaceable** (kind 10000-19999): 同一 kind+pubkey
+  の古いイベントを削除し追加（古い場合は無視）
+- **Ephemeral** (kind 20000-29999): ストアに追加せず、ブロードキャストのみ
+- **Parameterized Replaceable** (kind 30000-39999): 同一 kind+pubkey+d-tag
+  の古いイベントを削除し追加
+
+戻り値はストアに追加された場合 `true`、無視された場合（Ephemeral、古い
+Replaceable、削除済み等）`false`。
 
 ```typescript
 relay.store({
@@ -140,7 +159,10 @@ relay.store({
   created_at: 1700000000,
   tags: [],
   sig: "sig1",
-});
+}); // → true
+
+// Ephemeral イベントはストアに追加されない
+relay.store(EventBuilder.kind(20001).build()); // → false
 ```
 
 ##### `onREQ(handler: REQHandler): void`
@@ -180,6 +202,25 @@ relay.onEVENT((event) => {
 
 **型**:
 `EVENTHandler = (event: NostrEvent) => ["OK", string, boolean, string] | Promise<["OK", string, boolean, string]>`
+
+##### `onCOUNT(handler: COUNTHandler): void`
+
+COUNT ハンドラーを設定する。クライアントから COUNT
+メッセージを受信したときの処理をカスタマイズする。未設定の場合、ストアに対してフィルタリングし、マッチ数を返す。
+
+```typescript
+relay.onCOUNT((subId, filters) => {
+  return { count: 42 };
+});
+
+// 非同期も可能
+relay.onCOUNT(async (subId, filters) => {
+  return { count: await computeCount(filters) };
+});
+```
+
+**型**:
+`COUNTHandler = (subId: string, filters: NostrFilter[]) => { count: number } | Promise<{ count: number }>`
 
 #### エラーケース
 
@@ -304,6 +345,26 @@ EVENT メッセージの受信数。
 
 特定サブスクリプション ID の CLOSE を検索する。
 
+##### `findCOUNT(subId: string): ["COUNT", string, ...NostrFilter[]] | undefined`
+
+特定サブスクリプション ID の COUNT を検索する。
+
+```typescript
+const count = relay.findCOUNT("count1");
+if (count) {
+  console.log(count[1]); // "count1"
+  console.log(count[2]); // 最初のフィルター
+}
+```
+
+##### `countCOUNTs(): number`
+
+COUNT メッセージの受信数。
+
+##### `hasCOUNT(subId: string): boolean`
+
+特定サブスクリプション ID の COUNT が存在するか。
+
 #### スナップショット
 
 ##### `snapshot(): RelaySnapshot`
@@ -360,6 +421,56 @@ const matches = matchFilters(event, [
 
 ```typescript
 const results = filterEvents(allEvents, { kinds: [1], limit: 10 });
+```
+
+---
+
+### イベント種別関数
+
+NIP-16 および NIP-33 に基づくイベント種別判定ユーティリティ。
+
+##### `classifyEvent(kind: number): EventKind`
+
+kind 値からイベント種別を判定する。
+
+- `"regular"`: kind 0-9999, 40000+
+- `"replaceable"`: kind 10000-19999
+- `"ephemeral"`: kind 20000-29999
+- `"parameterized_replaceable"`: kind 30000-39999
+
+```typescript
+classifyEvent(1); // "regular"
+classifyEvent(10002); // "replaceable"
+classifyEvent(20001); // "ephemeral"
+classifyEvent(30023); // "parameterized_replaceable"
+```
+
+##### `isReplaceable(kind: number): boolean`
+
+Replaceable イベント (kind 10000-19999) かどうか判定する。
+
+##### `isEphemeral(kind: number): boolean`
+
+Ephemeral イベント (kind 20000-29999) かどうか判定する。
+
+##### `isParameterizedReplaceable(kind: number): boolean`
+
+Parameterized Replaceable イベント (kind 30000-39999) かどうか判定する。
+
+##### `getParameterizedId(event: NostrEvent): string | null`
+
+Parameterized Replaceable
+イベントの識別キーを取得する。`kind:pubkey:d-tag-value` 形式の文字列を返す。kind
+30000-39999 以外の場合は `null` を返す。
+
+```typescript
+const event = EventBuilder.kind(30023)
+  .tag("d", "my-article")
+  .pubkey("author-pubkey")
+  .build();
+
+getParameterizedId(event); // "30023:author-pubkey:my-article"
+getParameterizedId(EventBuilder.kind1().build()); // null
 ```
 
 ---
@@ -497,6 +608,35 @@ const events = EventBuilder.timeline(50, {
 
 リアクション付き投稿を生成する。`[post, reactions[]]` のタプルを返す。
 
+#### NIP-09 削除リクエスト
+
+##### `EventBuilder.deletion(eventIds: string[]): EventBuilder`
+
+削除リクエスト (kind:5) ビルダーを作成する。指定したイベント ID を `e`
+タグとして設定する。**注意**: ビルダーを返すので `.build()` が必要。
+
+```typescript
+const deletion = EventBuilder.deletion(["event-id-1", "event-id-2"])
+  .pubkey(authorPubkey)
+  .build();
+// → kind: 5, tags: [["e", "event-id-1"], ["e", "event-id-2"]]
+```
+
+##### `EventBuilder.deletionByAddress(addresses: string[]): EventBuilder`
+
+アドレス指定の削除リクエスト (kind:5) ビルダーを作成する。`kind:pubkey:d-tag`
+形式のアドレスを `a` タグとして設定する。**注意**: ビルダーを返すので `.build()`
+が必要。
+
+```typescript
+const deletion = EventBuilder.deletionByAddress([
+  "30023:pubkey:article-slug",
+])
+  .pubkey(authorPubkey)
+  .build();
+// → kind: 5, tags: [["a", "30023:pubkey:article-slug"]]
+```
+
 #### NIP 別テンプレート
 
 ##### `EventBuilder.metadata(profile: { name?: string; about?: string; picture?: string }): NostrEvent`
@@ -576,6 +716,15 @@ FilterBuilder.mentions("pubkey1");
 ```typescript
 FilterBuilder.reactions("event1");
 // → { kinds: [7], "#e": ["event1"] }
+```
+
+##### `FilterBuilder.search(keyword: string): NostrFilter`
+
+NIP-50 検索フィルターを生成する。
+
+```typescript
+FilterBuilder.search("nostr");
+// → { search: "nostr" }
 ```
 
 ---
@@ -691,6 +840,7 @@ interface NostrFilter {
   since?: number; // created_at下限 (inclusive)
   until?: number; // created_at上限 (inclusive)
   limit?: number; // 返却数上限
+  search?: string; // NIP-50: 検索キーワード
   [key: `#${string}`]: string[] | undefined; // タグフィルター
 }
 ```
@@ -702,7 +852,8 @@ type ClientMessage =
   | ["EVENT", NostrEvent]
   | ["REQ", string, ...NostrFilter[]]
   | ["CLOSE", string]
-  | ["AUTH", NostrEvent];
+  | ["AUTH", NostrEvent]
+  | ["COUNT", string, ...NostrFilter[]];
 ```
 
 ### RelayMessage
@@ -714,7 +865,8 @@ type RelayMessage =
   | ["EOSE", string]
   | ["CLOSED", string, string]
   | ["NOTICE", string]
-  | ["AUTH", string];
+  | ["AUTH", string]
+  | ["COUNT", string, { count: number }];
 ```
 
 ### MockRelayOptions
@@ -748,7 +900,27 @@ interface RelaySnapshot {
   timestamp: number; // 保存時刻 (ms)
   store: NostrEvent[]; // ストア内のイベント
   received: ClientMessage[]; // 受信メッセージログ
+  deletedIds?: string[]; // 削除済みイベントID (NIP-09)
 }
+```
+
+### EventKind
+
+```typescript
+type EventKind =
+  | "regular"
+  | "replaceable"
+  | "ephemeral"
+  | "parameterized_replaceable";
+```
+
+### COUNTHandler
+
+```typescript
+type COUNTHandler = (
+  subId: string,
+  filters: NostrFilter[],
+) => { count: number } | Promise<{ count: number }>;
 ```
 
 ### LogLevel
