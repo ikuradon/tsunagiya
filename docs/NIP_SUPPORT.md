@@ -12,30 +12,30 @@ Nostr の基本プロトコル。tsunagiya のコア機能。
 
 **対応メッセージ:**
 
-| メッセージ | 方向 | 対応 |
-|-----------|------|------|
-| `EVENT` | client → relay | ✅ 受信・ストア追加・OK 応答 |
-| `REQ` | client → relay | ✅ フィルタリング・EVENT/EOSE 応答 |
-| `CLOSE` | client → relay | ✅ サブスクリプション解除 |
-| `EVENT` | relay → client | ✅ サブスクリプション配信 |
-| `OK` | relay → client | ✅ EVENT 受理/拒否 |
-| `EOSE` | relay → client | ✅ ストアイベント送信完了 |
-| `NOTICE` | relay → client | ✅ `sendNotice()` |
-| `AUTH` | relay → client | ✅ NIP-42 チャレンジ |
+| メッセージ | 方向           | 対応                               |
+| ---------- | -------------- | ---------------------------------- |
+| `EVENT`    | client → relay | ✅ 受信・ストア追加・OK 応答       |
+| `REQ`      | client → relay | ✅ フィルタリング・EVENT/EOSE 応答 |
+| `CLOSE`    | client → relay | ✅ サブスクリプション解除          |
+| `EVENT`    | relay → client | ✅ サブスクリプション配信          |
+| `OK`       | relay → client | ✅ EVENT 受理/拒否                 |
+| `EOSE`     | relay → client | ✅ ストアイベント送信完了          |
+| `NOTICE`   | relay → client | ✅ `sendNotice()`                  |
+| `AUTH`     | relay → client | ✅ NIP-42 チャレンジ               |
 
 **フィルタリング:**
 
 ```typescript
 // 全フィルター条件に対応
 const filter: NostrFilter = {
-  ids: ["prefix..."],     // IDプレフィックスマッチ
+  ids: ["prefix..."], // IDプレフィックスマッチ
   authors: ["prefix..."], // 公開鍵プレフィックスマッチ
-  kinds: [1],             // kind完全一致
-  since: 1700000000,      // created_at下限
-  until: 1700100000,      // created_at上限
-  limit: 20,              // 返却数上限
-  "#e": ["eventId"],      // タグフィルター
-  "#p": ["pubkey"],       // タグフィルター
+  kinds: [1], // kind完全一致
+  since: 1700000000, // created_at下限
+  until: 1700100000, // created_at上限
+  limit: 20, // 返却数上限
+  "#e": ["eventId"], // タグフィルター
+  "#p": ["pubkey"], // タグフィルター
 };
 ```
 
@@ -61,7 +61,9 @@ try {
 
 ### NIP-04: Encrypted Direct Messages ✅ テンプレート対応
 
-EventBuilder で kind:4 DM イベントのテンプレートを提供。**暗号化はモック**（実際の NIP-04 暗号化は行わない）。
+EventBuilder で kind:4 DM
+イベントのテンプレートを提供。**暗号化はモック**（実際の NIP-04
+暗号化は行わない）。
 
 ```typescript
 const dm = EventBuilder.dm("recipient-pubkey", "hello").build();
@@ -97,7 +99,8 @@ const [post, reactions] = EventBuilder.withReactions(5);
 ### NIP-29: Group Chat ✅ テンプレート対応
 
 ```typescript
-const msg = EventBuilder.groupMessage("group-id").content("hello group").build();
+const msg = EventBuilder.groupMessage("group-id").content("hello group")
+  .build();
 // → kind: 9, tags: [["h", "group-id"]]
 ```
 
@@ -116,7 +119,8 @@ const event = EventBuilder.kind1()
 
 ### NIP-42: Authentication ✅ 完全対応
 
-AUTH チャレンジ/レスポンスのフルフローに対応。認証必須リレーでは、未認証の REQ/EVENT を自動的に拒否する。
+AUTH チャレンジ/レスポンスのフルフローに対応。認証必須リレーでは、未認証の
+REQ/EVENT を自動的に拒否する。
 
 ```typescript
 const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
@@ -126,7 +130,7 @@ relay.requireAuth((authEvent) => {
   // challengeタグ検証（自動）
   // relayタグ検証（カスタム）
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com"
+    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
   );
 });
 
@@ -168,24 +172,24 @@ const zap = EventBuilder.zapRequest({
 
 ## 実装予定 NIP（v0.2.0 以降）
 
-| NIP | 内容 | 予定バージョン | 概要 |
-|-----|------|--------------|------|
-| NIP-11 | Relay Information | v0.2.0 | `GET /` で返す relay info のモック |
-| NIP-45 | COUNT | v0.2.0 | `["COUNT", subId, ...filters]` への応答 |
-| NIP-50 | Search | v0.2.0 | `search` フィルターフィールドの対応 |
-| NIP-65 | Relay List Metadata | v0.3.0 | kind:10002 イベントのテンプレート |
-| NIP-94 | File Metadata | v0.3.0 | kind:1063 のテンプレート |
+| NIP    | 内容                | 予定バージョン | 概要                                    |
+| ------ | ------------------- | -------------- | --------------------------------------- |
+| NIP-11 | Relay Information   | v0.2.0         | `GET /` で返す relay info のモック      |
+| NIP-45 | COUNT               | v0.2.0         | `["COUNT", subId, ...filters]` への応答 |
+| NIP-50 | Search              | v0.2.0         | `search` フィルターフィールドの対応     |
+| NIP-65 | Relay List Metadata | v0.3.0         | kind:10002 イベントのテンプレート       |
+| NIP-94 | File Metadata       | v0.3.0         | kind:1063 のテンプレート                |
 
 ---
 
 ## 非対応 NIP（対応予定なし）
 
-| NIP | 内容 | 非対応理由 |
-|-----|------|-----------|
-| NIP-05 | DNS Identifier | DNS 解決はモックライブラリの範囲外 |
+| NIP    | 内容              | 非対応理由                                                                                                                  |
+| ------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| NIP-05 | DNS Identifier    | DNS 解決はモックライブラリの範囲外                                                                                          |
 | NIP-07 | Browser Extension | ブラウザ API のモックは別ライブラリで対応すべき（※ `EventBuilder.nip07Request()` で kind:24133 テストイベントの生成は可能） |
-| NIP-19 | bech32 Encoding | エンコーディングはクライアント側の処理 |
-| NIP-46 | Nostr Connect | リモート署名はモックリレーの範囲外 |
+| NIP-19 | bech32 Encoding   | エンコーディングはクライアント側の処理                                                                                      |
+| NIP-46 | Nostr Connect     | リモート署名はモックリレーの範囲外                                                                                          |
 
 ---
 

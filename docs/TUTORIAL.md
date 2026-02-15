@@ -1,6 +1,7 @@
 # チュートリアル
 
-tsunagiya を使って Nostr クライアントのテストを書く方法を、ステップバイステップで解説する。
+tsunagiya を使って Nostr
+クライアントのテストを書く方法を、ステップバイステップで解説する。
 
 ## 前提条件
 
@@ -91,7 +92,8 @@ Deno.test("リレーからイベントを取得する", async () => {
 
 ## ステップ 2: 複数リレーのテスト
 
-実際の Nostr クライアントは複数のリレーに接続する。tsunagiya はこれを簡単にテストできる。
+実際の Nostr クライアントは複数のリレーに接続する。tsunagiya
+はこれを簡単にテストできる。
 
 ```typescript
 Deno.test("複数リレーからイベントを集約する", async () => {
@@ -127,7 +129,9 @@ Deno.test("複数リレーからイベントを集約する", async () => {
     let closedCount = 0;
 
     await new Promise<void>((resolve) => {
-      for (const url of ["wss://relay1.example.com", "wss://relay2.example.com"]) {
+      for (
+        const url of ["wss://relay1.example.com", "wss://relay2.example.com"]
+      ) {
         const ws = new WebSocket(url);
         ws.onopen = () => {
           ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
@@ -161,7 +165,8 @@ Deno.test("複数リレーからイベントを集約する", async () => {
 
 ## ステップ 3: 不安定リレーのシミュレート
 
-実際のリレーはネットワーク遅延やエラーが発生する。tsunagiya でこれをシミュレートできる。
+実際のリレーはネットワーク遅延やエラーが発生する。tsunagiya
+でこれをシミュレートできる。
 
 ```typescript
 Deno.test("遅延のあるリレー", async () => {
@@ -240,14 +245,14 @@ Deno.test("接続拒否するリレー", async () => {
 
 ### MockRelayOptions 一覧
 
-| オプション | 型 | 説明 |
-|-----------|-----|------|
-| `latency` | `number \| { min, max }` | 応答遅延 (ms) |
-| `errorRate` | `0.0 - 1.0` | エラー応答の確率 |
-| `disconnectRate` | `0.0 - 1.0` | ランダム切断の確率 |
-| `connectionTimeout` | `number` | 接続タイムアウト (ms) |
-| `requiresAuth` | `boolean` | AUTH 要求の有効化 |
-| `logging` | `boolean \| LogHandler` | ログ出力 |
+| オプション          | 型                       | 説明                  |
+| ------------------- | ------------------------ | --------------------- |
+| `latency`           | `number \| { min, max }` | 応答遅延 (ms)         |
+| `errorRate`         | `0.0 - 1.0`              | エラー応答の確率      |
+| `disconnectRate`    | `0.0 - 1.0`              | ランダム切断の確率    |
+| `connectionTimeout` | `number`                 | 接続タイムアウト (ms) |
+| `requiresAuth`      | `boolean`                | AUTH 要求の有効化     |
+| `logging`           | `boolean \| LogHandler`  | ログ出力              |
 
 ---
 
@@ -329,9 +334,9 @@ const broken = EventBuilder.kind1()
 ```typescript
 import { MockPool } from "@ikuradon/tsunagiya";
 import {
-  assertReceivedREQ,
-  assertEventPublished,
   assertClosed,
+  assertEventPublished,
+  assertReceivedREQ,
 } from "@ikuradon/tsunagiya/testing";
 
 Deno.test("クライアントが正しいメッセージを送信したか検証する", async () => {
@@ -374,7 +379,7 @@ Deno.test("クライアントが正しいメッセージを送信したか検証
 ### スナップショットで状態管理
 
 ```typescript
-import { snapshot, restore } from "@ikuradon/tsunagiya/testing";
+import { restore, snapshot } from "@ikuradon/tsunagiya/testing";
 
 Deno.test("スナップショットで状態を復元する", () => {
   const pool = new MockPool();

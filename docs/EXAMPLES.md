@@ -25,7 +25,7 @@ tsunagiya の実践的な使用例を紹介する。
 
 ```typescript
 import { MockPool } from "@ikuradon/tsunagiya";
-import { EventBuilder, assertReceivedREQ } from "@ikuradon/tsunagiya/testing";
+import { assertReceivedREQ, EventBuilder } from "@ikuradon/tsunagiya/testing";
 import { assertEquals } from "@std/assert";
 
 Deno.test("kind:1 のイベントを取得する", async () => {
@@ -108,7 +108,7 @@ Deno.test("3つのリレーからイベントを集約する", async () => {
 
   urls.forEach((url, i) => {
     pool.relay(url).store(
-      EventBuilder.kind1().content(`event from relay ${i + 1}`).build()
+      EventBuilder.kind1().content(`event from relay ${i + 1}`).build(),
     );
   });
 
@@ -126,7 +126,9 @@ Deno.test("3つのリレーからイベントを集約する", async () => {
           if (msg[0] === "EVENT") allEvents.push(msg[2].content);
           if (msg[0] === "EOSE") ws.close();
         };
-        ws.onclose = () => { if (++done === 3) resolve(); };
+        ws.onclose = () => {
+          if (++done === 3) resolve();
+        };
       }
     });
 
@@ -140,7 +142,7 @@ Deno.test("3つのリレーからイベントを集約する", async () => {
 ## 4. フィルターマッチングのテスト
 
 ```typescript
-import { matchFilter, filterEvents } from "@ikuradon/tsunagiya";
+import { filterEvents, matchFilter } from "@ikuradon/tsunagiya";
 
 Deno.test("フィルターマッチング", () => {
   const event = EventBuilder.kind1()
@@ -193,7 +195,8 @@ Deno.test("カスタム REQ ハンドラーで動的にイベントを返す", a
     let content = "";
 
     await new Promise<void>((resolve) => {
-      ws.onopen = () => ws.send(JSON.stringify(["REQ", "my-sub", { kinds: [1] }]));
+      ws.onopen = () =>
+        ws.send(JSON.stringify(["REQ", "my-sub", { kinds: [1] }]));
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg[0] === "EVENT") content = msg[2].content;
@@ -222,7 +225,9 @@ Deno.test("未登録URLへの接続は失敗する", async () => {
     let errorFired = false;
 
     const code = await new Promise<number>((resolve) => {
-      ws.onerror = () => { errorFired = true; };
+      ws.onerror = () => {
+        errorFired = true;
+      };
       ws.onclose = (e) => resolve(e.code);
     });
 
@@ -304,7 +309,7 @@ Deno.test("AUTH チャレンジ/レスポンス", async () => {
 
   relay.requireAuth((authEvent) => {
     return authEvent.tags.some(
-      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com"
+      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
     );
   });
 
@@ -375,7 +380,7 @@ Deno.test("1000件のイベントを処理する", async () => {
 ## 9. リアルタイムストリームのテスト
 
 ```typescript
-import { streamEvents, startStream } from "@ikuradon/tsunagiya/testing";
+import { startStream, streamEvents } from "@ikuradon/tsunagiya/testing";
 
 Deno.test("時間差でイベントが配信される", async () => {
   const pool = new MockPool();
@@ -510,7 +515,9 @@ Deno.test("リアクションの取得", async () => {
 
     await new Promise<void>((resolve) => {
       ws.onopen = () => {
-        ws.send(JSON.stringify(["REQ", "reactions", { kinds: [7], "#e": [post.id] }]));
+        ws.send(
+          JSON.stringify(["REQ", "reactions", { kinds: [7], "#e": [post.id] }]),
+        );
       };
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
@@ -579,7 +586,10 @@ Deno.test("壊れたイベントの投稿", async () => {
       ws.onopen = () => ws.send(JSON.stringify(["EVENT", broken]));
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
-        if (msg[0] === "OK") { resolve(msg[2]); ws.close(); }
+        if (msg[0] === "OK") {
+          resolve(msg[2]);
+          ws.close();
+        }
       };
     });
 
@@ -631,7 +641,7 @@ Deno.test("カスタムログハンドラー", async () => {
 ## 14. スナップショットを使ったテスト
 
 ```typescript
-import { snapshot, restore } from "@ikuradon/tsunagiya/testing";
+import { restore, snapshot } from "@ikuradon/tsunagiya/testing";
 
 Deno.test("スナップショットで複数テストケースを効率的に実行", () => {
   const pool = new MockPool();

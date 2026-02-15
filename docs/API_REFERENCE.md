@@ -23,17 +23,28 @@ tsunagiya v0.1.0 の全クラス・関数・型の詳細リファレンス。
 ## メインモジュール
 
 ```typescript
-import { MockPool, MockRelay, matchFilter, matchFilters, filterEvents, AuthState, generateChallenge, createLogger, Logger } from "@ikuradon/tsunagiya";
+import {
+  AuthState,
+  createLogger,
+  filterEvents,
+  generateChallenge,
+  Logger,
+  matchFilter,
+  matchFilters,
+  MockPool,
+  MockRelay,
+} from "@ikuradon/tsunagiya";
 ```
 
 ### MockPool
 
-テストのエントリポイント。複数の MockRelay を管理し、`globalThis.WebSocket` を差し替える。
+テストのエントリポイント。複数の MockRelay を管理し、`globalThis.WebSocket`
+を差し替える。
 
 #### コンストラクタ
 
 ```typescript
-new MockPool()
+new MockPool();
 ```
 
 引数なし。
@@ -42,7 +53,8 @@ new MockPool()
 
 ##### `relay(url: string, options?: MockRelayOptions): MockRelay`
 
-MockRelay を登録・取得する。同一 URL に対して複数回呼び出すと、既存のインスタンスを返す。
+MockRelay を登録・取得する。同一 URL
+に対して複数回呼び出すと、既存のインスタンスを返す。
 
 ```typescript
 const relay = pool.relay("wss://relay.example.com");
@@ -104,14 +116,14 @@ URL 単位で動作する仮想リレー。
 
 #### プロパティ
 
-| プロパティ | 型 | 説明 |
-|-----------|-----|------|
-| `url` | `string` (readonly) | リレーURL |
-| `options` | `MockRelayOptions` (readonly) | リレーオプション |
-| `received` | `ClientMessage[]` (readonly) | 全受信メッセージ |
-| `connectionCount` | `number` (readonly) | アクティブ接続数 |
-| `errors` | `ReadonlyArray<string>` (readonly) | 発生したエラーレスポンスのログ |
-| `logger` | `Logger \| null` (readonly) | ロガーインスタンス |
+| プロパティ        | 型                                 | 説明                           |
+| ----------------- | ---------------------------------- | ------------------------------ |
+| `url`             | `string` (readonly)                | リレーURL                      |
+| `options`         | `MockRelayOptions` (readonly)      | リレーオプション               |
+| `received`        | `ClientMessage[]` (readonly)       | 全受信メッセージ               |
+| `connectionCount` | `number` (readonly)                | アクティブ接続数               |
+| `errors`          | `ReadonlyArray<string>` (readonly) | 発生したエラーレスポンスのログ |
+| `logger`          | `Logger \| null` (readonly)        | ロガーインスタンス             |
 
 #### ストア・ハンドラー
 
@@ -133,7 +145,8 @@ relay.store({
 
 ##### `onREQ(handler: REQHandler): void`
 
-REQ ハンドラーを設定する。設定すると自動マッチングがスキップされ、このハンドラーが呼ばれる。
+REQ
+ハンドラーを設定する。設定すると自動マッチングがスキップされ、このハンドラーが呼ばれる。
 
 ```typescript
 relay.onREQ((subId, filters) => {
@@ -146,11 +159,13 @@ relay.onREQ(async (subId, filters) => {
 });
 ```
 
-**型**: `REQHandler = (subId: string, filters: NostrFilter[]) => NostrEvent[] | Promise<NostrEvent[]>`
+**型**:
+`REQHandler = (subId: string, filters: NostrFilter[]) => NostrEvent[] | Promise<NostrEvent[]>`
 
 ##### `onEVENT(handler: EVENTHandler): void`
 
-EVENT ハンドラーを設定する。クライアントから EVENT メッセージを受信したときの処理をカスタマイズする。
+EVENT ハンドラーを設定する。クライアントから EVENT
+メッセージを受信したときの処理をカスタマイズする。
 
 ```typescript
 relay.onEVENT((event) => {
@@ -163,7 +178,8 @@ relay.onEVENT((event) => {
 });
 ```
 
-**型**: `EVENTHandler = (event: NostrEvent) => ["OK", string, boolean, string] | Promise<["OK", string, boolean, string]>`
+**型**:
+`EVENTHandler = (event: NostrEvent) => ["OK", string, boolean, string] | Promise<["OK", string, boolean, string]>`
 
 #### エラーケース
 
@@ -184,8 +200,8 @@ relay.refuse();
 - `reason`: クローズ理由（デフォルト: ""）
 
 ```typescript
-relay.disconnect();        // code: 1000
-relay.disconnect(1006);    // 異常切断
+relay.disconnect(); // code: 1000
+relay.disconnect(1006); // 異常切断
 ```
 
 ##### `disconnectAfter(ms: number, code?: number): void`
@@ -196,7 +212,7 @@ relay.disconnect(1006);    // 異常切断
 - `code`: クローズコード（デフォルト: 1006）
 
 ```typescript
-relay.disconnectAfter(3000);       // 3秒後に切断
+relay.disconnectAfter(3000); // 3秒後に切断
 relay.disconnectAfter(5000, 1001); // 5秒後にcode:1001で切断
 ```
 
@@ -230,9 +246,12 @@ relay.sendNotice("error: too many requests");
 
 ##### `requireAuth(validator: AuthValidator): void`
 
-AUTH 要求を設定する。接続時に AUTH チャレンジが送信される。既存の接続にも即座にチャレンジが送信される。
+AUTH 要求を設定する。接続時に AUTH
+チャレンジが送信される。既存の接続にも即座にチャレンジが送信される。
 
-認証必須リレー（`requiresAuth: true` または `requireAuth()` 設定済み）では、未認証の接続からの REQ/EVENT は自動的に拒否される：
+認証必須リレー（`requiresAuth: true` または `requireAuth()`
+設定済み）では、未認証の接続からの REQ/EVENT は自動的に拒否される：
+
 - REQ → `["CLOSED", subId, "auth-required: authentication required"]`
 - EVENT → `["OK", id, false, "auth-required: authentication required"]`
 
@@ -240,7 +259,7 @@ AUTH 要求を設定する。接続時に AUTH チャレンジが送信される
 relay.requireAuth((authEvent) => {
   // relayタグの検証
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com"
+    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
   );
 });
 ```
@@ -305,7 +324,8 @@ relay.restore(snap);
 
 ##### `reset(): void`
 
-リレーの状態を完全にリセットする。ストア、受信ログ、サブスクリプション、ハンドラー、AUTH 状態がクリアされる。
+リレーの状態を完全にリセットする。ストア、受信ログ、サブスクリプション、ハンドラー、AUTH
+状態がクリアされる。
 
 ---
 
@@ -313,7 +333,9 @@ relay.restore(snap);
 
 ##### `matchFilter(event: NostrEvent, filter: NostrFilter): boolean`
 
-イベントが単一フィルターにマッチするか判定する。NIP-01 のフィルター仕様に準拠。全条件が AND で評価される。`limit` はマッチング自体には影響しない。
+イベントが単一フィルターにマッチするか判定する。NIP-01
+のフィルター仕様に準拠。全条件が AND で評価される。`limit`
+はマッチング自体には影響しない。
 
 ```typescript
 const matches = matchFilter(event, { kinds: [1], authors: ["pubkey1"] });
@@ -321,7 +343,8 @@ const matches = matchFilter(event, { kinds: [1], authors: ["pubkey1"] });
 
 ##### `matchFilters(event: NostrEvent, filters: NostrFilter[]): boolean`
 
-イベントが複数フィルターのいずれかにマッチするか判定する。フィルター間は OR 条件。
+イベントが複数フィルターのいずれかにマッチするか判定する。フィルター間は OR
+条件。
 
 ```typescript
 const matches = matchFilters(event, [
@@ -332,7 +355,8 @@ const matches = matchFilters(event, [
 
 ##### `filterEvents(events: NostrEvent[], filter: NostrFilter): NostrEvent[]`
 
-イベント配列からフィルター条件にマッチするものを抽出する。`created_at` 降順でソートし、`limit` が指定されていれば制限する。
+イベント配列からフィルター条件にマッチするものを抽出する。`created_at`
+降順でソートし、`limit` が指定されていれば制限する。
 
 ```typescript
 const results = filterEvents(allEvents, { kinds: [1], limit: 10 });
@@ -348,7 +372,8 @@ const results = filterEvents(allEvents, { kinds: [1], limit: 10 });
 
 ##### `AuthState`
 
-接続ごとの AUTH 状態を管理するクラス。通常は MockRelay が内部で使用するため、直接利用する必要はない。
+接続ごとの AUTH 状態を管理するクラス。通常は MockRelay
+が内部で使用するため、直接利用する必要はない。
 
 ---
 
@@ -364,14 +389,14 @@ MockRelayOptions の `logging` フィールドからロガーインスタンス�
 
 ##### `Logger` クラス
 
-| メソッド/プロパティ | 型 | 説明 |
-|-------------------|-----|------|
-| `level` | `LogLevel` (readonly) | 現在のログレベル |
-| `entries` | `ReadonlyArray<LogEntry>` (readonly) | 蓄積されたログエントリ |
-| `setLevel(level)` | `void` | ログレベル変更 |
-| `setHandler(handler)` | `void` | カスタムハンドラー設定 |
-| `clear()` | `void` | ログエントリクリア |
-| `log(entry, level?)` | `void` | ログ記録 |
+| メソッド/プロパティ   | 型                                   | 説明                   |
+| --------------------- | ------------------------------------ | ---------------------- |
+| `level`               | `LogLevel` (readonly)                | 現在のログレベル       |
+| `entries`             | `ReadonlyArray<LogEntry>` (readonly) | 蓄積されたログエントリ |
+| `setLevel(level)`     | `void`                               | ログレベル変更         |
+| `setHandler(handler)` | `void`                               | カスタムハンドラー設定 |
+| `clear()`             | `void`                               | ログエントリクリア     |
+| `log(entry, level?)`  | `void`                               | ログ記録               |
 
 ---
 
@@ -379,11 +404,18 @@ MockRelayOptions の `logging` フィールドからロガーインスタンス�
 
 ```typescript
 import {
-  EventBuilder, FilterBuilder,
-  assertReceivedREQ, assertEventPublished, assertNoErrors,
-  assertAuthCompleted, assertClosed, assertReceived,
-  streamEvents, startStream,
-  snapshot, restore,
+  assertAuthCompleted,
+  assertClosed,
+  assertEventPublished,
+  assertNoErrors,
+  assertReceived,
+  assertReceivedREQ,
+  EventBuilder,
+  FilterBuilder,
+  restore,
+  snapshot,
+  startStream,
+  streamEvents,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
@@ -393,39 +425,39 @@ import {
 
 #### ファクトリメソッド
 
-| メソッド | 説明 |
-|---------|------|
-| `EventBuilder.kind0()` | kind:0 (Metadata) ビルダー |
-| `EventBuilder.kind1()` | kind:1 (Short Text Note) ビルダー |
-| `EventBuilder.kind3()` | kind:3 (Contacts) ビルダー |
-| `EventBuilder.kind4()` | kind:4 (Encrypted DM) ビルダー |
-| `EventBuilder.kind7()` | kind:7 (Reaction) ビルダー |
-| `EventBuilder.kind(k: number)` | 任意の kind |
+| メソッド                       | 説明                              |
+| ------------------------------ | --------------------------------- |
+| `EventBuilder.kind0()`         | kind:0 (Metadata) ビルダー        |
+| `EventBuilder.kind1()`         | kind:1 (Short Text Note) ビルダー |
+| `EventBuilder.kind3()`         | kind:3 (Contacts) ビルダー        |
+| `EventBuilder.kind4()`         | kind:4 (Encrypted DM) ビルダー    |
+| `EventBuilder.kind7()`         | kind:7 (Reaction) ビルダー        |
+| `EventBuilder.kind(k: number)` | 任意の kind                       |
 
 #### ビルダーメソッド
 
 すべてのビルダーメソッドは `EventBuilder` を返す（チェーン可能）。
 
-| メソッド | 説明 |
-|---------|------|
-| `content(text: string)` | コンテンツ設定 |
-| `tag(key: string, ...values: string[])` | タグ追加 |
-| `pubkey(pubkey: string)` | 公開鍵設定 |
-| `id(id: string)` | ID 設定 |
-| `createdAt(timestamp: number)` | created_at 設定 |
-| `sign(privateKey?: string)` | モック署名生成（暗号的に正しくない） |
-| `corrupt(options: CorruptOptions)` | フィールドを不正な値に置換 |
-| `geohash(hash: string)` | geohash タグ追加 (NIP-52) |
-| `emoji(name: string, url: string)` | emoji タグ追加 (NIP-30) |
-| `build()` | `NostrEvent` を構築して返す |
+| メソッド                                | 説明                                 |
+| --------------------------------------- | ------------------------------------ |
+| `content(text: string)`                 | コンテンツ設定                       |
+| `tag(key: string, ...values: string[])` | タグ追加                             |
+| `pubkey(pubkey: string)`                | 公開鍵設定                           |
+| `id(id: string)`                        | ID 設定                              |
+| `createdAt(timestamp: number)`          | created_at 設定                      |
+| `sign(privateKey?: string)`             | モック署名生成（暗号的に正しくない） |
+| `corrupt(options: CorruptOptions)`      | フィールドを不正な値に置換           |
+| `geohash(hash: string)`                 | geohash タグ追加 (NIP-52)            |
+| `emoji(name: string, url: string)`      | emoji タグ追加 (NIP-30)              |
+| `build()`                               | `NostrEvent` を構築して返す          |
 
 #### CorruptOptions
 
 ```typescript
 interface CorruptOptions {
-  id?: boolean;         // IDを不正な値にする
-  pubkey?: boolean;     // pubkeyを不正な値にする
-  sig?: boolean;        // 署名を不正な値にする
+  id?: boolean; // IDを不正な値にする
+  pubkey?: boolean; // pubkeyを不正な値にする
+  sig?: boolean; // 署名を不正な値にする
   created_at?: boolean; // created_atを-1にする
 }
 ```
@@ -458,7 +490,8 @@ const events = EventBuilder.timeline(50, {
 
 ##### `EventBuilder.thread(depth: number): NostrEvent[]`
 
-リプライチェーン（スレッド）を生成する。`[root, reply1, reply2, ...]` の配列を返す。
+リプライチェーン（スレッド）を生成する。`[root, reply1, reply2, ...]`
+の配列を返す。
 
 ##### `EventBuilder.withReactions(reactionCount: number): [NostrEvent, NostrEvent[]]`
 
@@ -476,11 +509,13 @@ kind:3 コンタクトリストイベント。
 
 ##### `EventBuilder.dm(recipientPubkey: string, content: string): EventBuilder`
 
-kind:4 DM ビルダー（暗号化はモック）。**注意**: ビルダーを返すので `.build()` が必要。
+kind:4 DM ビルダー（暗号化はモック）。**注意**: ビルダーを返すので `.build()`
+が必要。
 
 ##### `EventBuilder.groupMessage(groupId: string): EventBuilder`
 
-NIP-29 グループメッセージビルダー。**注意**: ビルダーを返すので `.build()` が必要。
+NIP-29 グループメッセージビルダー。**注意**: ビルダーを返すので `.build()`
+が必要。
 
 ##### `EventBuilder.zapRequest(options: ZapRequestOptions): NostrEvent`
 
@@ -488,19 +523,21 @@ NIP-57 Zap Request イベント。
 
 ```typescript
 interface ZapRequestOptions {
-  amount: number;           // millisats
-  relays: string[];         // リレーURL一覧
-  lnurl: string;            // LNURL
-  eventId?: string;         // 対象イベントID
+  amount: number; // millisats
+  relays: string[]; // リレーURL一覧
+  lnurl: string; // LNURL
+  eventId?: string; // 対象イベントID
   recipientPubkey?: string; // 対象公開鍵
 }
 ```
 
 ##### `EventBuilder.nip07Request(): NostrEvent`
 
-NIP-07 リクエストイベント (kind:24133) を生成する。ブラウザ拡張連携のテストデータとして使用する。
+NIP-07 リクエストイベント (kind:24133)
+を生成する。ブラウザ拡張連携のテストデータとして使用する。
 
-**注意**: tsunagiya は NIP-07 のブラウザ API (`window.nostr`) のモック機能は提供しない。このメソッドはテスト用イベントの生成のみを行う。
+**注意**: tsunagiya は NIP-07 のブラウザ API (`window.nostr`)
+のモック機能は提供しない。このメソッドはテスト用イベントの生成のみを行う。
 
 ```typescript
 const event = EventBuilder.nip07Request();
@@ -559,7 +596,8 @@ assertReceivedREQ(relay, { kinds: [1] });
 
 ##### `assertNoErrors(relay: MockRelay): void`
 
-エラーレスポンスが発生していないことを検証する。OK:false、CLOSED（auth-required）、error NOTICE が1件でもあれば失敗する。
+エラーレスポンスが発生していないことを検証する。OK:false、CLOSED（auth-required）、error
+NOTICE が1件でもあれば失敗する。
 
 ##### `assertAuthCompleted(relay: MockRelay): void`
 
@@ -574,9 +612,7 @@ AUTH 応答が受信されていることを検証する。
 カスタム述語で受信メッセージを検証する。
 
 ```typescript
-assertReceived(relay, (messages) =>
-  messages.some((m) => m[0] === "REQ")
-);
+assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 ```
 
 ---
@@ -590,7 +626,7 @@ assertReceived(relay, (messages) =>
 ```typescript
 interface StreamOptions {
   interval?: number; // 送信間隔 (ms), デフォルト: 100
-  jitter?: number;   // ジッター幅 (±ms), デフォルト: 0
+  jitter?: number; // ジッター幅 (±ms), デフォルト: 0
 }
 ```
 
@@ -601,8 +637,8 @@ interface StreamOptions {
 ```typescript
 interface StartStreamOptions extends StreamOptions {
   eventGenerator: () => NostrEvent; // 必須
-  interval?: number;                // デフォルト: 1000
-  count?: number;                   // 件数上限（省略で無制限）
+  interval?: number; // デフォルト: 1000
+  count?: number; // 件数上限（省略で無制限）
 }
 ```
 
@@ -610,7 +646,7 @@ interface StartStreamOptions extends StreamOptions {
 
 ```typescript
 interface StreamHandle {
-  stop(): void;           // ストリーム停止
+  stop(): void; // ストリーム停止
   readonly stopped: boolean; // 停止済みか
 }
 ```
@@ -635,13 +671,13 @@ interface StreamHandle {
 
 ```typescript
 interface NostrEvent {
-  id: string;          // イベントID (64文字hex)
-  pubkey: string;      // 公開鍵 (64文字hex)
-  created_at: number;  // UNIXタイムスタンプ (秒)
-  kind: number;        // イベント種別
-  tags: string[][];    // タグ配列
-  content: string;     // コンテンツ文字列
-  sig: string;         // 署名 (128文字hex)
+  id: string; // イベントID (64文字hex)
+  pubkey: string; // 公開鍵 (64文字hex)
+  created_at: number; // UNIXタイムスタンプ (秒)
+  kind: number; // イベント種別
+  tags: string[][]; // タグ配列
+  content: string; // コンテンツ文字列
+  sig: string; // 署名 (128文字hex)
 }
 ```
 
@@ -649,12 +685,12 @@ interface NostrEvent {
 
 ```typescript
 interface NostrFilter {
-  ids?: string[];                        // IDプレフィックスマッチ
-  authors?: string[];                    // 公開鍵プレフィックスマッチ
-  kinds?: number[];                      // kind完全一致
-  since?: number;                        // created_at下限 (inclusive)
-  until?: number;                        // created_at上限 (inclusive)
-  limit?: number;                        // 返却数上限
+  ids?: string[]; // IDプレフィックスマッチ
+  authors?: string[]; // 公開鍵プレフィックスマッチ
+  kinds?: number[]; // kind完全一致
+  since?: number; // created_at下限 (inclusive)
+  until?: number; // created_at上限 (inclusive)
+  limit?: number; // 返却数上限
   [key: `#${string}`]: string[] | undefined; // タグフィルター
 }
 ```
@@ -686,8 +722,8 @@ type RelayMessage =
 ```typescript
 interface MockRelayOptions {
   latency?: { min: number; max: number } | number;
-  errorRate?: number;        // 0.0 - 1.0
-  disconnectRate?: number;   // 0.0 - 1.0
+  errorRate?: number; // 0.0 - 1.0
+  disconnectRate?: number; // 0.0 - 1.0
   connectionTimeout?: number; // ms
   requiresAuth?: boolean;
   logging?: boolean | LogHandler;
@@ -698,8 +734,8 @@ interface MockRelayOptions {
 
 ```typescript
 interface LogEntry {
-  timestamp: number;              // ms
-  relay: string;                  // リレーURL
+  timestamp: number; // ms
+  relay: string; // リレーURL
   direction: "send" | "receive";
   data: unknown;
 }
@@ -709,8 +745,8 @@ interface LogEntry {
 
 ```typescript
 interface RelaySnapshot {
-  timestamp: number;        // 保存時刻 (ms)
-  store: NostrEvent[];      // ストア内のイベント
+  timestamp: number; // 保存時刻 (ms)
+  store: NostrEvent[]; // ストア内のイベント
   received: ClientMessage[]; // 受信メッセージログ
 }
 ```

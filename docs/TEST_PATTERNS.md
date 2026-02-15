@@ -93,7 +93,9 @@ Deno.test("一部リレーがダウンしても動作する", async () => {
           if (msg[0] === "EOSE") ws.close();
         };
         ws.onerror = () => errors.push(url);
-        ws.onclose = () => { if (++done === 2) resolve(); };
+        ws.onclose = () => {
+          if (++done === 2) resolve();
+        };
       }
     });
 
@@ -122,7 +124,9 @@ Deno.test("接続タイムアウト", async () => {
     let errorFired = false;
 
     const code = await new Promise<number>((resolve) => {
-      ws.onerror = () => { errorFired = true; };
+      ws.onerror = () => {
+        errorFired = true;
+      };
       ws.onclose = (e) => resolve(e.code);
     });
 
@@ -147,7 +151,7 @@ Deno.test("エラー率のあるリレー", async () => {
 
   // イベントを登録してもエラー率100%なのでNOTICEが返る
   pool.relay("wss://flaky.relay.com").store(
-    EventBuilder.kind1().content("test").build()
+    EventBuilder.kind1().content("test").build(),
   );
 
   pool.install();
@@ -193,15 +197,18 @@ Deno.test("同一リレーに複数接続", async () => {
         new Promise<void>((resolve) => {
           const ws = new WebSocket("wss://relay.example.com");
           let count = 0;
-          ws.onopen = () => ws.send(JSON.stringify(["REQ", `s${i}`, { kinds: [1] }]));
+          ws.onopen = () =>
+            ws.send(JSON.stringify(["REQ", `s${i}`, { kinds: [1] }]));
           ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if (msg[0] === "EVENT") count++;
             if (msg[0] === "EOSE") ws.close();
           };
-          ws.onclose = () => { results.push(count); resolve(); };
-        })
-      )
+          ws.onclose = () => {
+            results.push(count);
+            resolve();
+          };
+        })),
     );
 
     // 全接続が同じイベントを受信
@@ -267,7 +274,8 @@ Deno.test("重複イベントの排除", async () => {
   const pool = new MockPool();
 
   // 同じイベントを複数リレーに登録
-  const sharedEvent = EventBuilder.kind1().id("shared-id").content("shared").build();
+  const sharedEvent = EventBuilder.kind1().id("shared-id").content("shared")
+    .build();
 
   pool.relay("wss://relay1.example.com").store(sharedEvent);
   pool.relay("wss://relay2.example.com").store(sharedEvent);
@@ -278,7 +286,9 @@ Deno.test("重複イベントの排除", async () => {
     let done = 0;
 
     await new Promise<void>((resolve) => {
-      for (const url of ["wss://relay1.example.com", "wss://relay2.example.com"]) {
+      for (
+        const url of ["wss://relay1.example.com", "wss://relay2.example.com"]
+      ) {
         const ws = new WebSocket(url);
         ws.onopen = () => ws.send(JSON.stringify(["REQ", "s", { kinds: [1] }]));
         ws.onmessage = (e) => {
@@ -286,7 +296,9 @@ Deno.test("重複イベントの排除", async () => {
           if (msg[0] === "EVENT") eventIds.add(msg[2].id);
           if (msg[0] === "EOSE") ws.close();
         };
-        ws.onclose = () => { if (++done === 2) resolve(); };
+        ws.onclose = () => {
+          if (++done === 2) resolve();
+        };
       }
     });
 

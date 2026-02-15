@@ -66,7 +66,7 @@ const handle = startStream(relay, {
 ```typescript
 Deno.test({
   name: "時間のかかるテスト",
-  fn: async () => { /* ... */ },
+  fn: async () => {/* ... */},
   sanitizeOps: false,
   sanitizeResources: false,
 });
@@ -117,7 +117,9 @@ pool.install(); // install が遅い
 relay.onREQ(() => []); // 常に空
 ```
 
-→ `onREQ` を設定すると自動マッチングがスキップされる。ハンドラーからイベントを返すか、`onREQ` を使わずに `store()` を使う。
+→ `onREQ`
+を設定すると自動マッチングがスキップされる。ハンドラーからイベントを返すか、`onREQ`
+を使わずに `store()` を使う。
 
 ---
 

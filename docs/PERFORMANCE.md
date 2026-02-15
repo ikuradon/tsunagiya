@@ -26,7 +26,7 @@ for (let i = 0; i < 1000; i++) {
 ```typescript
 const events = EventBuilder.timeline(1000, {
   kind: 1,
-  interval: 60,      // 1分間隔
+  interval: 60, // 1分間隔
   startTime: 1700000000,
 });
 ```
@@ -78,13 +78,14 @@ Deno.test("テストスイート", async (t) => {
 
 ```typescript
 // ⚠️ 10000件のストア → スナップショットで追加10000件分のメモリ
-relay.store(...EventBuilder.bulk(10000).map(e => (relay.store(e), e)));
+relay.store(...EventBuilder.bulk(10000).map((e) => (relay.store(e), e)));
 const snap = snapshot(relay); // ← 10000件のコピー
 ```
 
 ### 不要なログを無効化
 
-`logging: true` はすべてのメッセージをメモリに蓄積する。大量テストでは無効にする。
+`logging: true`
+はすべてのメッセージをメモリに蓄積する。大量テストでは無効にする。
 
 ```typescript
 // ✅ パフォーマンステストではログ無効（デフォルト）
@@ -237,7 +238,9 @@ Deno.test("10リレー × 100件 = 1000件", async () => {
           if (msg[0] === "EVENT") allReceived.push(msg[2]);
           if (msg[0] === "EOSE") ws.close();
         };
-        ws.onclose = () => { if (++done === 10) resolve(); };
+        ws.onclose = () => {
+          if (++done === 10) resolve();
+        };
       }
     });
 

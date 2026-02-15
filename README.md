@@ -344,6 +344,20 @@ restore(relay, snap);
 | NIP-52 | Geohash         | EventBuilder geohash タグ           |
 | NIP-57 | Zap Request     | EventBuilder テンプレート           |
 
+## ドキュメント
+
+| ドキュメント                                        | 内容                       |
+| --------------------------------------------------- | -------------------------- |
+| [API リファレンス](./docs/API_REFERENCE.md)         | 全クラス・関数・型の詳細   |
+| [チュートリアル](./docs/TUTORIAL.md)                | ステップバイステップガイド |
+| [使用例集](./docs/EXAMPLES.md)                      | 実践的な使用例（14例）     |
+| [テストパターン](./docs/TEST_PATTERNS.md)           | よくあるテストシナリオ     |
+| [ベストプラクティス](./docs/BEST_PRACTICES.md)      | テスト設計の指針           |
+| [トラブルシューティング](./docs/TROUBLESHOOTING.md) | よくあるエラーと解決方法   |
+| [FAQ](./docs/FAQ.md)                                | よくある質問（17問）       |
+| [NIP 対応状況](./docs/NIP_SUPPORT.md)               | NIP ごとの対応・使用例     |
+| [パフォーマンス](./docs/PERFORMANCE.md)             | 大量データの最適化         |
+
 ## ライセンス
 
 MIT
