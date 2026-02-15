@@ -11,6 +11,11 @@ import type { MockRelayOptions } from "./types.ts";
 import { MockRelay } from "./relay.ts";
 import { MockWebSocket } from "./websocket.ts";
 
+/** URLを正規化する（末尾スラッシュを除去） */
+function normalizeUrl(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
 /**
  * 複数のMockRelayを管理するコンテナ
  *
@@ -46,13 +51,14 @@ export class MockPool {
    * @returns MockRelayインスタンス
    */
   relay(url: string, options?: MockRelayOptions): MockRelay {
-    const existing = this.#relays.get(url);
+    const key = normalizeUrl(url);
+    const existing = this.#relays.get(key);
     if (existing) {
       return existing;
     }
 
     const mockRelay = new MockRelay(url, options);
-    this.#relays.set(url, mockRelay);
+    this.#relays.set(key, mockRelay);
     return mockRelay;
   }
 
@@ -69,7 +75,7 @@ export class MockPool {
     this.#originalWebSocket = globalThis.WebSocket;
 
     MockWebSocket._resolveRelay = (url: string) => {
-      return this.#relays.get(url);
+      return this.#relays.get(normalizeUrl(url));
     };
 
     // deno-lint-ignore no-explicit-any
