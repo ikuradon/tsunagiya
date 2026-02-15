@@ -106,6 +106,89 @@ Deno.test("assertNoErrors - passes on empty relay", () => {
   assertNoErrors(relay);
 });
 
+Deno.test("assertNoErrors - passes when no errors", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const event = EventBuilder.kind1().id("ok-event").build();
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // should not throw
+    assertNoErrors(relay);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertNoErrors - throws when EVENT rejected", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  // EVENTを拒否するハンドラー
+  relay.onEVENT((event) => {
+    return ["OK", event.id, false, "blocked: spam"];
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const event = EventBuilder.kind1().id("spam-event").build();
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertThrows(
+      () => assertNoErrors(relay),
+      Error,
+      "Expected no errors",
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertNoErrors - throws on auth-required rejection", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 認証せずにREQを送信
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const relay = pool.relay("wss://auth.relay.com");
+    assertThrows(
+      () => assertNoErrors(relay),
+      Error,
+      "Expected no errors",
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("assertAuthCompleted - passes when AUTH received", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
