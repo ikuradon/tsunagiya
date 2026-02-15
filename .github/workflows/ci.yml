@@ -99,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        library: [nostr-tools, ndk, rx-nostr]
+        library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
     steps:
       - uses: actions/checkout@v6
       - uses: denoland/setup-deno@v2

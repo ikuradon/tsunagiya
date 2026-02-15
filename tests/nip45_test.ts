@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
 
-Deno.test("NIP-45 COUNT - basic count returns correct number", () => {
+Deno.test("NIP-45 COUNT - basic count returns correct number", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -22,22 +22,19 @@ Deno.test("NIP-45 COUNT - basic count returns correct number", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        assertEquals(messages.length, 1);
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[0], "COUNT");
-        assertEquals(count[1], "count1");
-        assertEquals(count[2].count, 3);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(messages.length, 1);
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[0], "COUNT");
+    assertEquals(count[1], "count1");
+    assertEquals(count[2].count, 3);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - returns 0 for no matches", () => {
+Deno.test("NIP-45 COUNT - returns 0 for no matches", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
@@ -52,19 +49,16 @@ Deno.test("NIP-45 COUNT - returns 0 for no matches", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 0);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 0);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - multiple filters (OR)", () => {
+Deno.test("NIP-45 COUNT - multiple filters (OR)", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -84,19 +78,16 @@ Deno.test("NIP-45 COUNT - multiple filters (OR)", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 2);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 2);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - custom onCOUNT handler", () => {
+Deno.test("NIP-45 COUNT - custom onCOUNT handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -115,19 +106,16 @@ Deno.test("NIP-45 COUNT - custom onCOUNT handler", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 42);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 42);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - async onCOUNT handler", () => {
+Deno.test("NIP-45 COUNT - async onCOUNT handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -147,19 +135,16 @@ Deno.test("NIP-45 COUNT - async onCOUNT handler", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 99);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 99);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - with author filter", () => {
+Deno.test("NIP-45 COUNT - with author filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -181,13 +166,10 @@ Deno.test("NIP-45 COUNT - with author filter", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 2);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 2);
   } finally {
     pool.uninstall();
   }
@@ -195,7 +177,7 @@ Deno.test("NIP-45 COUNT - with author filter", () => {
 
 // ===== 検証ヘルパー =====
 
-Deno.test("NIP-45 - countCOUNTs() counts COUNT messages", () => {
+Deno.test("NIP-45 - countCOUNTs() counts COUNT messages", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -207,18 +189,15 @@ Deno.test("NIP-45 - countCOUNTs() counts COUNT messages", () => {
       ws.send(JSON.stringify(["COUNT", "c2", { kinds: [7] }]));
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        assertEquals(relay.countCOUNTs(), 2);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(relay.countCOUNTs(), 2);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 - findCOUNT() finds by subId", () => {
+Deno.test("NIP-45 - findCOUNT() finds by subId", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -229,21 +208,18 @@ Deno.test("NIP-45 - findCOUNT() finds by subId", () => {
       ws.send(JSON.stringify(["COUNT", "my-count", { kinds: [1] }]));
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const found = relay.findCOUNT("my-count");
-        assertEquals(found?.[0], "COUNT");
-        assertEquals(found?.[1], "my-count");
-        assertEquals(relay.findCOUNT("nonexistent"), undefined);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const found = relay.findCOUNT("my-count");
+    assertEquals(found?.[0], "COUNT");
+    assertEquals(found?.[1], "my-count");
+    assertEquals(relay.findCOUNT("nonexistent"), undefined);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 - hasCOUNT() checks existence", () => {
+Deno.test("NIP-45 - hasCOUNT() checks existence", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -254,19 +230,16 @@ Deno.test("NIP-45 - hasCOUNT() checks existence", () => {
       ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        assertEquals(relay.hasCOUNT("c1"), true);
-        assertEquals(relay.hasCOUNT("c2"), false);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(relay.hasCOUNT("c1"), true);
+    assertEquals(relay.hasCOUNT("c2"), false);
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - deduplicates events across filters", () => {
+Deno.test("NIP-45 COUNT - deduplicates events across filters", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -292,19 +265,16 @@ Deno.test("NIP-45 COUNT - deduplicates events across filters", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 1); // Not 2
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 1); // Not 2
   } finally {
     pool.uninstall();
   }
 });
 
-Deno.test("NIP-45 COUNT - reset clears countHandler", () => {
+Deno.test("NIP-45 COUNT - reset clears countHandler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -323,13 +293,10 @@ Deno.test("NIP-45 COUNT - reset clears countHandler", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 0); // Not 999
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 0); // Not 999
   } finally {
     pool.uninstall();
   }
