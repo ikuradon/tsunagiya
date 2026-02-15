@@ -20,8 +20,8 @@ export type EventKind =
  * イベント種別を判定する
  *
  * kind 値に基づいて以下の種別を返す:
- * - `regular`: kind 0-9999, 40000+（ただし replaceable/ephemeral/parameterized_replaceable を除く）
- * - `replaceable`: kind 10000-19999
+ * - `regular`: 上記以外（kind 1, 2, 4-9999, 40000+ 等）
+ * - `replaceable`: kind 0, 3, 10000-19999（NIP-01 特殊 kind 含む）
  * - `ephemeral`: kind 20000-29999
  * - `parameterized_replaceable`: kind 30000-39999
  *
@@ -29,6 +29,8 @@ export type EventKind =
  * @returns イベント種別
  */
 export function classifyEvent(kind: number): EventKind {
+  // NIP-01: kind 0 (metadata), kind 3 (contacts) は replaceable
+  if (kind === 0 || kind === 3) return "replaceable";
   if (kind >= 10000 && kind < 20000) return "replaceable";
   if (kind >= 20000 && kind < 30000) return "ephemeral";
   if (kind >= 30000 && kind < 40000) return "parameterized_replaceable";
@@ -38,10 +40,10 @@ export function classifyEvent(kind: number): EventKind {
 /**
  * Replaceable イベントかどうか判定する
  *
- * kind: 10000-19999 のイベントが対象。
+ * kind: 0, 3, 10000-19999 のイベントが対象。
  */
 export function isReplaceable(kind: number): boolean {
-  return kind >= 10000 && kind < 20000;
+  return kind === 0 || kind === 3 || (kind >= 10000 && kind < 20000);
 }
 
 /**

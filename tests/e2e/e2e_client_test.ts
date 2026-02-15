@@ -21,6 +21,11 @@ import type { NostrEvent } from "../../src/types.ts";
 
 let _testTimestamp = Math.floor(Date.now() / 1000);
 
+/** microtaskキューをフラッシュする */
+function flush(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
 /** テスト用イベントを生成する (created_at は呼び出し順に増加) */
 function makeEvent(
   id: string,
@@ -64,6 +69,7 @@ describe("NostrClient E2E", () => {
 
       await client.connect();
       const sub = client.subscribe([{ kinds: [1] }]);
+      await flush();
 
       assert.equal(received.length, 2);
       assert.equal(received[0].content, "second note"); // sorted by created_at desc
@@ -94,6 +100,7 @@ describe("NostrClient E2E", () => {
 
       await client.connect();
       const published = client.publishNote("test note", "b".repeat(64));
+      await flush();
 
       assert.equal(okEventId, published.id);
       assert.equal(okAccepted, true);
@@ -125,6 +132,7 @@ describe("NostrClient E2E", () => {
 
       await client.connect();
       client.subscribe([{ kinds: [1] }]);
+      await flush();
 
       assert.equal(received.length, 2);
 
@@ -153,10 +161,12 @@ describe("NostrClient E2E", () => {
       await client.connect();
 
       const published = client.publishNote("find me", "c".repeat(64));
+      await flush();
 
       const received: NostrEvent[] = [];
       client.onEvent((ev) => received.push(ev));
       client.subscribe([{ ids: [published.id] }]);
+      await flush();
 
       assert.equal(received.length, 1);
       assert.equal(received[0].id, published.id);

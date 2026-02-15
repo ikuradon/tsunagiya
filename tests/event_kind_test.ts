@@ -10,12 +10,16 @@ import { EventBuilder } from "../src/testing/event_builder.ts";
 
 // ===== classifyEvent =====
 
-Deno.test("classifyEvent - regular for kind:0", () => {
-  assertEquals(classifyEvent(0), "regular");
+Deno.test("classifyEvent - replaceable for kind:0 (NIP-01 metadata)", () => {
+  assertEquals(classifyEvent(0), "replaceable");
 });
 
 Deno.test("classifyEvent - regular for kind:1", () => {
   assertEquals(classifyEvent(1), "regular");
+});
+
+Deno.test("classifyEvent - replaceable for kind:3 (NIP-01 contacts)", () => {
+  assertEquals(classifyEvent(3), "replaceable");
 });
 
 Deno.test("classifyEvent - regular for kind:9999", () => {
@@ -51,6 +55,14 @@ Deno.test("classifyEvent - regular for kind:40000", () => {
 });
 
 // ===== isReplaceable =====
+
+Deno.test("isReplaceable - true for kind:0 (NIP-01 metadata)", () => {
+  assertEquals(isReplaceable(0), true);
+});
+
+Deno.test("isReplaceable - true for kind:3 (NIP-01 contacts)", () => {
+  assertEquals(isReplaceable(3), true);
+});
 
 Deno.test("isReplaceable - true for kind:10000", () => {
   assertEquals(isReplaceable(10000), true);

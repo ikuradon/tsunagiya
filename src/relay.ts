@@ -36,8 +36,8 @@ interface ReceivedMessage {
   timestamp: number;
   /** パース済みメッセージ */
   message: ClientMessage;
-  /** 送信元WebSocket */
-  socket: MockWebSocket;
+  /** 送信元WebSocket（スナップショットから復元した場合は null） */
+  socket: MockWebSocket | null;
 }
 
 /**
@@ -79,7 +79,7 @@ export class MockRelay {
    * イベントをストアに登録する
    *
    * REQ受信時の自動マッチングに使用される。
-   * NIP-16 に基づき、イベント種別に応じた処理を行う:
+   * NIP-01/NIP-16 に基づき、イベント種別に応じた処理を行う:
    * - Regular: 通常通り追加
    * - Replaceable: 同一 kind+pubkey の古いイベントを削除し追加（古い場合は無視）
    * - Ephemeral: ストアに追加せず、ブロードキャストのみ
@@ -88,49 +88,11 @@ export class MockRelay {
    * @returns ストアに追加された場合 true、無視された場合 false
    */
   store(event: NostrEvent): boolean {
-    // 削除済みイベントは拒否
-    if (this.#deletedIds.has(event.id)) return false;
-
-    const kind = classifyEvent(event.kind);
-
-    if (kind === "ephemeral") {
-      // Ephemeral: ストアに追加せず、ブロードキャストのみ
+    const { stored, ephemeral } = this.#classifyAndStore(event);
+    if (ephemeral) {
       this._broadcastEvent(event);
-      return false;
     }
-
-    if (kind === "replaceable") {
-      const existing = this.#store.find(
-        (e) => e.kind === event.kind && e.pubkey === event.pubkey,
-      );
-      if (existing) {
-        if (event.created_at <= existing.created_at) return false;
-        this.#store = this.#store.filter(
-          (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
-        );
-      }
-      this.#store.push(event);
-      return true;
-    }
-
-    if (kind === "parameterized_replaceable") {
-      const newParamId = getParameterizedId(event);
-      const existing = this.#store.find((e) => {
-        return getParameterizedId(e) === newParamId;
-      });
-      if (existing) {
-        if (event.created_at <= existing.created_at) return false;
-        this.#store = this.#store.filter(
-          (e) => getParameterizedId(e) !== newParamId,
-        );
-      }
-      this.#store.push(event);
-      return true;
-    }
-
-    // Regular
-    this.#store.push(event);
-    return true;
+    return stored;
   }
 
   /**
@@ -409,7 +371,7 @@ export class MockRelay {
           tags: (msg as ["EVENT", NostrEvent])[1].tags.map((t) => [...t]),
         }] as ClientMessage
         : [...msg] as ClientMessage,
-      socket: null as unknown as MockWebSocket,
+      socket: null,
     }));
     this.#deletedIds = new Set(snap.deletedIds ?? []);
   }
@@ -592,55 +554,20 @@ export class MockRelay {
         this.#store.push(event);
         response = ["OK", event.id, true, ""];
       } else {
-        const kind = classifyEvent(event.kind);
-        if (kind === "ephemeral") {
-          // Ephemeral: ストアに追加せず、ブロードキャストのみ
+        const { stored, ephemeral } = this.#classifyAndStore(event);
+        if (ephemeral) {
           this._broadcastEvent(event);
           response = ["OK", event.id, true, ""];
-        } else if (kind === "replaceable") {
-          const existing = this.#store.find(
-            (e) => e.kind === event.kind && e.pubkey === event.pubkey,
-          );
-          if (existing && event.created_at <= existing.created_at) {
-            response = [
-              "OK",
-              event.id,
-              true,
-              "duplicate: already have a newer event",
-            ];
-          } else {
-            this.#store = this.#store.filter(
-              (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
-            );
-            this.#store.push(event);
-            this._broadcastEvent(event);
-            response = ["OK", event.id, true, ""];
-          }
-        } else if (kind === "parameterized_replaceable") {
-          const newParamId = getParameterizedId(event);
-          const existing = this.#store.find(
-            (e) => getParameterizedId(e) === newParamId,
-          );
-          if (existing && event.created_at <= existing.created_at) {
-            response = [
-              "OK",
-              event.id,
-              true,
-              "duplicate: already have a newer event",
-            ];
-          } else {
-            this.#store = this.#store.filter(
-              (e) => getParameterizedId(e) !== newParamId,
-            );
-            this.#store.push(event);
-            this._broadcastEvent(event);
-            response = ["OK", event.id, true, ""];
-          }
+        } else if (stored) {
+          this._broadcastEvent(event);
+          response = ["OK", event.id, true, ""];
         } else {
-          // Regular
-          this.#store.push(event);
-          this._broadcastEvent(event);
-          response = ["OK", event.id, true, ""];
+          response = [
+            "OK",
+            event.id,
+            true,
+            "duplicate: already have a newer event",
+          ];
         }
       }
     }
@@ -770,6 +697,67 @@ export class MockRelay {
     this.#sendWithLatency(ws, msg);
   }
 
+  // ===== イベント種別判定・ストア =====
+
+  /**
+   * イベント種別に応じてストアに追加・置換する
+   *
+   * Ephemeral イベントはストアに追加しない（呼び出し側でブロードキャストする）。
+   * Replaceable/Parameterized Replaceable は同一キーの古いイベントを置換する。
+   *
+   * @returns stored: ストアに追加されたか、ephemeral: ephemeral イベントか
+   */
+  #classifyAndStore(
+    event: NostrEvent,
+  ): { stored: boolean; ephemeral: boolean } {
+    if (this.#deletedIds.has(event.id)) {
+      return { stored: false, ephemeral: false };
+    }
+
+    const kind = classifyEvent(event.kind);
+
+    if (kind === "ephemeral") {
+      return { stored: false, ephemeral: true };
+    }
+
+    if (kind === "replaceable") {
+      const existing = this.#store.find(
+        (e) => e.kind === event.kind && e.pubkey === event.pubkey,
+      );
+      if (existing) {
+        if (event.created_at <= existing.created_at) {
+          return { stored: false, ephemeral: false };
+        }
+        this.#store = this.#store.filter(
+          (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
+        );
+      }
+      this.#store.push(event);
+      return { stored: true, ephemeral: false };
+    }
+
+    if (kind === "parameterized_replaceable") {
+      const newParamId = getParameterizedId(event);
+      const existing = this.#store.find(
+        (e) => getParameterizedId(e) === newParamId,
+      );
+      if (existing) {
+        if (event.created_at <= existing.created_at) {
+          return { stored: false, ephemeral: false };
+        }
+        this.#store = this.#store.filter(
+          (e) => getParameterizedId(e) !== newParamId,
+        );
+      }
+      this.#store.push(event);
+      return { stored: true, ephemeral: false };
+    }
+
+    // Regular
+    this.#store.push(event);
+    return { stored: true, ephemeral: false };
+  }
+
   // ===== 認証チェック =====
 
   #requiresAuthentication(): boolean {
@@ -808,7 +796,10 @@ export class MockRelay {
       }, latency);
       this.#pendingTimers.add(timer);
     } else {
-      ws._receiveMessage(json);
+      // 実際のWebSocketと同様に非同期でメッセージを配信する。
+      // send() 内で同期的にレスポンスを返すと、一部のクライアント
+      // ライブラリ（NDK等）が正しく処理できない。
+      queueMicrotask(() => ws._receiveMessage(json));
     }
   }
 
