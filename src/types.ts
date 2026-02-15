@@ -62,6 +62,7 @@ export type RelayMessage =
   | ["EVENT", string, NostrEvent]
   | ["OK", string, boolean, string]
   | ["EOSE", string]
+  | ["CLOSED", string, string]
   | ["NOTICE", string]
   | ["AUTH", string];
 
@@ -90,8 +91,6 @@ export interface MockRelayOptions {
   disconnectRate?: number;
   /** 接続タイムアウト (ms) */
   connectionTimeout?: number;
-  /** 再接続遅延 (ms) */
-  reconnectDelay?: number;
   /** 接続時にAUTH要求するか */
   requiresAuth?: boolean;
   /** ログ出力 */

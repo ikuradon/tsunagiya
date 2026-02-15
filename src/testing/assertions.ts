@@ -7,7 +7,6 @@
  */
 
 import type { ClientMessage, NostrFilter } from "../types.ts";
-import { matchFilter } from "../filter.ts";
 import type { MockRelay } from "../relay.ts";
 
 /**
@@ -52,23 +51,20 @@ export function assertEventPublished(
 }
 
 /**
- * NOTICEメッセージが受信されていないことを検証する
+ * エラーレスポンスが発生していないことを検証する
  *
- * NOTICEはリレーからクライアントへのメッセージなので、
- * ここでは受信メッセージ中にエラーを示すメッセージがないかチェックする。
- * 具体的には、receivedメッセージ中に "error" を含むものがないか確認する。
+ * MockRelay が送信したエラーレスポンス（OK:false、CLOSED、error NOTICE）を
+ * チェックし、1件でもあれば失敗する。
  *
- * @throws {Error} エラーが検出された場合
+ * @throws {Error} エラーレスポンスが検出された場合
  */
 export function assertNoErrors(relay: MockRelay): void {
-  // クライアントから受信したメッセージを全件チェック
-  // (NOTICEはリレー→クライアントなので、ここではreceivedに記録されない)
-  // 代わりに、EVENTでOK: falseが返されたかをチェックする簡易実装
-  const messages = relay.received;
-  if (messages.length === 0) return;
-
-  // EVENTの受信自体にはエラーはないので、パスとする
-  // より高度なエラー検出はPhase 4以降で拡張可能
+  const errors = relay.errors;
+  if (errors.length > 0) {
+    throw new Error(
+      `Expected no errors but found ${errors.length}: ${errors.join(", ")}`,
+    );
+  }
 }
 
 /**
@@ -163,8 +159,3 @@ function filtersMatch(actual: NostrFilter, expected: NostrFilter): boolean {
 
   return true;
 }
-
-// matchFilter を内部で使用するためにインポートしているが、filtersMatch は
-// フィルター同士の比較用なので別実装。matchFilter は未使用にならないよう
-// アサーション関数内で将来的に活用可能。
-void matchFilter;
