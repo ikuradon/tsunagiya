@@ -46,8 +46,12 @@ export function streamEvents(
     timer = setTimeout(() => {
       if (stopped || index >= events.length) return;
       const event = events[index++];
-      relay.store(event);
-      relay._broadcastEvent(event);
+      // store() は ephemeral イベントの場合、内部でブロードキャストする。
+      // regular/replaceable の場合のみ追加でブロードキャストする。
+      const stored = relay.store(event);
+      if (stored) {
+        relay._broadcastEvent(event);
+      }
       scheduleNext();
     }, effectiveDelay);
   }
@@ -108,8 +112,10 @@ export function startStream(
       }
 
       const event = options.eventGenerator();
-      relay.store(event);
-      relay._broadcastEvent(event);
+      const stored = relay.store(event);
+      if (stored) {
+        relay._broadcastEvent(event);
+      }
       count++;
 
       scheduleNext();

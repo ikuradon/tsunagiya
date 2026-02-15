@@ -8,8 +8,13 @@
     "./testing": "./src/testing/mod.ts"
   },
   "tasks": {
-    "test": "deno test tests/",
-    "test:e2e": "deno test -A tests/e2e/e2e_client_test.ts",
+    "test": "deno test --ignore=tests/e2e tests/",
+    "test:e2e": "deno test -A tests/e2e/",
+    "test:e2e:client": "deno test -A tests/e2e/e2e_client_test.ts",
+    "test:e2e:nostr-tools": "deno test -A tests/e2e/e2e_nostr_tools_test.ts",
+    "test:e2e:ndk": "deno test -A tests/e2e/e2e_ndk_test.ts",
+    "test:e2e:rx-nostr": "deno test -A tests/e2e/e2e_rx_nostr_test.ts",
+    "test:all": "deno test -A tests/",
     "check": "deno check src/mod.ts src/testing/mod.ts examples/client/mod.ts && deno lint && deno fmt --check",
     "fmt": "deno fmt",
     "client": "deno run --allow-net examples/client/cli.ts"
@@ -21,6 +26,11 @@
     "include": ["src/", "README.md", "LICENSE", "deno.json"]
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.18"
+    "@std/assert": "jsr:@std/assert@^1.0.18",
+    "nostr-tools/pure": "npm:nostr-tools@^2/pure",
+    "nostr-tools/pool": "npm:nostr-tools@^2/pool",
+    "@nostr-dev-kit/ndk": "npm:@nostr-dev-kit/ndk@^2",
+    "rx-nostr": "npm:rx-nostr@^3",
+    "@rx-nostr/crypto": "npm:@rx-nostr/crypto@0"
   }
 }
