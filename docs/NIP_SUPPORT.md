@@ -1,6 +1,6 @@
 # NIP 対応状況
 
-tsunagiya v0.2.0 の NIP（Nostr Implementation Possibilities）対応状況。
+繋ぎ屋 v0.2.0 の NIP（Nostr Implementation Possibilities）対応状況。
 
 ---
 
@@ -8,7 +8,7 @@ tsunagiya v0.2.0 の NIP（Nostr Implementation Possibilities）対応状況。
 
 ### NIP-01: Basic Protocol ✅ 完全対応
 
-Nostr の基本プロトコル。tsunagiya のコア機能。
+Nostr の基本プロトコル。繋ぎ屋のコア機能。
 
 **対応メッセージ:**
 

@@ -1,5 +1,5 @@
 /**
- * tsunagiya - Nostrリレーモックライブラリ
+ * 繋ぎ屋 (tsunagiya) - Nostrリレーモックライブラリ
  *
  * `globalThis.WebSocket`を差し替えることで、既存のNostrクライアントコードを
  * 一切変更せずにテストできる。

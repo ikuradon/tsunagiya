@@ -1,4 +1,4 @@
-# CLAUDE.md - tsunagiya 開発ガイド
+# CLAUDE.md - 繋ぎ屋 開発ガイド
 
 ## プロジェクト概要
 
