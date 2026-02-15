@@ -58,6 +58,7 @@ Deno.test("fetch events from relay", async () => {
 - ログ機能（console / カスタムハンドラー）
 - テストフレームワーク非依存
 - 外部依存ゼロ
+- E2Eテスト対応（nostr-tools, NDK, rx-nostr, nostr-fetch）
 
 ## MockPool
 
@@ -379,6 +380,28 @@ import { restore, snapshot } from "@ikuradon/tsunagiya/testing";
 const snap = snapshot(relay);
 // ... 操作 ...
 restore(relay, snap);
+```
+
+## E2Eテスト対応
+
+tsunagiya は以下の主要 Nostr クライアントライブラリとの互換性を E2E
+テストで検証しています。
+
+| ライブラリ  | テストコマンド                   | 検証内容                                            |
+| ----------- | -------------------------------- | --------------------------------------------------- |
+| nostr-tools | `deno task test:e2e:nostr-tools` | SimplePool での REQ/EVENT 処理                      |
+| NDK         | `deno task test:e2e:ndk`         | NDK インスタンス経由のイベント取得・投稿            |
+| rx-nostr    | `deno task test:e2e:rx-nostr`    | RxNostr の Reactive API（createRxNostr / use）      |
+| nostr-fetch | `deno task test:e2e:nostr-fetch` | NostrFetcher によるイベント取得（fetch / iterator） |
+
+全ライブラリで正規の BIP-340 Schnorr
+署名を使用し、署名検証を無効化せずにテストを実施しています。
+
+**E2E テストの実行:**
+
+```bash
+deno task test:e2e           # 全 E2E テスト実行
+deno task test:all            # ユニットテスト + E2E テスト
 ```
 
 ## 対応NIP

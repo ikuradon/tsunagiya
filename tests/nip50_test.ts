@@ -96,7 +96,7 @@ Deno.test("NIP-50 filterEvents - search with limit", () => {
 
 // ===== Integration with MockRelay =====
 
-Deno.test("NIP-50 - search via REQ returns matching events", () => {
+Deno.test("NIP-50 - search via REQ returns matching events", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -117,20 +117,17 @@ Deno.test("NIP-50 - search via REQ returns matching events", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        // 2 EVENT + EOSE = 3
-        assertEquals(messages.length, 3);
-        const contents = messages
-          .filter((m) => JSON.parse(m)[0] === "EVENT")
-          .map((m) => JSON.parse(m)[2].content);
-        assertEquals(
-          contents.every((c: string) => c.toLowerCase().includes("nostr")),
-          true,
-        );
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // 2 EVENT + EOSE = 3
+    assertEquals(messages.length, 3);
+    const contents = messages
+      .filter((m) => JSON.parse(m)[0] === "EVENT")
+      .map((m) => JSON.parse(m)[2].content);
+    assertEquals(
+      contents.every((c: string) => c.toLowerCase().includes("nostr")),
+      true,
+    );
   } finally {
     pool.uninstall();
   }
@@ -151,7 +148,7 @@ Deno.test("NIP-50 FilterBuilder - search filter works with matchFilter", () => {
 
 // ===== COUNT with search =====
 
-Deno.test("NIP-50 COUNT - search filter works with COUNT", () => {
+Deno.test("NIP-50 COUNT - search filter works with COUNT", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -171,13 +168,10 @@ Deno.test("NIP-50 COUNT - search filter works with COUNT", () => {
       messages.push(e.data as string);
     });
 
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const count = JSON.parse(messages[0]);
-        assertEquals(count[2].count, 1);
-        resolve();
-      }, 50);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 1);
   } finally {
     pool.uninstall();
   }

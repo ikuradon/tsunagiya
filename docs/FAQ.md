@@ -59,6 +59,20 @@ v0.1.0 では Deno 専用です。`globalThis.WebSocket`
 が存在するランタイムであれば原理的に動作しますが、テストは Deno
 でのみ実施しています。
 
+v0.2.0 以降では、以下の主要 Nostr クライアントライブラリとの互換性を E2E
+テストで検証しています:
+
+- **nostr-tools** (`npm:nostr-tools@^2`) - SimplePool での REQ/EVENT 処理
+- **NDK** (`npm:@nostr-dev-kit/ndk@^2`) - NDK
+  インスタンス経由のイベント取得・投稿
+- **rx-nostr** (`npm:rx-nostr@^3`) - RxNostr の Reactive API（createRxNostr /
+  use）
+- **nostr-fetch** (`npm:nostr-fetch@^0`) - NostrFetcher
+  によるイベント取得（fetch / iterator）
+
+これらのライブラリは Deno の npm 互換性機能を利用して動作します。詳しくは
+README.md の「E2Eテスト対応」セクションを参照してください。
+
 ---
 
 ### Q6. テストフレームワーク依存はある？
