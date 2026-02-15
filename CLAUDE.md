@@ -100,46 +100,43 @@ deno publish --dry-run  # JSR公開プレビュー
 
 ## エージェントチーム ワークフロー
 
-機能開発は以下の7ロールで分担する。director
-が全体を統括し、各ロールのチームメイトにタスクを割り当てる。 エージェント定義は
+機能開発は以下の5ロールで分担する。director
+が設計判断と全体統括を担い、各ロールのチームメイトにタスクを割り当てる。エージェント定義は
 `.claude/agents/` に配置。tmux モードで各エージェントが分割ペインで動作する。
 
 ### ロール定義
 
-| ロール                      | 担当範囲                           | 対象ファイル                                   | モデル | permissionMode |
-| --------------------------- | ---------------------------------- | ---------------------------------------------- | ------ | -------------- |
-| **総括 (director)**         | タスク割り当て・進捗管理・最終判断 | なし（統括のみ）                               | opus   | default        |
-| **設計 (architect)**        | 要件分析、API設計、影響範囲の特定  | なし（plan mode必須）                          | opus   | plan           |
-| **開発 (developer)**        | src/ 以下の実装                    | `src/**/*.ts`                                  | sonnet | acceptEdits    |
-| **テスト (tester)**         | tests/ 以下のテスト作成            | `tests/**/*.ts`                                | sonnet | acceptEdits    |
-| **ドキュメント (docs)**     | ドキュメント作成・更新             | `docs/**/*.md`, `README.md`                    | sonnet | acceptEdits    |
-| **開発QA (dev-qa)**         | コードの品質検証、テスト実行       | `src/**/*.ts`, `tests/**/*.ts`（読み取り中心） | opus   | default        |
-| **ドキュメントQA (doc-qa)** | ドキュメントと実装の整合性検証     | `docs/**/*.md`, `src/**/*.ts`（読み取り中心）  | opus   | default        |
+| ロール                         | 担当範囲                                           | 対象ファイル                                | モデル | permissionMode    |
+| ------------------------------ | -------------------------------------------------- | ------------------------------------------- | ------ | ----------------- |
+| **総括 (director)**            | 設計判断・タスク割り当て・進捗管理・最終判断       | なし（統括のみ）                            | opus   | bypassPermissions |
+| **開発 (engineer)**            | src/ コード実装・修正・リファクタリング            | `src/**/*.ts`, `examples/**/*.ts`           | sonnet | bypassPermissions |
+| **QA (qa-engineer)**           | テスト計画・テスト作成・品質検証・ドキュメント検証 | `tests/**/*.ts`（作成）、全ファイル（検証） | opus   | default           |
+| **ドキュメント (tech-writer)** | ドキュメント作成・更新                             | `docs/**/*.md`, `README.md`                 | sonnet | bypassPermissions |
+| **DevOps (devops-engineer)**   | CI/CD・E2Eテスト・マルチランタイム互換性・JSR公開  | `.github/**`, `tests/e2e/**`, `deno.json`   | sonnet | bypassPermissions |
 
 ### ワークフロー順序
 
 ```
-director（総括・意思決定）
-  ├─ 1. architect  → 設計・計画を作成（plan mode）
-  ├─ 2. developer  → src/ 実装（architect の計画に基づく）  ← 並列可
-  ├─ 2. tester     → tests/ テスト作成                      ← 並列可
-  ├─ 3. docs       → ドキュメント更新（developer の変更に基づく）
-  ├─ 4. dev-qa     → テスト実行・コードレビュー             ← 並列可
-  └─ 4. doc-qa     → ドキュメントと実装の整合性検証         ← 並列可
+director（設計判断・統括）
+  ├─ 1. engineer        → src/ 実装                              ← 並列可
+  ├─ 1. qa-engineer     → tests/ テスト作成 + コード品質検証     ← 並列可
+  ├─ 2. tech-writer     → ドキュメント更新（engineer の変更に基づく）  ← 並列可
+  ├─ 2. devops-engineer → E2Eテスト・CI/CD更新                        ← 並列可
+  └─ 3. qa-engineer     → ドキュメント整合性検証
 ```
 
 ### 並列実行可能な組み合わせ
 
-- `developer` + `tester`（src/ と tests/ で分担）
-- `developer` + `docs`（ファイル競合しない場合）
-- `dev-qa` + `doc-qa`（両方とも読み取り中心）
+- `engineer` + `qa-engineer`（src/ と tests/ で分担）
+- `engineer` + `tech-writer`（ファイル競合しない場合）
+- `tech-writer` + `devops-engineer`（ファイル競合しない）
 
 ### 各ロールの完了条件
 
 - **director**: 全チームメイトのタスクが完了し、最終確認済み
-- **architect**: 設計ドキュメントが承認された
-- **developer**: `deno task check` と `deno test tests/` がパス
-- **tester**: `deno test tests/` が全テストパス、テスト項目がカバーされている
-- **docs**: ドキュメントが実装と一致している
-- **dev-qa**: 全テストパス、型チェック・lint・フォーマットクリーン
-- **doc-qa**: ドキュメントと公開APIに矛盾がない
+- **engineer**: `deno task check` と `deno task test` がパス
+- **qa-engineer**:
+  全テストパス、型チェック・lint・フォーマットクリーン、ドキュメントと公開APIに矛盾がない
+- **tech-writer**: ドキュメントが実装と一致している
+- **devops-engineer**: `deno task test:all` がパス、CI
+  ワークフローが正しく構成されている
