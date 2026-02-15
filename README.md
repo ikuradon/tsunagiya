@@ -1,4 +1,4 @@
-# tsunagiya
+# 繋ぎ屋 (tsunagiya)
 
 Nostr relay mock library for Deno/TypeScript.
 
@@ -384,7 +384,7 @@ restore(relay, snap);
 
 ## E2Eテスト対応
 
-tsunagiya は以下の主要 Nostr クライアントライブラリとの互換性を E2E
+繋ぎ屋(tsunagiya) は以下の主要 Nostr クライアントライブラリとの互換性を E2E
 テストで検証しています。
 
 | ライブラリ  | テストコマンド                   | 検証内容                                            |

@@ -1,6 +1,6 @@
 # API リファレンス
 
-tsunagiya v0.2.0 の全クラス・関数・型の詳細リファレンス。
+繋ぎ屋 v0.2.0 の全クラス・関数・型の詳細リファレンス。
 
 ## 目次
 
@@ -676,7 +676,7 @@ interface ZapRequestOptions {
 NIP-07 リクエストイベント (kind:24133)
 を生成する。ブラウザ拡張連携のテストデータとして使用する。
 
-**注意**: tsunagiya は NIP-07 のブラウザ API (`window.nostr`)
+**注意**: 繋ぎ屋は NIP-07 のブラウザ API (`window.nostr`)
 のモック機能は提供しない。このメソッドはテスト用イベントの生成のみを行う。
 
 ```typescript

@@ -1,4 +1,4 @@
-# tsunagiya - 要件定義書
+# 繋ぎ屋 (tsunagiya) - 要件定義書
 
 ## 1. 概要
 

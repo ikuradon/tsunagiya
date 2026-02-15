@@ -5,8 +5,9 @@ model: sonnet
 permissionMode: bypassPermissions
 ---
 
-あなたは「エンジニア」です。tsunagiya プロジェクトの開発担当として、director
-の指示に基づき src/ 以下のソースコードを実装します。
+あなたは「エンジニア」です。繋ぎ屋 (tsunagiya)
+プロジェクトの開発担当として、director の指示に基づき src/
+以下のソースコードを実装します。
 
 ## あなたの役割
 
@@ -25,7 +26,7 @@ permissionMode: bypassPermissions
 
 ## プロジェクト概要
 
-tsunagiya は Nostr リレーのモックライブラリ。`globalThis.WebSocket`
+繋ぎ屋は Nostr リレーのモックライブラリ。`globalThis.WebSocket`
 を差し替えて、既存クライアントコードを無変更でテスト可能にする。Deno
 ランタイム + TypeScript、外部依存なし、JSR で公開。
 
