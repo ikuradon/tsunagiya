@@ -51,6 +51,8 @@ Deno.test("fetch events from relay", async () => {
 - NIP-16 イベント種別自動処理（Regular/Replaceable/Ephemeral）
 - NIP-33 Parameterized Replaceable Events
 - NIP-09 Event Deletion Request
+- NIP-11 リレー情報ドキュメント（setInfo/getInfo + fetch インターセプト）
+- NIP-25 Reactions（EventBuilder withReactions）
 - NIP-45 COUNT メッセージ対応
 - NIP-50 検索フィルター対応
 - テスト支援ヘルパー（EventBuilder, FilterBuilder, assertions）
@@ -387,12 +389,12 @@ restore(relay, snap);
 繋ぎ屋(tsunagiya) は以下の主要 Nostr クライアントライブラリとの互換性を E2E
 テストで検証しています。
 
-| ライブラリ  | テストコマンド                   | 検証内容                                            |
-| ----------- | -------------------------------- | --------------------------------------------------- |
-| nostr-tools | `deno task test:e2e:nostr-tools` | SimplePool での REQ/EVENT 処理                      |
-| NDK         | `deno task test:e2e:ndk`         | NDK インスタンス経由のイベント取得・投稿            |
-| rx-nostr    | `deno task test:e2e:rx-nostr`    | RxNostr の Reactive API（createRxNostr / use）      |
-| nostr-fetch | `deno task test:e2e:nostr-fetch` | NostrFetcher によるイベント取得（fetch / iterator） |
+| ライブラリ  | テストコマンド                  | 検証内容                                            |
+| ----------- | ------------------------------- | --------------------------------------------------- |
+| nostr-tools | `deno task example:nostr-tools` | SimplePool での REQ/EVENT 処理                      |
+| NDK         | `deno task example:ndk`         | NDK インスタンス経由のイベント取得・投稿            |
+| rx-nostr    | `deno task example:rx-nostr`    | RxNostr の Reactive API（createRxNostr / use）      |
+| nostr-fetch | `deno task example:nostr-fetch` | NostrFetcher によるイベント取得（fetch / iterator） |
 
 全ライブラリで正規の BIP-340 Schnorr
 署名を使用し、署名検証を無効化せずにテストを実施しています。
@@ -400,7 +402,7 @@ restore(relay, snap);
 **E2E テストの実行:**
 
 ```bash
-deno task test:e2e           # 全 E2E テスト実行
+deno task example             # 全 E2E テスト実行
 deno task test:all            # ユニットテスト + E2E テスト
 ```
 
@@ -412,7 +414,9 @@ deno task test:all            # ユニットテスト + E2E テスト
 | NIP-04 | Encrypted DM              | EventBuilder テンプレート              |
 | NIP-09 | Event Deletion            | kind:5 削除リクエスト処理              |
 | NIP-10 | Reply Threading           | EventBuilder e/p タグ                  |
+| NIP-11 | Relay Information         | setInfo/getInfo + fetch インターセプト |
 | NIP-16 | Event Treatment           | Regular/Replaceable/Ephemeral 自動処理 |
+| NIP-25 | Reactions                 | EventBuilder withReactions             |
 | NIP-29 | Group Chat                | EventBuilder テンプレート              |
 | NIP-30 | Custom Emoji              | EventBuilder emoji タグ                |
 | NIP-33 | Parameterized Replaceable | kind+pubkey+d-tag 置き換え             |

@@ -48,10 +48,19 @@ deno publish --dry-run  # JSR公開プレビュー
 ## NIP対応
 
 - **NIP-01**: 完全実装（EVENT, REQ, CLOSE, EOSE, OK, NOTICE）
-- **NIP-42**: AUTH チャレンジ/レスポンス
+- **NIP-04**: Encrypted DM（EventBuilderテンプレート）
+- **NIP-09**: Event Deletion（kind:5 削除リクエスト処理）
 - **NIP-10**: e/p タグ（EventBuilderで対応）
+- **NIP-11**: Relay Information Document（setInfo/getInfo + fetch
+  インターセプト）
+- **NIP-16**: Event Treatment（Regular/Replaceable/Ephemeral 自動処理）
+- **NIP-25**: Reactions（EventBuilder withReactions）
 - **NIP-29**: グループチャット（EventBuilderで対応）
 - **NIP-30**: Emoji タグ（EventBuilderで対応）
+- **NIP-33**: Parameterized Replaceable Events（kind+pubkey+d-tag 置き換え）
+- **NIP-42**: AUTH チャレンジ/レスポンス
+- **NIP-45**: COUNT メッセージ対応
+- **NIP-50**: Search フィルター対応（content 部分一致検索）
 - **NIP-52**: Geohash タグ（EventBuilderで対応）
 - **NIP-57**: Zap Request（EventBuilderテンプレート）
 

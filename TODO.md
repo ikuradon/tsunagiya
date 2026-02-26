@@ -17,7 +17,8 @@
 
 ### NIP 対応
 
-- [x] NIP-11 (Relay Information Document) — `relay.setInfo()` / `getInfo()` + fetch インターセプト
+- [x] NIP-11 (Relay Information Document) — `relay.setInfo()` / `getInfo()` +
+      fetch インターセプト
 - [ ] NIP-40 (Expiration Timestamp) — `EventBuilder.withExpiration()`
       メソッド追加
 

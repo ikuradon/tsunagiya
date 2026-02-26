@@ -1,0 +1,55 @@
+/* Nostr パープルテーマ */
+
+:root {
+  --vp-c-brand-1: #8b5cf6;
+  --vp-c-brand-2: #7c3aed;
+  --vp-c-brand-3: #6d28d9;
+  --vp-c-brand-soft: rgba(139, 92, 246, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #a78bfa;
+  --vp-c-brand-2: #8b5cf6;
+  --vp-c-brand-3: #7c3aed;
+  --vp-c-brand-soft: rgba(167, 139, 250, 0.14);
+}
+
+/* ヒーロー名のグラデーション */
+.VPHero .name .clip {
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ヒーロー背景のぼかしグロー効果 */
+.VPHero .image-bg {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 50%,
+    rgba(139, 92, 246, 0.25) 0%,
+    rgba(6, 182, 212, 0.1) 50%,
+    transparent 100%
+  );
+  filter: blur(40px);
+}
+
+.dark .VPHero .image-bg {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 50%,
+    rgba(167, 139, 250, 0.3) 0%,
+    rgba(6, 182, 212, 0.15) 50%,
+    transparent 100%
+  );
+  filter: blur(40px);
+}
+
+/* ホームページ hero セクションのスタイリング */
+.VPHome .VPHero {
+  padding: 80px 24px;
+}
+
+.VPHome .VPHero .tagline {
+  color: var(--vp-c-text-2);
+  font-size: 1.1rem;
+  line-height: 1.7;
+}

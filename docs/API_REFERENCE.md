@@ -1,6 +1,6 @@
 # API リファレンス
 
-繋ぎ屋 v0.2.0 の全クラス・関数・型の詳細リファレンス。
+繋ぎ屋 v0.2.1 の全クラス・関数・型の詳細リファレンス。
 
 ## 目次
 
@@ -131,6 +131,30 @@ URL 単位で動作する仮想リレー。
 | `errors`          | `ReadonlyArray<string>` (readonly) | 発生したエラーレスポンスのログ |
 | `deletedIds`      | `ReadonlySet<string>` (readonly)   | 削除済みイベントID (NIP-09)    |
 | `logger`          | `Logger \| null` (readonly)        | ロガーインスタンス             |
+
+#### NIP-11 リレー情報
+
+##### `setInfo(info: Partial<RelayInformation>): void`
+
+NIP-11 リレー情報を設定する。既存の情報にマージされる。
+
+```typescript
+relay.setInfo({
+  name: "Test Relay",
+  description: "A mock relay for testing",
+  supported_nips: [1, 11, 42],
+  limitation: { max_subscriptions: 20 },
+});
+```
+
+##### `getInfo(): RelayInformation`
+
+現在のリレー情報を取得する。
+
+```typescript
+const info = relay.getInfo();
+console.log(info.name); // "Test Relay"
+```
 
 #### ストア・ハンドラー
 
@@ -901,6 +925,7 @@ interface RelaySnapshot {
   store: NostrEvent[]; // ストア内のイベント
   received: ClientMessage[]; // 受信メッセージログ
   deletedIds?: string[]; // 削除済みイベントID (NIP-09)
+  info?: RelayInformation; // NIP-11 リレー情報
 }
 ```
 
@@ -921,6 +946,43 @@ type COUNTHandler = (
   subId: string,
   filters: NostrFilter[],
 ) => { count: number } | Promise<{ count: number }>;
+```
+
+### RelayInformation
+
+```typescript
+interface RelayInformation {
+  name?: string;
+  description?: string;
+  banner?: string;
+  icon?: string;
+  pubkey?: string;
+  contact?: string;
+  supported_nips?: number[];
+  software?: string;
+  version?: string;
+  limitation?: RelayLimitation;
+  fees?: Record<string, unknown>;
+}
+```
+
+### RelayLimitation
+
+```typescript
+interface RelayLimitation {
+  max_message_length?: number;
+  max_subscriptions?: number;
+  max_limit?: number;
+  max_subid_length?: number;
+  max_event_tags?: number;
+  max_content_length?: number;
+  min_pow_difficulty?: number;
+  auth_required?: boolean;
+  payment_required?: boolean;
+  restricted_writes?: boolean;
+  created_at_lower_limit?: number;
+  created_at_upper_limit?: number;
+}
 ```
 
 ### LogLevel
