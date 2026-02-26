@@ -6,7 +6,7 @@
  * @module
  */
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, test } from "../_compat/mod.ts";
 import { MockPool } from "../../src/mod.ts";
 import { EventBuilder } from "../../src/testing/mod.ts";
 import type { NostrEvent } from "../../src/types.ts";
@@ -64,7 +64,7 @@ async function withRelay(
 
 // ===== テストケース =====
 
-Deno.test("basic: timeline - store済みイベント取得、created_at降順ソート", async () => {
+test("basic: timeline - store済みイベント取得、created_at降順ソート", async () => {
   await withRelay(async (relay, ws) => {
     // 時系列のイベントを3件登録（古い→新しい順）
     const events = EventBuilder.timeline(3, {
@@ -86,7 +86,7 @@ Deno.test("basic: timeline - store済みイベント取得、created_at降順ソ
   });
 });
 
-Deno.test("basic: post - EVENT送信 → OK受信、relay.hasEvent()確認", async () => {
+test("basic: post - EVENT送信 → OK受信、relay.hasEvent()確認", async () => {
   await withRelay(async (relay, ws) => {
     const id = await post(ws, "hello nostr", TEST_PUBKEY);
 
@@ -103,7 +103,7 @@ Deno.test("basic: post - EVENT送信 → OK受信、relay.hasEvent()確認", asy
   });
 });
 
-Deno.test("basic: reply - e/pタグ付きEVENT送信、relay側でタグ検証", async () => {
+test("basic: reply - e/pタグ付きEVENT送信、relay側でタグ検証", async () => {
   await withRelay(async (relay, ws) => {
     const targetPubkey =
       "bbbb000000000000000000000000000000000000000000000000000000000000";
@@ -140,7 +140,7 @@ Deno.test("basic: reply - e/pタグ付きEVENT送信、relay側でタグ検証",
   });
 });
 
-Deno.test("basic: repost - kind:6 リポストイベント送信", async () => {
+test("basic: repost - kind:6 リポストイベント送信", async () => {
   await withRelay(async (relay, ws) => {
     const targetEvent = EventBuilder.kind1().content("original").build();
 
@@ -165,7 +165,7 @@ Deno.test("basic: repost - kind:6 リポストイベント送信", async () => {
   });
 });
 
-Deno.test("basic: like - kind:7 リアクションイベント送信", async () => {
+test("basic: like - kind:7 リアクションイベント送信", async () => {
   await withRelay(async (relay, ws) => {
     const targetEvent = EventBuilder.kind1().content("likable").build();
     const id = await like(
@@ -190,7 +190,7 @@ Deno.test("basic: like - kind:7 リアクションイベント送信", async () 
   });
 });
 
-Deno.test("basic: delete - kind:5 削除リクエスト送信、NIP-09処理確認", async () => {
+test("basic: delete - kind:5 削除リクエスト送信、NIP-09処理確認", async () => {
   await withRelay(async (relay, ws) => {
     // 先にイベントを投稿
     const originalId = await post(ws, "to be deleted", TEST_PUBKEY);
@@ -215,7 +215,7 @@ Deno.test("basic: delete - kind:5 削除リクエスト送信、NIP-09処理確�
   });
 });
 
-Deno.test("basic: search - NIP-50 search フィルター、content部分一致", async () => {
+test("basic: search - NIP-50 search フィルター、content部分一致", async () => {
   await withRelay(async (relay, ws) => {
     // 検索対象のイベントを登録
     const ev1 = EventBuilder.kind1().content("hello world").build();
@@ -235,7 +235,7 @@ Deno.test("basic: search - NIP-50 search フィルター、content部分一致",
   });
 });
 
-Deno.test("basic: profile - kind:0 metadata取得、JSON解析", async () => {
+test("basic: profile - kind:0 metadata取得、JSON解析", async () => {
   await withRelay(async (relay, ws) => {
     const targetPubkey =
       "dddd000000000000000000000000000000000000000000000000000000000000";
@@ -253,7 +253,7 @@ Deno.test("basic: profile - kind:0 metadata取得、JSON解析", async () => {
   });
 });
 
-Deno.test("basic: stream - リアルタイム購読 + streamEvents()で時間差配信", async () => {
+test("basic: stream - リアルタイム購読 + streamEvents()で時間差配信", async () => {
   const { streamEvents } = await import("../../src/testing/mod.ts");
 
   const pool = new MockPool();
@@ -292,7 +292,7 @@ Deno.test("basic: stream - リアルタイム購読 + streamEvents()で時間差
   }
 });
 
-Deno.test("basic: dm-post - kind:4 DM送信", async () => {
+test("basic: dm-post - kind:4 DM送信", async () => {
   await withRelay(async (relay, ws) => {
     const recipientPk =
       "eeee000000000000000000000000000000000000000000000000000000000000";
@@ -314,7 +314,7 @@ Deno.test("basic: dm-post - kind:4 DM送信", async () => {
   });
 });
 
-Deno.test("basic: powa - 「ぽわ〜」投稿 → relay.hasEvent()で内容確認", async () => {
+test("basic: powa - 「ぽわ〜」投稿 → relay.hasEvent()で内容確認", async () => {
   await withRelay(async (relay, ws) => {
     const id = await powa(ws, TEST_PUBKEY);
 
@@ -328,7 +328,7 @@ Deno.test("basic: powa - 「ぽわ〜」投稿 → relay.hasEvent()で内容確�
   });
 });
 
-Deno.test("basic: puru - 「ぷる」投稿 → relay.hasEvent()で内容確認", async () => {
+test("basic: puru - 「ぷる」投稿 → relay.hasEvent()で内容確認", async () => {
   await withRelay(async (relay, ws) => {
     const id = await puru(ws, TEST_PUBKEY);
 
@@ -342,7 +342,7 @@ Deno.test("basic: puru - 「ぷる」投稿 → relay.hasEvent()で内容確認"
   });
 });
 
-Deno.test("basic: 複数リレー - 2リレーへの同時接続・送受信", async () => {
+test("basic: 複数リレー - 2リレーへの同時接続・送受信", async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.test");
   const relay2 = pool.relay("wss://relay2.test");
@@ -391,7 +391,7 @@ Deno.test("basic: 複数リレー - 2リレーへの同時接続・送受信", a
   }
 });
 
-Deno.test("basic: 接続失敗 - 未登録URL → code:1006", async () => {
+test("basic: 接続失敗 - 未登録URL → code:1006", async () => {
   const pool = new MockPool();
   // relay.test のみ登録し、unknown.test は登録しない
   pool.relay(TEST_RELAY);

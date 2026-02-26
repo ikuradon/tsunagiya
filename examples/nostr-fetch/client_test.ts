@@ -8,7 +8,7 @@
  * @module
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, test } from "../_compat/mod.ts";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -55,7 +55,7 @@ const testOpts = { sanitizeResources: false, sanitizeOps: false };
 
 // --- テストケース ---
 
-Deno.test("nostr-fetch: timeline (fetchAllEvents)", testOpts, async () => {
+test("nostr-fetch: timeline (fetchAllEvents)", testOpts, async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.test");
   relay.store(signEvent("hello"));
@@ -78,7 +78,7 @@ Deno.test("nostr-fetch: timeline (fetchAllEvents)", testOpts, async () => {
   }
 });
 
-Deno.test("nostr-fetch: fetchLastEvent", testOpts, async () => {
+test("nostr-fetch: fetchLastEvent", testOpts, async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.test");
   relay.store(signEvent("first"));
@@ -101,7 +101,7 @@ Deno.test("nostr-fetch: fetchLastEvent", testOpts, async () => {
   }
 });
 
-Deno.test("nostr-fetch: allEventsIterator", testOpts, async () => {
+test("nostr-fetch: allEventsIterator", testOpts, async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.test");
   relay.store(signEvent("iter-1"));
@@ -133,7 +133,7 @@ Deno.test("nostr-fetch: allEventsIterator", testOpts, async () => {
 // 取得して NIP サポートを確認するため、WebSocket のみモックする tsunagiya では
 // テストできない。search 機能のテストは basic/ の client_test.ts を参照。
 
-Deno.test("nostr-fetch: profile (kind:0)", testOpts, async () => {
+test("nostr-fetch: profile (kind:0)", testOpts, async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.test");
   const metadata = { name: "testuser", about: "test profile" };
@@ -159,7 +159,7 @@ Deno.test("nostr-fetch: profile (kind:0)", testOpts, async () => {
   }
 });
 
-Deno.test("nostr-fetch: 複数リレー集約", testOpts, async () => {
+test("nostr-fetch: 複数リレー集約", testOpts, async () => {
   const mockPool = new MockPool();
   const relay1 = mockPool.relay("wss://relay1.test");
   const relay2 = mockPool.relay("wss://relay2.test");
@@ -189,7 +189,7 @@ Deno.test("nostr-fetch: 複数リレー集約", testOpts, async () => {
   }
 });
 
-Deno.test("nostr-fetch: client コア関数 (timeline)", testOpts, async () => {
+test("nostr-fetch: client コア関数 (timeline)", testOpts, async () => {
   // client.ts のコア関数を直接テスト
   const { timeline } = await import("./client.ts");
 
@@ -217,7 +217,7 @@ Deno.test("nostr-fetch: client コア関数 (timeline)", testOpts, async () => {
 
 // 注意: search コア関数のテストも NIP-50 HTTP relay info 制限により省略。
 
-Deno.test("nostr-fetch: client コア関数 (profile)", testOpts, async () => {
+test("nostr-fetch: client コア関数 (profile)", testOpts, async () => {
   const { profile } = await import("./client.ts");
 
   const mockPool = new MockPool();

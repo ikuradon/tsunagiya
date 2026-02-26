@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "nostr-tools": "^2",
+    "@nostr-dev-kit/ndk": "^2",
+    "rx-nostr": "^3",
+    "@rx-nostr/crypto": "^0",
+    "nostr-fetch": "^0"
+  },
+  "devDependencies": {
+    "tsx": "^4"
+  }
+}
