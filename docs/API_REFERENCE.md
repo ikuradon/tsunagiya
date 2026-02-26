@@ -164,8 +164,8 @@ console.log(info.name); // "Test Relay"
 
 NIP-16 に基づき、イベント種別に応じた処理を行う:
 
-- **Regular** (kind 0-9999, 40000+): 通常通り追加
-- **Replaceable** (kind 10000-19999): 同一 kind+pubkey
+- **Regular** (kind 1-2, 4-9999, 40000+ ※kind 0, 3 は replaceable): 通常通り追加
+- **Replaceable** (kind 0, 3, 10000-19999): 同一 kind+pubkey
   の古いイベントを削除し追加（古い場合は無視）
 - **Ephemeral** (kind 20000-29999): ストアに追加せず、ブロードキャストのみ
 - **Parameterized Replaceable** (kind 30000-39999): 同一 kind+pubkey+d-tag
@@ -457,8 +457,8 @@ NIP-16 および NIP-33 に基づくイベント種別判定ユーティリテ�
 
 kind 値からイベント種別を判定する。
 
-- `"regular"`: kind 0-9999, 40000+
-- `"replaceable"`: kind 10000-19999
+- `"regular"`: kind 1-2, 4-9999, 40000+（kind 0, 3 を除く）
+- `"replaceable"`: kind 0, 3, 10000-19999
 - `"ephemeral"`: kind 20000-29999
 - `"parameterized_replaceable"`: kind 30000-39999
 
@@ -471,7 +471,7 @@ classifyEvent(30023); // "parameterized_replaceable"
 
 ##### `isReplaceable(kind: number): boolean`
 
-Replaceable イベント (kind 10000-19999) かどうか判定する。
+Replaceable イベント (kind 0, 3, 10000-19999) かどうか判定する。
 
 ##### `isEphemeral(kind: number): boolean`
 

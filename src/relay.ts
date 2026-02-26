@@ -55,10 +55,7 @@ export class MockRelay {
   #received: ReceivedMessage[] = [];
   #connections: Set<MockWebSocket> = new Set();
   #info: RelayInformation = {};
-  #subscriptions: Map<
-    string,
-    { filters: NostrFilter[]; socket: MockWebSocket }
-  > = new Map();
+  #subscriptions: Map<MockWebSocket, Map<string, NostrFilter[]>> = new Map();
   #reqHandler: REQHandler | null = null;
   #eventHandler: EVENTHandler | null = null;
   #countHandler: COUNTHandler | null = null;
@@ -109,6 +106,12 @@ export class MockRelay {
    * @returns ストアに追加された場合 true、無視された場合 false
    */
   store(event: NostrEvent): boolean {
+    // NIP-09: kind:5 削除リクエストの処理
+    if (event.kind === 5) {
+      this.#handleDeletion(event);
+      this.#store.push(event);
+      return true;
+    }
     const { stored, ephemeral } = this.#classifyAndStore(event);
     if (ephemeral) {
       this._broadcastEvent(event);
@@ -448,11 +451,7 @@ export class MockRelay {
     this.#connections.delete(ws);
     this.#authState.removeConnection(ws);
     // この接続のサブスクリプションをクリーンアップ
-    for (const [subId, sub] of this.#subscriptions) {
-      if (sub.socket === ws) {
-        this.#subscriptions.delete(subId);
-      }
-    }
+    this.#subscriptions.delete(ws);
   }
 
   /**
@@ -463,10 +462,12 @@ export class MockRelay {
    * @internal ストリーム機能から呼び出される
    */
   _broadcastEvent(event: NostrEvent): void {
-    for (const [subId, sub] of this.#subscriptions) {
-      if (matchFilters(event, sub.filters)) {
-        const msg: RelayMessage = ["EVENT", subId, event];
-        sub.socket._receiveMessage(JSON.stringify(msg));
+    for (const [ws, subscriptions] of this.#subscriptions) {
+      for (const [subId, filters] of subscriptions) {
+        if (matchFilters(event, filters)) {
+          const msg: RelayMessage = ["EVENT", subId, event];
+          ws._receiveMessage(JSON.stringify(msg));
+        }
       }
     }
   }
@@ -495,7 +496,58 @@ export class MockRelay {
   _handleMessage(ws: MockWebSocket, data: string): void {
     let parsed: ClientMessage;
     try {
-      parsed = JSON.parse(data) as ClientMessage;
+      const raw: unknown = JSON.parse(data);
+      // メッセージ構造の基本検証
+      if (!Array.isArray(raw) || raw.length < 1) {
+        const notice: RelayMessage = [
+          "NOTICE",
+          "error: invalid message format",
+        ];
+        ws._receiveMessage(JSON.stringify(notice));
+        return;
+      }
+      const type = raw[0];
+      if (type === "EVENT") {
+        if (
+          raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null ||
+          typeof (raw[1] as Record<string, unknown>).id !== "string"
+        ) {
+          const notice: RelayMessage = [
+            "NOTICE",
+            "error: malformed EVENT message",
+          ];
+          ws._receiveMessage(JSON.stringify(notice));
+          return;
+        }
+      } else if (type === "REQ" || type === "COUNT") {
+        if (raw.length < 2 || typeof raw[1] !== "string") {
+          const notice: RelayMessage = [
+            "NOTICE",
+            `error: malformed ${type} message`,
+          ];
+          ws._receiveMessage(JSON.stringify(notice));
+          return;
+        }
+      } else if (type === "CLOSE") {
+        if (raw.length < 2 || typeof raw[1] !== "string") {
+          const notice: RelayMessage = [
+            "NOTICE",
+            "error: malformed CLOSE message",
+          ];
+          ws._receiveMessage(JSON.stringify(notice));
+          return;
+        }
+      } else if (type === "AUTH") {
+        if (raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null) {
+          const notice: RelayMessage = [
+            "NOTICE",
+            "error: malformed AUTH message",
+          ];
+          ws._receiveMessage(JSON.stringify(notice));
+          return;
+        }
+      }
+      parsed = raw as ClientMessage;
     } catch {
       // 不正なJSONは無視
       return;
@@ -552,7 +604,7 @@ export class MockRelay {
         this.#handleReq(ws, parsed[1], parsed.slice(2) as NostrFilter[]);
         break;
       case "CLOSE":
-        this.#handleClose(parsed[1]);
+        this.#handleClose(ws, parsed[1]);
         break;
       case "AUTH":
         this.#handleAuth(ws, parsed[1]);
@@ -608,7 +660,12 @@ export class MockRelay {
     subId: string,
     filters: NostrFilter[],
   ): Promise<void> {
-    this.#subscriptions.set(subId, { filters, socket: ws });
+    let wsSubscriptions = this.#subscriptions.get(ws);
+    if (!wsSubscriptions) {
+      wsSubscriptions = new Map();
+      this.#subscriptions.set(ws, wsSubscriptions);
+    }
+    wsSubscriptions.set(subId, filters);
 
     let events: NostrEvent[];
 
@@ -638,8 +695,8 @@ export class MockRelay {
     this.#sendWithLatency(ws, eose);
   }
 
-  #handleClose(subId: string): void {
-    this.#subscriptions.delete(subId);
+  #handleClose(ws: MockWebSocket, subId: string): void {
+    this.#subscriptions.get(ws)?.delete(subId);
   }
 
   async #handleAuth(ws: MockWebSocket, authEvent: NostrEvent): Promise<void> {

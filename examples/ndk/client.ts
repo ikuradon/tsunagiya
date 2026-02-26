@@ -506,8 +506,10 @@ async function main(): Promise<void> {
           opts,
           ac.signal,
         );
-        // ストリームは無限に待機
-        await new Promise(() => {});
+        // AbortSignal で待機を解除
+        await new Promise<void>((resolve) => {
+          ac.signal.addEventListener("abort", () => resolve());
+        });
         break;
       }
       case "dm-post": {

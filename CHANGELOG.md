@@ -1,5 +1,62 @@
 # Changelog
 
+## v0.2.3 (2026-02-26)
+
+### Bug Fixes
+
+- Fix subId collision across multiple WebSocket connections (per-connection
+  subscription management)
+- Fix crash on malformed client messages (EVENT, REQ, CLOSE without required
+  fields)
+- Fix `store(kind:5)` not processing deletion (NIP-09)
+- Fix NIP-11 Accept header case-insensitive matching and `init.headers` override
+
+### Tests
+
+- Add 8 regression tests for the above bug fixes
+
+### Improvements
+
+- Fix NDK CLI `stream` command not terminating on SIGINT
+- Fix `nostr-fetch` E2E assertion that was always true
+- Fix NIP-16 documentation to correctly list kind 0/3 as replaceable
+
+## v0.2.2 (2026-02-26)
+
+### Documentation
+
+- VitePress bilingual documentation site (Japanese/English)
+- Fixed documentation consistency (NIP-11, version numbers, E2E commands)
+- Single Source of Truth pattern: shared code/tables for both languages
+
+## v0.2.0 (2026-02-20)
+
+### New Features
+
+- NIP-09: Event Deletion (kind:5 deletion request processing)
+- NIP-11: Relay Information Document (`setInfo()`/`getInfo()` + fetch intercept)
+- NIP-16: Event Treatment (Regular/Replaceable/Ephemeral auto-processing)
+- NIP-25: Reactions (`EventBuilder.withReactions()`)
+- NIP-33: Parameterized Replaceable Events (kind+pubkey+d-tag replacement)
+- NIP-45: COUNT message support
+- NIP-50: Search filter support (content partial match)
+
+### Test Helpers
+
+- `EventBuilder` NIP templates: `dm()`, `groupMessage()`, `zapRequest()`,
+  `nip07Request()`, `deletion()`, `deletionByAddress()`
+- `EventBuilder` common tags: `geohash()`, `emoji()`
+- `FilterBuilder`: `search()` pattern
+- Assertion helpers: `assertReceivedREQ`, `assertEventPublished`,
+  `assertNoErrors`, `assertAuthCompleted`, `assertClosed`, `assertReceived`
+- Snapshot/restore with NIP-11 info support
+
+### Improvements
+
+- Cross-runtime compatibility layer for E2E tests (Node.js/Bun)
+- Reorganized examples into per-library directories
+- `nostr-fetch` E2E test suite
+
 ## v0.1.0 (2026-02-15)
 
 Initial release.
