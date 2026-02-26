@@ -37,3 +37,8 @@ Deno.test("FilterBuilder - reactions()", () => {
   const filter = FilterBuilder.reactions("event789");
   assertEquals(filter, { kinds: [7], "#e": ["event789"] });
 });
+
+Deno.test("FilterBuilder - search()", () => {
+  const filter = FilterBuilder.search("nostr");
+  assertEquals(filter, { search: "nostr" });
+});

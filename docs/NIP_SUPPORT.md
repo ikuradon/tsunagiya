@@ -1,6 +1,6 @@
 # NIP 対応状況
 
-繋ぎ屋 v0.2.0 の NIP（Nostr Implementation Possibilities）対応状況。
+繋ぎ屋 v0.2.1 の NIP（Nostr Implementation Possibilities）対応状況。
 
 ---
 
@@ -326,13 +326,53 @@ const zap = EventBuilder.zapRequest({
 
 ---
 
+### NIP-11: Relay Information Document ✅ 完全対応
+
+`relay.setInfo()` / `getInfo()` でリレー情報を設定・取得でき、`pool.install()`
+時に `fetch()` もインターセプトされる。`Accept: application/nostr+json`
+ヘッダー付きのリクエストに対して NIP-11 準拠の JSON を返す。
+
+```typescript
+const relay = pool.relay("wss://relay.example.com");
+
+// リレー情報を設定
+relay.setInfo({
+  name: "Test Relay",
+  description: "A mock relay for testing",
+  supported_nips: [1, 11, 42],
+  software: "tsunagiya",
+  version: "0.2.1",
+  limitation: {
+    max_message_length: 16384,
+    max_subscriptions: 20,
+  },
+});
+
+// リレー情報を取得
+const info = relay.getInfo();
+console.log(info.name); // "Test Relay"
+
+// fetch インターセプト（pool.install() 後）
+pool.install();
+try {
+  const res = await fetch("https://relay.example.com", {
+    headers: { Accept: "application/nostr+json" },
+  });
+  const data = await res.json();
+  console.log(data.name); // "Test Relay"
+} finally {
+  pool.uninstall();
+}
+```
+
+---
+
 ## 実装予定 NIP（v0.3.0 以降）
 
-| NIP    | 内容                | 予定バージョン | 概要                               |
-| ------ | ------------------- | -------------- | ---------------------------------- |
-| NIP-11 | Relay Information   | v0.3.0         | `GET /` で返す relay info のモック |
-| NIP-65 | Relay List Metadata | v0.3.0         | kind:10002 イベントのテンプレート  |
-| NIP-94 | File Metadata       | v0.3.0         | kind:1063 のテンプレート           |
+| NIP    | 内容                | 予定バージョン | 概要                              |
+| ------ | ------------------- | -------------- | --------------------------------- |
+| NIP-65 | Relay List Metadata | v0.3.0         | kind:10002 イベントのテンプレート |
+| NIP-94 | File Metadata       | v0.3.0         | kind:1063 のテンプレート          |
 
 ---
 

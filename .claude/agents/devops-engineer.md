@@ -45,10 +45,11 @@ permissionMode: bypassPermissions
 ## コマンド
 
 - `deno task test` — ユニットテスト実行（e2e 除外）
-- `deno task test:e2e` — 全 E2E テスト実行
-- `deno task test:e2e:nostr-tools` — nostr-tools E2E テスト
-- `deno task test:e2e:ndk` — NDK E2E テスト
-- `deno task test:e2e:rx-nostr` — rx-nostr E2E テスト
+- `deno task example` — 全 E2E テスト実行
+- `deno task example:nostr-tools` — nostr-tools E2E テスト
+- `deno task example:ndk` — NDK E2E テスト
+- `deno task example:rx-nostr` — rx-nostr E2E テスト
+- `deno task example:nostr-fetch` — nostr-fetch E2E テスト
 - `deno task test:all` — 全テスト実行（ユニット + E2E）
 - `deno task check` — 型チェック + lint + format 確認
 - `deno publish --dry-run` — JSR 公開プレビュー
