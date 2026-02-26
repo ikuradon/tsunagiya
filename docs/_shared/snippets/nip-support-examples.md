@@ -32,7 +32,7 @@ try {
 }
 ```
 
-NIP-04 DM テンプレート:
+NIP-04 DM テンプレート (⚠️ deprecated — NIP-17 への移行推奨):
 
 ```typescript
 const dm = EventBuilder.dm("recipient-pubkey", "hello").build();
@@ -66,7 +66,7 @@ const thread = EventBuilder.thread(5);
 // thread[2]: reply（["e", root.id, "", "root"], ["e", thread[1].id, "", "reply"], ["p", thread[1].pubkey]）
 ```
 
-NIP-16 イベント種別:
+NIP-01 イベント種別（旧 NIP-16 — 現在は NIP-01 に統合）:
 
 ```typescript
 import { classifyEvent, isEphemeral, isReplaceable } from "@ikuradon/tsunagiya";
@@ -80,7 +80,7 @@ isReplaceable(10002); // true
 isEphemeral(20001); // true
 ```
 
-NIP-33 Parameterized Replaceable:
+NIP-01 Addressable Events（旧 NIP-33 — 現在は NIP-01 に統合）:
 
 ```typescript
 import {
@@ -195,16 +195,52 @@ const filter = FilterBuilder.search("nostr");
 // → { search: "nostr" }
 ```
 
-NIP-52 Geohash:
+NIP-52 Calendar Events（全4種対応）:
 
 ```typescript
-const event = EventBuilder.kind1()
-  .geohash("u4pruydqqvj")
-  .build();
-// → tags: [["g", "u4pruydqqvj"]]
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+// Date-based Calendar Event (kind:31922)
+const dateEvent = EventBuilder.calendarDateEvent({
+  title: "Nostr Meetup",
+  startDate: "2026-03-01",
+  endDate: "2026-03-01",
+  location: "Tokyo",
+  geohash: "xn76g",
+}).build();
+
+// Time-based Calendar Event (kind:31923)
+const timeEvent = EventBuilder.calendarTimeEvent({
+  title: "Online Seminar",
+  start: 1740000000,
+  end: 1740003600,
+  startTzid: "Asia/Tokyo",
+}).build();
+
+// Calendar Collection (kind:31924)
+const collection = EventBuilder.calendarCollection({
+  title: "Tech Events 2026",
+  events: ["31922:pubkey:meetup", "31923:pubkey:seminar"],
+}).build();
+
+// RSVP (kind:31925)
+const rsvp = EventBuilder.calendarRsvp({
+  eventAddress: "31922:pubkey:meetup",
+  status: "accepted",
+}).build();
+
+// Geohash タグ（引き続き利用可能）
+const event = EventBuilder.kind1().geohash("u4pruydqqvj").build();
+
+// フィルター
+FilterBuilder.calendarDateEvents(); // { kinds: [31922] }
+FilterBuilder.calendarTimeEvents(); // { kinds: [31923] }
+FilterBuilder.calendarEvents(); // { kinds: [31922, 31923] }
+FilterBuilder.calendarCollections(); // { kinds: [31924] }
+FilterBuilder.rsvps("31922:pubkey:meetup"); // { kinds: [31925], "#a": [...] }
 ```
 
-NIP-57 Zap Request:
+NIP-57 Lightning Zaps:
 
 ```typescript
 const zap = EventBuilder.zapRequest({

@@ -49,22 +49,26 @@ deno task docs:dev      # ドキュメント開発サーバー
 
 ## NIP対応
 
-- **NIP-01**: 完全実装（EVENT, REQ, CLOSE, EOSE, OK, NOTICE）
-- **NIP-04**: Encrypted DM（EventBuilderテンプレート）
+- **NIP-01**: 完全実装（EVENT, REQ, CLOSE, EOSE, OK, NOTICE + Event Treatment +
+  Addressable Events）
+  - 旧 NIP-16 (Event Treatment: Regular/Replaceable/Ephemeral) は NIP-01
+    に統合済み
+  - 旧 NIP-33 (Parameterized Replaceable → Addressable Events) は NIP-01
+    に統合済み
+- **NIP-04**: Encrypted DM（EventBuilderテンプレート）— deprecated、NIP-17 推奨
 - **NIP-09**: Event Deletion（kind:5 削除リクエスト処理）
 - **NIP-10**: e/p タグ（EventBuilderで対応）
 - **NIP-11**: Relay Information Document（setInfo/getInfo + fetch
   インターセプト）
-- **NIP-16**: Event Treatment（Regular/Replaceable/Ephemeral 自動処理）
 - **NIP-25**: Reactions（EventBuilder withReactions）
-- **NIP-29**: グループチャット（EventBuilderで対応）
-- **NIP-30**: Emoji タグ（EventBuilderで対応）
-- **NIP-33**: Parameterized Replaceable Events（kind+pubkey+d-tag 置き換え）
+- **NIP-29**: Relay-based Groups（EventBuilderで対応）
+- **NIP-30**: Custom Emoji タグ（EventBuilderで対応）
 - **NIP-42**: AUTH チャレンジ/レスポンス
 - **NIP-45**: COUNT メッセージ対応
 - **NIP-50**: Search フィルター対応（content 部分一致検索）
-- **NIP-52**: Geohash タグ（EventBuilderで対応）
-- **NIP-57**: Zap Request（EventBuilderテンプレート）
+- **NIP-52**: Calendar Events（EventBuilder テンプレート — 全4種対応:
+  Date/Time/Collection/RSVP）
+- **NIP-57**: Lightning Zaps（EventBuilderテンプレート）
 
 ## テスト支援ヘルパー (`src/testing/`)
 

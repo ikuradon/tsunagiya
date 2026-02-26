@@ -48,8 +48,7 @@ Deno.test("fetch events from relay", async () => {
 - 不安定リレーのシミュレート（レイテンシ、エラー率、切断）
 - NIP-42 AUTH チャレンジ/レスポンス
 - 送信メッセージの記録・検証ヘルパー
-- NIP-16 イベント種別自動処理（Regular/Replaceable/Ephemeral）
-- NIP-33 Parameterized Replaceable Events
+- NIP-01 イベント種別自動処理（Regular/Replaceable/Ephemeral/Addressable）
 - NIP-09 Event Deletion Request
 - NIP-11 リレー情報ドキュメント（setInfo/getInfo + fetch インターセプト）
 - NIP-25 Reactions（EventBuilder withReactions）
@@ -188,7 +187,7 @@ relay.findCLOSE("sub1"); // CLOSE検索
 relay.connectionCount; // アクティブ接続数
 ```
 
-### NIP-16/33 イベント種別
+### NIP-01 イベント種別（旧 NIP-16/33）
 
 ```typescript
 import {
@@ -408,23 +407,26 @@ deno task test:all            # ユニットテスト + E2E テスト
 
 ## 対応NIP
 
-| NIP    | 内容                      | 対応状況                               |
-| ------ | ------------------------- | -------------------------------------- |
-| NIP-01 | Basic Protocol            | EVENT, REQ, CLOSE, EOSE, OK, NOTICE    |
-| NIP-04 | Encrypted DM              | EventBuilder テンプレート              |
-| NIP-09 | Event Deletion            | kind:5 削除リクエスト処理              |
-| NIP-10 | Reply Threading           | EventBuilder e/p タグ                  |
-| NIP-11 | Relay Information         | setInfo/getInfo + fetch インターセプト |
-| NIP-16 | Event Treatment           | Regular/Replaceable/Ephemeral 自動処理 |
-| NIP-25 | Reactions                 | EventBuilder withReactions             |
-| NIP-29 | Group Chat                | EventBuilder テンプレート              |
-| NIP-30 | Custom Emoji              | EventBuilder emoji タグ                |
-| NIP-33 | Parameterized Replaceable | kind+pubkey+d-tag 置き換え             |
-| NIP-42 | AUTH                      | チャレンジ/レスポンス                  |
-| NIP-45 | COUNT                     | COUNT メッセージ対応                   |
-| NIP-50 | Search                    | content 部分一致検索                   |
-| NIP-52 | Geohash                   | EventBuilder geohash タグ              |
-| NIP-57 | Zap Request               | EventBuilder テンプレート              |
+| NIP    | 内容                                  | 対応状況                                                                   |
+| ------ | ------------------------------------- | -------------------------------------------------------------------------- |
+| NIP-01 | Basic Protocol                        | EVENT, REQ, CLOSE, EOSE, OK, NOTICE + Event Treatment + Addressable Events |
+| NIP-04 | Encrypted DM ⚠️ deprecated (→ NIP-17) | EventBuilder テンプレート（NIP-17 への移行推奨）                           |
+| NIP-09 | Event Deletion                        | kind:5 削除リクエスト処理                                                  |
+| NIP-10 | Reply Threading                       | EventBuilder e/p タグ                                                      |
+| NIP-11 | Relay Information                     | setInfo/getInfo + fetch インターセプト                                     |
+| NIP-25 | Reactions                             | EventBuilder withReactions                                                 |
+| NIP-29 | Relay-based Groups                    | EventBuilder テンプレート                                                  |
+| NIP-30 | Custom Emoji                          | EventBuilder emoji タグ                                                    |
+| NIP-42 | AUTH                                  | チャレンジ/レスポンス                                                      |
+| NIP-45 | COUNT                                 | COUNT メッセージ対応                                                       |
+| NIP-50 | Search                                | content 部分一致検索                                                       |
+| NIP-52 | Calendar Events                       | EventBuilder テンプレート（全4種対応）                                     |
+| NIP-57 | Lightning Zaps                        | EventBuilder テンプレート                                                  |
+
+> **Note:** 旧 NIP-16 (Event Treatment) および旧 NIP-33 (Parameterized
+> Replaceable Events) は現在 NIP-01 に統合されています。本ライブラリの
+> Regular/Replaceable/Ephemeral/Addressable イベント処理は NIP-01
+> 対応の一部です。
 
 ## ドキュメント
 

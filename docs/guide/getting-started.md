@@ -24,8 +24,7 @@ outline: deep
 - 不安定リレーのシミュレート（レイテンシ、エラー率、切断）
 - NIP-42 AUTH チャレンジ/レスポンス
 - 送信メッセージの記録・検証ヘルパー
-- NIP-16 イベント種別自動処理（Regular/Replaceable/Ephemeral）
-- NIP-33 Parameterized Replaceable Events
+- NIP-01 イベント種別自動処理（Regular/Replaceable/Ephemeral/Addressable）
 - NIP-09 Event Deletion Request
 - NIP-45 COUNT メッセージ対応
 - NIP-50 検索フィルター対応

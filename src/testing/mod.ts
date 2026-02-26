@@ -9,6 +9,10 @@
 export { EventBuilder } from "./event_builder.ts";
 export type {
   BulkOptions,
+  CalendarCollectionOptions,
+  CalendarDateEventOptions,
+  CalendarRsvpOptions,
+  CalendarTimeEventOptions,
   CorruptOptions,
   TimelineOptions,
   ZapRequestOptions,

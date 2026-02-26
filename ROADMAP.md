@@ -24,28 +24,31 @@
 
 ### リレーモック実装
 
-| NIP    | 内容                          | 対応バージョン | 備考                                  |
-| ------ | ----------------------------- | -------------- | ------------------------------------- |
-| NIP-01 | Basic Protocol                | v0.1.0         | EVENT, REQ, CLOSE, EOSE, OK, NOTICE  |
-| NIP-09 | Event Deletion                | v0.2.0         | kind:5 e-tag/a-tag 削除、リアルタイム配信 |
-| NIP-11 | Relay Info Document           | v0.2.2         | setInfo/getInfo + fetch インターセプト |
-| NIP-16 | Event Treatment               | v0.2.0         | Regular/Replaceable/Ephemeral 自動処理 |
-| NIP-33 | Parameterized Replaceable     | v0.2.0         | kind+pubkey+d-tag 置き換え            |
-| NIP-42 | Authentication                | v0.1.0         | AUTH チャレンジ/レスポンス            |
-| NIP-45 | COUNT                         | v0.2.0         | COUNT メッセージ対応                  |
-| NIP-50 | Search                        | v0.2.0         | content 部分一致検索                  |
+| NIP    | 内容                | 対応バージョン | 備考                                                                       |
+| ------ | ------------------- | -------------- | -------------------------------------------------------------------------- |
+| NIP-01 | Basic Protocol      | v0.1.0         | EVENT, REQ, CLOSE, EOSE, OK, NOTICE + Event Treatment + Addressable Events |
+| NIP-09 | Event Deletion      | v0.2.0         | kind:5 e-tag/a-tag 削除、リアルタイム配信                                  |
+| NIP-11 | Relay Info Document | v0.2.2         | setInfo/getInfo + fetch インターセプト                                     |
+| NIP-42 | Authentication      | v0.1.0         | AUTH チャレンジ/レスポンス                                                 |
+| NIP-45 | COUNT               | v0.2.0         | COUNT メッセージ対応                                                       |
+| NIP-50 | Search              | v0.2.0         | content 部分一致検索                                                       |
+
+> **Note:** 旧 NIP-16 (Event Treatment) および旧 NIP-33 (Parameterized
+> Replaceable Events → Addressable Events) は NIP-01 に統合されました。v0.2.0
+> で実装した Regular/Replaceable/Ephemeral/Addressable イベント処理は NIP-01
+> 対応の一部です。
 
 ### EventBuilder テンプレート
 
-| NIP    | 内容                          | 対応バージョン |
-| ------ | ----------------------------- | -------------- |
-| NIP-04 | Encrypted DM                  | v0.2.0         |
-| NIP-10 | e/p タグ                      | v0.2.0         |
-| NIP-25 | Reactions                     | v0.2.0         |
-| NIP-29 | グループチャット              | v0.2.0         |
-| NIP-30 | Emoji タグ                    | v0.2.0         |
-| NIP-52 | Geohash タグ                  | v0.2.0         |
-| NIP-57 | Zap Request                   | v0.2.0         |
+| NIP    | 内容                                  | 対応バージョン |
+| ------ | ------------------------------------- | -------------- |
+| NIP-04 | Encrypted DM ⚠️ deprecated (→ NIP-17) | v0.2.0         |
+| NIP-10 | Reply Threading (e/p タグ)            | v0.2.0         |
+| NIP-25 | Reactions                             | v0.2.0         |
+| NIP-29 | Relay-based Groups                    | v0.2.0         |
+| NIP-30 | Custom Emoji タグ                     | v0.2.0         |
+| NIP-52 | Calendar Events（全4種対応）          | v0.2.5         |
+| NIP-57 | Lightning Zaps                        | v0.2.0         |
 
 ### v0.2.3 品質改善（監査対応）
 
@@ -63,11 +66,12 @@
 
 ソーシャル機能の基本NIP：
 
-1. **NIP-25** - Reactions（kind:7 リレー側処理）
-2. **NIP-51** - Lists（replaceable処理）
-3. **NIP-23** - Long-form（NIP-33の実例）
-4. **NIP-18** - Reposts（kind:6処理）
-5. **NIP-65** - Relay List（kind:10002処理）
+1. **NIP-17** - Private Direct Messages（NIP-04 deprecated に伴う移行先）
+2. **NIP-25** - Reactions（kind:7 リレー側処理）
+3. **NIP-51** - Lists（replaceable処理）
+4. **NIP-23** - Long-form（NIP-01 Addressable Events の実例）
+5. **NIP-18** - Reposts（kind:6処理）
+6. **NIP-65** - Relay List（kind:10002処理）
 
 ---
 
@@ -75,10 +79,10 @@
 
 チャット・決済機能：
 
-6. **NIP-57** - Zaps（フロー処理）
-7. **NIP-17** - Private DMs
-8. **NIP-28** - Public Chat
-9. **レート制限シミュレート**
+7. **NIP-40** - Expiration Timestamp
+8. **NIP-57** - Zaps（フロー処理）
+9. **NIP-28** - Public Chat
+10. **レート制限シミュレート**
 
 ---
 
@@ -86,11 +90,10 @@
 
 分散サービス・署名機能：
 
-10. **NIP-90** - DVM（Job処理フロー）
-11. **NIP-46** - Remote Signing
-12. **NIP-47** - Wallet Connect
-13. **NIP-53** - Live Activities
-14. **NIP-52** - Calendar（リレー側処理）
+11. **NIP-90** - DVM（Job処理フロー）
+12. **NIP-46** - Remote Signing
+13. **NIP-47** - Wallet Connect
+14. **NIP-53** - Live Activities
 
 ---
 
@@ -98,11 +101,10 @@
 
 高度な同期・セキュリティ機能：
 
-15. **NIP-77** - Negentropy（同期プロトコル）
-16. **NIP-70** - Protected Events
-17. **NIP-59** - Gift Wrap
-18. **NIP-20** - Command Results
-19. **NIP-40** - Expiration
+16. **NIP-77** - Negentropy（同期プロトコル）
+17. **NIP-70** - Protected Events
+18. **NIP-59** - Gift Wrap
+19. **NIP-20** - Command Results
 20. **NIP-13** - PoW（Proof of Work）
 
 ---
