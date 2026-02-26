@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.0 (unreleased)
+
+### New Features
+
+- NIP-17: Private Direct Messages (EventBuilder template)
+- NIP-25: Reactions (kind:7 relay-side processing)
+- NIP-51: Lists (replaceable event handling)
+- NIP-23: Long-form Content (Addressable Events example)
+- NIP-18: Reposts (kind:6 processing)
+- NIP-65: Relay List Metadata (kind:10002 processing)
+
 ## v0.2.5 (2026-02-26)
 
 ### Test Helpers
