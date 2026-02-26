@@ -92,7 +92,7 @@ export default defineConfig({
         sidebarMenuLabel: "メニュー",
         darkModeSwitchLabel: "テーマ切替",
         editLink: {
-          pattern: "https://github.com/ikuradon/tsunagiya/edit/main/site/:path",
+          pattern: "https://github.com/ikuradon/tsunagiya/edit/main/docs/:path",
           text: "このページを編集する",
         },
       },
@@ -149,7 +149,7 @@ export default defineConfig({
           ],
         },
         editLink: {
-          pattern: "https://github.com/ikuradon/tsunagiya/edit/main/site/:path",
+          pattern: "https://github.com/ikuradon/tsunagiya/edit/main/docs/:path",
           text: "Edit this page on GitHub",
         },
       },

@@ -25,19 +25,19 @@ outline: deep
 
 ## 基本的な REQ/EVENT テスト
 
-<!--@include: ../../_shared/snippets/examples-basic.md-->
+<!--@include: ../_shared/snippets/examples-basic.md-->
 
 ---
 
 ## カスタム REQ ハンドラー・エラーハンドリング・AUTH
 
-<!--@include: ../../_shared/snippets/examples-advanced.md-->
+<!--@include: ../_shared/snippets/examples-advanced.md-->
 
 ---
 
 ## ストリーム・スレッド・リアクション・スナップショット
 
-<!--@include: ../../_shared/snippets/examples-helpers.md-->
+<!--@include: ../_shared/snippets/examples-helpers.md-->
 
 ---
 

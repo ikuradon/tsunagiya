@@ -428,17 +428,17 @@ deno task test:all            # ユニットテスト + E2E テスト
 
 ## ドキュメント
 
-| ドキュメント                                        | 内容                       |
-| --------------------------------------------------- | -------------------------- |
-| [API リファレンス](./docs/API_REFERENCE.md)         | 全クラス・関数・型の詳細   |
-| [チュートリアル](./docs/TUTORIAL.md)                | ステップバイステップガイド |
-| [使用例集](./docs/EXAMPLES.md)                      | 実践的な使用例（14例）     |
-| [テストパターン](./docs/TEST_PATTERNS.md)           | よくあるテストシナリオ     |
-| [ベストプラクティス](./docs/BEST_PRACTICES.md)      | テスト設計の指針           |
-| [トラブルシューティング](./docs/TROUBLESHOOTING.md) | よくあるエラーと解決方法   |
-| [FAQ](./docs/FAQ.md)                                | よくある質問（17問）       |
-| [NIP 対応状況](./docs/NIP_SUPPORT.md)               | NIP ごとの対応・使用例     |
-| [パフォーマンス](./docs/PERFORMANCE.md)             | 大量データの最適化         |
+| ドキュメント                                                                        | 内容                       |
+| ----------------------------------------------------------------------------------- | -------------------------- |
+| [API リファレンス](https://ikuradon.github.io/tsunagiya/reference/api)              | 全クラス・関数・型の詳細   |
+| [チュートリアル](https://ikuradon.github.io/tsunagiya/guide/tutorial)               | ステップバイステップガイド |
+| [使用例集](https://ikuradon.github.io/tsunagiya/guide/examples)                     | 実践的な使用例（14例）     |
+| [テストパターン](https://ikuradon.github.io/tsunagiya/guide/test-patterns)          | よくあるテストシナリオ     |
+| [ベストプラクティス](https://ikuradon.github.io/tsunagiya/advanced/best-practices)  | テスト設計の指針           |
+| [トラブルシューティング](https://ikuradon.github.io/tsunagiya/help/troubleshooting) | よくあるエラーと解決方法   |
+| [FAQ](https://ikuradon.github.io/tsunagiya/help/faq)                                | よくある質問（17問）       |
+| [NIP 対応状況](https://ikuradon.github.io/tsunagiya/reference/nip-support)          | NIP ごとの対応・使用例     |
+| [パフォーマンス](https://ikuradon.github.io/tsunagiya/advanced/performance)         | 大量データの最適化         |
 
 ## ライセンス
 

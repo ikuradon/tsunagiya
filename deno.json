@@ -22,7 +22,10 @@
     "run:rx-nostr": "deno run -A examples/rx-nostr/client.ts",
     "run:nostr-fetch": "deno run -A examples/nostr-fetch/client.ts",
     "check": "deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
-    "fmt": "deno fmt"
+    "fmt": "deno fmt",
+    "docs:dev": "cd docs && deno task dev",
+    "docs:build": "cd docs && deno task build",
+    "docs:preview": "cd docs && deno task preview"
   },
   "compilerOptions": {
     "strict": true

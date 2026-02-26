@@ -10,11 +10,11 @@ outline: deep
 
 ## インストール
 
-<!--@include: ../../_shared/snippets/install.md-->
+<!--@include: ../_shared/snippets/install.md-->
 
 ## 基本的な使い方
 
-<!--@include: ../../_shared/snippets/basic-usage.md-->
+<!--@include: ../_shared/snippets/basic-usage.md-->
 
 ## 機能
 
@@ -41,9 +41,9 @@ outline: deep
 テストのエントリポイント。複数の `MockRelay` を管理し、`globalThis.WebSocket`
 を差し替えます。
 
-<!--@include: ../../_shared/tables/api-mockpool.md-->
+<!--@include: ../_shared/tables/api-mockpool.md-->
 
-<!--@include: ../../_shared/snippets/mockpool-usage.md-->
+<!--@include: ../_shared/snippets/mockpool-usage.md-->
 
 > **注意:** `pool.relay()` で登録していない URL
 > に接続しようとすると、接続失敗として扱われます（エラーイベント +
@@ -56,21 +56,21 @@ URL 単位で動作する仮想リレー。
 
 ### プロパティ
 
-<!--@include: ../../_shared/tables/api-mockrelay-props.md-->
+<!--@include: ../_shared/tables/api-mockrelay-props.md-->
 
 ### 使い方
 
-<!--@include: ../../_shared/snippets/mockrelay-usage.md-->
+<!--@include: ../_shared/snippets/mockrelay-usage.md-->
 
 ## テスト支援ヘルパー
 
 `@ikuradon/tsunagiya/testing` からインポートします。
 
-<!--@include: ../../_shared/snippets/testing-helpers.md-->
+<!--@include: ../_shared/snippets/testing-helpers.md-->
 
 ## 対応 NIP
 
-<!--@include: ../../_shared/tables/nip-support.md-->
+<!--@include: ../_shared/tables/nip-support.md-->
 
 ## E2Eテスト対応
 

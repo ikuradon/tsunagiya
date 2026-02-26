@@ -293,3 +293,71 @@ Deno.test("NIP-11 - uninstall restores original fetch", () => {
 
   assertEquals(globalThis.fetch, originalFetch);
 });
+
+// ===== 回帰テスト: Issue 4 - Accept ヘッダー case sensitivity =====
+
+Deno.test("NIP-11 - fetch with lowercase accept header", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Lowercase Test" });
+
+  pool.install();
+  try {
+    const response = await fetch("https://relay.example.com", {
+      headers: { "accept": "application/nostr+json" },
+    });
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Lowercase Test");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 - fetch with array format headers", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Array Headers" });
+
+  pool.install();
+  try {
+    const response = await fetch("https://relay.example.com", {
+      headers: [["Accept", "application/nostr+json"]],
+    });
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Array Headers");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 - fetch with Request + init headers override", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Override Test" });
+
+  pool.install();
+  try {
+    // Request has no Accept header, but init.headers overrides
+    const request = new Request("https://relay.example.com");
+    const response = await fetch(request, {
+      headers: { "Accept": "application/nostr+json" },
+    });
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Override Test");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 - fetch with Headers object", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Headers Object" });
+
+  pool.install();
+  try {
+    const headers = new Headers();
+    headers.set("accept", "application/nostr+json");
+    const response = await fetch("https://relay.example.com", { headers });
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Headers Object");
+  } finally {
+    pool.uninstall();
+  }
+});

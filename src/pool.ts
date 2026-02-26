@@ -24,21 +24,45 @@ function httpToWsUrl(httpUrl: string): string {
   );
 }
 
+/** ヘッダー値を case-insensitive で取得する */
+function getHeaderValue(
+  headers: HeadersInit | undefined,
+  name: string,
+): string | null {
+  if (!headers) return null;
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  if (Array.isArray(headers)) {
+    const entry = (headers as [string, string][]).find(
+      ([k]) => k.toLowerCase() === name.toLowerCase(),
+    );
+    return entry?.[1] ?? null;
+  }
+  // Record<string, string>
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name.toLowerCase()) {
+      return value;
+    }
+  }
+  return null;
+}
+
 /** NIP-11リクエストかどうか判定する（Accept: application/nostr+json） */
 function isNip11Request(
   request: RequestInfo | URL,
   init?: RequestInit,
 ): boolean {
+  // init.headers があればそちらを優先（fetch の仕様: init が request をオーバーライド）
+  if (init?.headers) {
+    const accept = getHeaderValue(init.headers, "accept") ?? "";
+    return accept.includes("application/nostr+json");
+  }
   if (request instanceof Request) {
     const accept = request.headers.get("Accept") ?? "";
     return accept.includes("application/nostr+json");
   }
-  const accept =
-    (init?.headers instanceof Headers
-      ? init.headers.get("Accept")
-      : (init?.headers as Record<string, string> | undefined)?.["Accept"]) ??
-      "";
-  return accept.includes("application/nostr+json");
+  return false;
 }
 
 /**

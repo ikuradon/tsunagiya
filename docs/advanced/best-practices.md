@@ -105,7 +105,7 @@ streamEvents(relay, events, { interval: 10 });
 
 ## コード例
 
-<!--@include: ../../_shared/snippets/best-practices.md-->
+<!--@include: ../_shared/snippets/best-practices.md-->
 
 ---
 

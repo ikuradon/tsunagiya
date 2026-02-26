@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "manual",
+  "tasks": {
+    "dev": "deno run -A npm:vitepress dev",
+    "build": "deno run -A npm:vitepress build",
+    "preview": "deno run -A npm:vitepress preview"
+  }
+}

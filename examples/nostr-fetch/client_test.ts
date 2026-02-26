@@ -8,7 +8,7 @@
  * @module
  */
 
-import { assertEquals, test } from "../_compat/mod.ts";
+import { assert, assertEquals, test } from "../_compat/mod.ts";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -233,9 +233,10 @@ test(
           { kinds: [1], authors: [pk], search: "nostr" },
           {},
         );
-        // nostr-fetch が NIP-11 情報を取得して search をサポートすることを確認
-        // nostr-fetch の内部で NIP-11 をどのタイミングで取得するかにより結果が変わる可能性がある
-        assertEquals(events.length >= 0, true);
+        // nostr-fetch が検索クエリをエラーなく処理できることを検証
+        // nostr-fetch の内部で NIP-11 をどのタイミングで取得するかにより件数が変わる可能性があるが、
+        // 少なくとも配列が返ることを確認する
+        assert(Array.isArray(events), "events should be an array");
       } finally {
         fetcher.shutdown();
       }
