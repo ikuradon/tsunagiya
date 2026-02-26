@@ -160,6 +160,37 @@ export interface StreamHandle {
   readonly stopped: boolean;
 }
 
+/** NIP-11 リレー制限事項 */
+export interface RelayLimitation {
+  max_message_length?: number;
+  max_subscriptions?: number;
+  max_limit?: number;
+  max_subid_length?: number;
+  max_event_tags?: number;
+  max_content_length?: number;
+  min_pow_difficulty?: number;
+  auth_required?: boolean;
+  payment_required?: boolean;
+  restricted_writes?: boolean;
+  created_at_lower_limit?: number;
+  created_at_upper_limit?: number;
+}
+
+/** NIP-11 リレー情報ドキュメント */
+export interface RelayInformation {
+  name?: string;
+  description?: string;
+  banner?: string;
+  icon?: string;
+  pubkey?: string;
+  contact?: string;
+  supported_nips?: number[];
+  software?: string;
+  version?: string;
+  limitation?: RelayLimitation;
+  fees?: Record<string, unknown>;
+}
+
 /** リレーのスナップショット */
 export interface RelaySnapshot {
   /** 保存時刻 (ms) */
@@ -170,4 +201,6 @@ export interface RelaySnapshot {
   received: ClientMessage[];
   /** 削除済みイベントID */
   deletedIds?: string[];
+  /** NIP-11 リレー情報 */
+  info?: RelayInformation;
 }

@@ -440,3 +440,23 @@ test("nostr-tools: assertion helpers", async () => {
     mockPool.uninstall();
   }
 });
+
+test("nostr-tools: nip11 fetchRelayInformation", async () => {
+  const mockPool = new MockPool();
+  const relay = mockPool.relay("wss://relay.nip11.test");
+  relay.setInfo({
+    name: "Mock NIP-11 Relay",
+    supported_nips: [1, 11, 42, 50],
+    software: "https://github.com/ikuradon/tsunagiya",
+    version: "0.3.0",
+  });
+  mockPool.install();
+  try {
+    const { fetchRelayInformation } = await import("nostr-tools/nip11");
+    const info = await fetchRelayInformation("wss://relay.nip11.test");
+    assertEquals(info.name, "Mock NIP-11 Relay");
+    assertEquals(info.supported_nips?.includes(50), true);
+  } finally {
+    mockPool.uninstall();
+  }
+});

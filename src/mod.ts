@@ -47,6 +47,8 @@ export type {
   MockRelayOptions,
   NostrEvent,
   NostrFilter,
+  RelayInformation,
+  RelayLimitation,
   RelayMessage,
   RelaySnapshot,
   REQHandler,

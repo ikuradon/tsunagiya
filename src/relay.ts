@@ -15,6 +15,7 @@ import type {
   MockRelayOptions,
   NostrEvent,
   NostrFilter,
+  RelayInformation,
   RelayMessage,
   RelaySnapshot,
   REQHandler,
@@ -53,6 +54,7 @@ export class MockRelay {
   #store: NostrEvent[] = [];
   #received: ReceivedMessage[] = [];
   #connections: Set<MockWebSocket> = new Set();
+  #info: RelayInformation = {};
   #subscriptions: Map<
     string,
     { filters: NostrFilter[]; socket: MockWebSocket }
@@ -71,6 +73,25 @@ export class MockRelay {
     this.url = url;
     this.options = options;
     this.#logger = createLogger(options.logging);
+  }
+
+  // ===== NIP-11 リレー情報 =====
+
+  /**
+   * NIP-11 リレー情報をマージ設定する
+   *
+   * 既存の情報とマージする（シャロウマージ）。
+   * fetch インターセプト経由で `Accept: application/nostr+json` リクエストに返される。
+   */
+  setInfo(info: Partial<RelayInformation>): void {
+    this.#info = { ...this.#info, ...info };
+  }
+
+  /**
+   * NIP-11 リレー情報のシャロウコピーを返す
+   */
+  getInfo(): RelayInformation {
+    return { ...this.#info };
   }
 
   // ===== ストア・ハンドラー =====
@@ -349,6 +370,7 @@ export class MockRelay {
         return [...msg] as ClientMessage;
       }),
       deletedIds: [...this.#deletedIds],
+      info: { ...this.#info },
     };
   }
 
@@ -374,6 +396,7 @@ export class MockRelay {
       socket: null,
     }));
     this.#deletedIds = new Set(snap.deletedIds ?? []);
+    this.#info = snap.info ? { ...snap.info } : {};
   }
 
   /**
@@ -392,6 +415,7 @@ export class MockRelay {
     this.#authState.reset();
     this.#errors = [];
     this.#deletedIds.clear();
+    this.#info = {};
     for (const timer of this.#pendingTimers) {
       clearTimeout(timer);
     }
