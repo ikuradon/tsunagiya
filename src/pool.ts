@@ -16,6 +16,31 @@ function normalizeUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+/** HTTP/HTTPS URLをWS/WSSに変換する */
+function httpToWsUrl(httpUrl: string): string {
+  return httpUrl.replace(/^https:\/\//, "wss://").replace(
+    /^http:\/\//,
+    "ws://",
+  );
+}
+
+/** NIP-11リクエストかどうか判定する（Accept: application/nostr+json） */
+function isNip11Request(
+  request: RequestInfo | URL,
+  init?: RequestInit,
+): boolean {
+  if (request instanceof Request) {
+    const accept = request.headers.get("Accept") ?? "";
+    return accept.includes("application/nostr+json");
+  }
+  const accept =
+    (init?.headers instanceof Headers
+      ? init.headers.get("Accept")
+      : (init?.headers as Record<string, string> | undefined)?.["Accept"]) ??
+      "";
+  return accept.includes("application/nostr+json");
+}
+
 /**
  * 複数のMockRelayを管理するコンテナ
  *
@@ -39,6 +64,7 @@ function normalizeUrl(url: string): string {
 export class MockPool {
   #relays: Map<string, MockRelay> = new Map();
   #originalWebSocket: typeof globalThis.WebSocket | null = null;
+  #originalFetch: typeof globalThis.fetch | null = null;
   #installed = false;
 
   /**
@@ -81,6 +107,37 @@ export class MockPool {
     // deno-lint-ignore no-explicit-any
     (globalThis as any).WebSocket = MockWebSocket;
 
+    // NIP-11: fetch インターセプト
+    this.#originalFetch = globalThis.fetch;
+    const relays = this.#relays;
+    const originalFetch = this.#originalFetch;
+
+    // deno-lint-ignore no-explicit-any
+    (globalThis as any).fetch = (
+      request: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      if (isNip11Request(request, init)) {
+        const rawUrl = request instanceof Request
+          ? request.url
+          : request instanceof URL
+          ? request.toString()
+          : request;
+        const wsUrl = normalizeUrl(httpToWsUrl(rawUrl));
+        const relay = relays.get(wsUrl);
+        if (relay) {
+          const info = relay.getInfo();
+          return Promise.resolve(
+            new Response(JSON.stringify(info), {
+              status: 200,
+              headers: { "Content-Type": "application/nostr+json" },
+            }),
+          );
+        }
+      }
+      return originalFetch(request as RequestInfo, init);
+    };
+
     this.#installed = true;
   }
 
@@ -99,8 +156,14 @@ export class MockPool {
       (globalThis as any).WebSocket = this.#originalWebSocket;
     }
 
+    if (this.#originalFetch) {
+      // deno-lint-ignore no-explicit-any
+      (globalThis as any).fetch = this.#originalFetch;
+    }
+
     MockWebSocket._resolveRelay = null;
     this.#originalWebSocket = null;
+    this.#originalFetch = null;
     this.#installed = false;
   }
 
