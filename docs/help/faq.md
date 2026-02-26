@@ -143,7 +143,7 @@ MockWebSocket は文字列メッセージのみ対応です。`ArrayBuffer`, `Bl
 
 ### Q17. EventBuilder で生成されるイベントのフィールド値は？
 
-<!--@include: ../../_shared/snippets/faq.md-->
+<!--@include: ../_shared/snippets/faq.md-->
 
 ---
 

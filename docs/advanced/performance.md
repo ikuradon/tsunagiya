@@ -69,7 +69,7 @@ limit: 10       → < 3ms（ソート後にスライス）
 
 ## コード例
 
-<!--@include: ../../_shared/snippets/performance.md-->
+<!--@include: ../_shared/snippets/performance.md-->
 
 ---
 

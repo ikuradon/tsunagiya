@@ -4,7 +4,7 @@ outline: deep
 
 # API リファレンス
 
-繋ぎ屋 v0.2.0 の全クラス・関数・型の詳細リファレンスです。
+繋ぎ屋 v0.2.3 の全クラス・関数・型の詳細リファレンスです。
 
 ## 目次
 
@@ -27,49 +27,49 @@ outline: deep
 
 ## メインモジュール
 
-<!--@include: ../../_shared/snippets/api-main.md-->
+<!--@include: ../_shared/snippets/api-main.md-->
 
 ---
 
 ### MockPool メソッド一覧
 
-<!--@include: ../../_shared/tables/api-mockpool.md-->
+<!--@include: ../_shared/tables/api-mockpool.md-->
 
 ---
 
 ### MockRelay プロパティ一覧
 
-<!--@include: ../../_shared/tables/api-mockrelay-props.md-->
+<!--@include: ../_shared/tables/api-mockrelay-props.md-->
 
 ---
 
 ## テストモジュール
 
-<!--@include: ../../_shared/snippets/api-testing.md-->
+<!--@include: ../_shared/snippets/api-testing.md-->
 
 ---
 
 ### EventBuilder ファクトリメソッド
 
-<!--@include: ../../_shared/tables/api-eventbuilder-factory.md-->
+<!--@include: ../_shared/tables/api-eventbuilder-factory.md-->
 
 ---
 
 ### EventBuilder ビルダーメソッド
 
-<!--@include: ../../_shared/tables/api-eventbuilder-methods.md-->
+<!--@include: ../_shared/tables/api-eventbuilder-methods.md-->
 
 ---
 
 ### Logger
 
-<!--@include: ../../_shared/tables/api-logger.md-->
+<!--@include: ../_shared/tables/api-logger.md-->
 
 ---
 
 ## 型定義
 
-<!--@include: ../../_shared/snippets/api-types.md-->
+<!--@include: ../_shared/snippets/api-types.md-->
 
 ---
 

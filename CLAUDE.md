@@ -15,10 +15,12 @@ Nostrリレーのモックライブラリ。`globalThis.WebSocket`を差し替�
 ## コマンド
 
 ```bash
-deno task test        # テスト実行
-deno task check       # 型チェック + lint + format確認
-deno task fmt         # フォーマット
+deno task test          # テスト実行
+deno task check         # 型チェック + lint + format確認
+deno task fmt           # フォーマット
 deno publish --dry-run  # JSR公開プレビュー
+deno task docs:build    # VitePress ドキュメントビルド
+deno task docs:dev      # ドキュメント開発サーバー
 ```
 
 ## コーディング規約
@@ -78,6 +80,21 @@ deno publish --dry-run  # JSR公開プレビュー
 - **アサーションヘルパー**: assertReceivedREQ, assertEventPublished等
 
 テスト支援ヘルパーは `@ikuradon/tsunagiya/testing` としてエクスポート。
+
+## ドキュメントサイト (`docs/`)
+
+VitePress による日英バイリンガルドキュメント。GitHub Pages で公開。
+
+- **公開URL**: https://ikuradon.github.io/tsunagiya/
+- **構成**: `docs/` がVitePressプロジェクトルート
+- **共有コンテンツ**: `docs/_shared/snippets/`, `docs/_shared/tables/`
+  を日英ページから `<!--@include: -->` で参照
+- **include パス**: ルート直下ページ（`guide/`, `reference/` 等）は
+  `../_shared/`、`en/` 配下ページは `../../_shared/`
+- **ランタイム**: Deno（`docs/deno.json` + `docs/package.json` で依存管理、
+  `deno install` で `node_modules` 生成）
+- **デプロイ**: `.github/workflows/deploy-docs.yml` で `docs/**`
+  変更時に自動デプロイ
 
 ## 実装の優先順位
 

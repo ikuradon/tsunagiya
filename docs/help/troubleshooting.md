@@ -145,7 +145,7 @@ DOMException: WebSocket is not open
 
 ## コード例
 
-<!--@include: ../../_shared/snippets/troubleshooting.md-->
+<!--@include: ../_shared/snippets/troubleshooting.md-->
 
 ---
 

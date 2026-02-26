@@ -21,7 +21,7 @@ Nostr クライアント開発でよくあるテストシナリオとその実�
 
 ---
 
-<!--@include: ../../_shared/snippets/test-patterns.md-->
+<!--@include: ../_shared/snippets/test-patterns.md-->
 
 ---
 

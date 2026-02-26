@@ -14,7 +14,7 @@ outline: deep
 
 ## セットアップ
 
-<!--@include: ../../_shared/snippets/install.md-->
+<!--@include: ../_shared/snippets/install.md-->
 
 ---
 
@@ -56,7 +56,7 @@ outline: deep
 
 ### MockRelayOptions 一覧
 
-<!--@include: ../../_shared/tables/mockrelay-options.md-->
+<!--@include: ../_shared/tables/mockrelay-options.md-->
 
 ---
 
@@ -74,7 +74,7 @@ outline: deep
 
 ## コード例
 
-<!--@include: ../../_shared/snippets/tutorial-steps.md-->
+<!--@include: ../_shared/snippets/tutorial-steps.md-->
 
 ---
 
