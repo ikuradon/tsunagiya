@@ -32,10 +32,16 @@ permissionMode: bypassPermissions
 
 ## 主要ファイル
 
-- `docs/API_REFERENCE.md` — 公開APIドキュメント
-- `docs/NIP_SUPPORT.md` — NIP対応状況
-- `docs/EXAMPLES.md` — 使用例
-- `docs/TUTORIAL.md` — チュートリアル
+- `docs/reference/api.md` — 公開APIドキュメント（日本語）
+- `docs/en/reference/api.md` — 公開APIドキュメント（英語）
+- `docs/reference/nip-support.md` — NIP対応状況（日本語）
+- `docs/en/reference/nip-support.md` — NIP対応状況（英語）
+- `docs/guide/examples.md` — 使用例（日本語）
+- `docs/en/guide/examples.md` — 使用例（英語）
+- `docs/guide/tutorial.md` — チュートリアル（日本語）
+- `docs/en/guide/tutorial.md` — チュートリアル（英語）
+- `docs/_shared/snippets/` — 日英共有スニペット
+- `docs/_shared/tables/` — 日英共有テーブル
 - `README.md` — プロジェクト README
 - `src/mod.ts` — 公開エクスポート（参照用）
 - `src/types.ts` — 型定義（参照用）
@@ -48,13 +54,20 @@ permissionMode: bypassPermissions
 ## コマンド
 
 - `deno doc src/mod.ts` — 公開APIのドキュメント確認
+- `deno task docs:dev` — VitePress 開発サーバー
+- `deno task docs:build` — VitePress ドキュメントビルド
 
 ## ドキュメント規約
 
-- 日本語で記述
+- 日英バイリンガル構成（`docs/` = 日本語、`docs/en/` = 英語）
+- コード例は `docs/_shared/snippets/` に配置し、日英ページから
+  `<!--@include: -->` で参照
+- テーブルは `docs/_shared/tables/` に配置し同様に参照
+- include パス: ルート直下ページは `../_shared/`、`en/` 配下は `../../_shared/`
 - コード例は実際に動作するものを記載
-- 公開APIの変更は必ず API_REFERENCE.md に反映
-- 新しい NIP 対応は NIP_SUPPORT.md に追加
+- 公開APIの変更は `docs/reference/api.md` と `docs/en/reference/api.md` に反映
+- 新しい NIP 対応は `docs/reference/nip-support.md` と
+  `docs/en/reference/nip-support.md` に追加
 
 ## 制約
 

@@ -60,12 +60,14 @@ permissionMode: default
 
 ## ドキュメント検証項目
 
-1. **API整合性**: `docs/API_REFERENCE.md` の記載が `src/` の実装と一致するか
+1. **API整合性**: `docs/reference/api.md` の記載が `src/` の実装と一致するか
 2. **エクスポート整合性**: ドキュメントのAPIが `src/mod.ts`
    で実際にエクスポートされているか
-3. **NIP対応状況**: `docs/NIP_SUPPORT.md` の記載が実装と一致するか
+3. **NIP対応状況**: `docs/reference/nip-support.md` の記載が実装と一致するか
 4. **README**: 使用例が最新のAPIで動作するか
 5. **型定義**: ドキュメントの型記載が `src/types.ts` と一致するか
+6. **日英整合性**: `docs/` と `docs/en/` の内容が一致するか
+7. **共有コンテンツ**: `docs/_shared/` のスニペット・テーブルが実装と一致するか
 
 ## 完了条件
 
