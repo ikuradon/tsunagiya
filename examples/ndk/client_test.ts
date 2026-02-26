@@ -9,7 +9,7 @@
  * @module
  */
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, test } from "../_compat/mod.ts";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -87,7 +87,7 @@ const testOpts = { sanitizeResources: false, sanitizeOps: false };
 
 // ===== テストケース =====
 
-Deno.test("ndk client: timeline", testOpts, async () => {
+test("ndk client: timeline", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -115,7 +115,7 @@ Deno.test("ndk client: timeline", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: post", testOpts, async () => {
+test("ndk client: post", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -144,7 +144,7 @@ Deno.test("ndk client: post", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: reply", testOpts, async () => {
+test("ndk client: reply", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -180,7 +180,7 @@ Deno.test("ndk client: reply", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: like", testOpts, async () => {
+test("ndk client: like", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -216,7 +216,7 @@ Deno.test("ndk client: like", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: delete", testOpts, async () => {
+test("ndk client: delete", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -251,7 +251,7 @@ Deno.test("ndk client: delete", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: profile", testOpts, async () => {
+test("ndk client: profile", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -283,7 +283,7 @@ Deno.test("ndk client: profile", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: multi-relay", testOpts, async () => {
+test("ndk client: multi-relay", testOpts, async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.test");
   const relay2 = pool.relay("wss://relay2.test");
@@ -316,7 +316,7 @@ Deno.test("ndk client: multi-relay", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: EventBuilder integration", testOpts, async () => {
+test("ndk client: EventBuilder integration", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.test");
 
@@ -359,7 +359,7 @@ Deno.test("ndk client: EventBuilder integration", testOpts, async () => {
   }
 });
 
-Deno.test("ndk client: parseArgs", () => {
+test("ndk client: parseArgs", () => {
   // デフォルトリレー
   const result1 = client.parseArgs(["timeline"]);
   assertEquals(result1.command, "timeline");

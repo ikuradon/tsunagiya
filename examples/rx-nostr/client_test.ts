@@ -7,7 +7,7 @@
  * @module
  */
 
-import { assertEquals, assertGreater } from "@std/assert";
+import { assertEquals, assertGreater, test } from "../_compat/mod.ts";
 import { MockPool } from "../../src/mod.ts";
 import type { NostrEvent } from "../../src/types.ts";
 import { streamEvents } from "../../src/testing/mod.ts";
@@ -30,7 +30,7 @@ const { sk, pk, hexSk } = generateKey();
 /** テスト共通オプション: rx-nostr 内部の非同期リークを許容 */
 const testOpts = { sanitizeResources: false, sanitizeOps: false };
 
-Deno.test("rx-nostr: timeline (backward)", testOpts, async () => {
+test("rx-nostr: timeline (backward)", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-tl.test");
 
@@ -60,7 +60,7 @@ Deno.test("rx-nostr: timeline (backward)", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: post", testOpts, async () => {
+test("rx-nostr: post", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-post.test");
 
@@ -87,7 +87,7 @@ Deno.test("rx-nostr: post", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: like", testOpts, async () => {
+test("rx-nostr: like", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-like.test");
 
@@ -116,7 +116,7 @@ Deno.test("rx-nostr: like", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: delete", testOpts, async () => {
+test("rx-nostr: delete", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-del.test");
 
@@ -147,7 +147,7 @@ Deno.test("rx-nostr: delete", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: stream (forward)", testOpts, async () => {
+test("rx-nostr: stream (forward)", testOpts, async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-stream.test");
 
@@ -189,7 +189,7 @@ Deno.test("rx-nostr: stream (forward)", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: 複数リレー", testOpts, async () => {
+test("rx-nostr: 複数リレー", testOpts, async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.rx-multi.test");
   const relay2 = pool.relay("wss://relay2.rx-multi.test");
@@ -217,7 +217,7 @@ Deno.test("rx-nostr: 複数リレー", testOpts, async () => {
   }
 });
 
-Deno.test("rx-nostr: クリーンアップ (dispose)", testOpts, () => {
+test("rx-nostr: クリーンアップ (dispose)", testOpts, () => {
   const pool = new MockPool();
   pool.relay("wss://relay.rx-cleanup.test");
 

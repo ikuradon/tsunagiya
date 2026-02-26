@@ -6,7 +6,13 @@
  * @module
  */
 
-import { assert, assertEquals, assertExists, assertGreater } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertExists,
+  assertGreater,
+  test,
+} from "../_compat/mod.ts";
 import { MockPool } from "../../src/mod.ts";
 import {
   EventBuilder,
@@ -31,7 +37,7 @@ async function openWs(url: string): Promise<WebSocket> {
 
 // ===== カスタムハンドラー =====
 
-Deno.test("advanced: カスタムREQハンドラー - onREQ()でフィルターロジック上書き", async () => {
+test("advanced: カスタムREQハンドラー - onREQ()でフィルターロジック上書き", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -63,7 +69,7 @@ Deno.test("advanced: カスタムREQハンドラー - onREQ()でフィルター�
   }
 });
 
-Deno.test("advanced: カスタムEVENTハンドラー - onEVENT()でバリデーション/拒否", async () => {
+test("advanced: カスタムEVENTハンドラー - onEVENT()でバリデーション/拒否", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -121,7 +127,7 @@ Deno.test("advanced: カスタムEVENTハンドラー - onEVENT()でバリデー
 
 // ===== レイテンシ =====
 
-Deno.test("advanced: レイテンシ - latency設定で遅延確認", async () => {
+test("advanced: レイテンシ - latency設定で遅延確認", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, {
     latency: { min: 50, max: 80 },
@@ -169,7 +175,7 @@ Deno.test("advanced: レイテンシ - latency設定で遅延確認", async () =
 
 // ===== 切断 =====
 
-Deno.test("advanced: disconnect() - 即座切断", async () => {
+test("advanced: disconnect() - 即座切断", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -190,7 +196,7 @@ Deno.test("advanced: disconnect() - 即座切断", async () => {
   }
 });
 
-Deno.test("advanced: disconnectAfter() - 遅延切断", async () => {
+test("advanced: disconnectAfter() - 遅延切断", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -214,7 +220,7 @@ Deno.test("advanced: disconnectAfter() - 遅延切断", async () => {
   }
 });
 
-Deno.test("advanced: close(1006) - 異常切断コード", async () => {
+test("advanced: close(1006) - 異常切断コード", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -237,7 +243,7 @@ Deno.test("advanced: close(1006) - 異常切断コード", async () => {
 
 // ===== 接続拒否 =====
 
-Deno.test("advanced: refuse() - 接続拒否", async () => {
+test("advanced: refuse() - 接続拒否", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   relay.refuse();
@@ -264,7 +270,7 @@ Deno.test("advanced: refuse() - 接続拒否", async () => {
 
 // ===== NIP-42 AUTH =====
 
-Deno.test("advanced: NIP-42 AUTH - requiresAuth + requireAuth()チャレンジ/レスポンス", async () => {
+test("advanced: NIP-42 AUTH - requiresAuth + requireAuth()チャレンジ/レスポンス", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, { requiresAuth: true });
 
@@ -323,7 +329,7 @@ Deno.test("advanced: NIP-42 AUTH - requiresAuth + requireAuth()チャレンジ/�
 
 // ===== スナップショット =====
 
-Deno.test("advanced: snapshot() / restore() - 状態管理", async () => {
+test("advanced: snapshot() / restore() - 状態管理", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -374,7 +380,7 @@ Deno.test("advanced: snapshot() / restore() - 状態管理", async () => {
 
 // ===== リアルタイムストリーム =====
 
-Deno.test("advanced: streamEvents() - イベント配列の時間差配信", async () => {
+test("advanced: streamEvents() - イベント配列の時間差配信", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -409,7 +415,7 @@ Deno.test("advanced: streamEvents() - イベント配列の時間差配信", asy
   }
 });
 
-Deno.test("advanced: startStream() - ジェネレーターベースの継続配信", async () => {
+test("advanced: startStream() - ジェネレーターベースの継続配信", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -454,7 +460,7 @@ Deno.test("advanced: startStream() - ジェネレーターベースの継続配�
 
 // ===== NIP-16 イベント種別 =====
 
-Deno.test("advanced: NIP-16 - Replaceable イベントの自動処理", async () => {
+test("advanced: NIP-16 - Replaceable イベントの自動処理", async () => {
   const pool = new MockPool();
   pool.relay(TEST_RELAY);
   pool.install();
@@ -512,7 +518,7 @@ Deno.test("advanced: NIP-16 - Replaceable イベントの自動処理", async ()
 
 // ===== NIP-33 Parameterized Replaceable =====
 
-Deno.test("advanced: NIP-33 - Parameterized Replaceable (kind+pubkey+d-tag置き換え)", async () => {
+test("advanced: NIP-33 - Parameterized Replaceable (kind+pubkey+d-tag置き換え)", async () => {
   const pool = new MockPool();
   pool.relay(TEST_RELAY);
   pool.install();
@@ -574,7 +580,7 @@ Deno.test("advanced: NIP-33 - Parameterized Replaceable (kind+pubkey+d-tag置き
 
 // ===== NIP-45 COUNT =====
 
-Deno.test("advanced: NIP-45 COUNT - onCOUNT()ハンドラー", async () => {
+test("advanced: NIP-45 COUNT - onCOUNT()ハンドラー", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -621,7 +627,7 @@ Deno.test("advanced: NIP-45 COUNT - onCOUNT()ハンドラー", async () => {
 
 // ===== ログ機能 =====
 
-Deno.test("advanced: ログ機能 - logging: true + カスタムハンドラー", async () => {
+test("advanced: ログ機能 - logging: true + カスタムハンドラー", async () => {
   const logs: unknown[] = [];
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, {
@@ -661,7 +667,7 @@ Deno.test("advanced: ログ機能 - logging: true + カスタムハンドラー"
 
 // ===== EventBuilder 活用 =====
 
-Deno.test("advanced: EventBuilder - thread()でスレッド生成", async () => {
+test("advanced: EventBuilder - thread()でスレッド生成", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -697,7 +703,7 @@ Deno.test("advanced: EventBuilder - thread()でスレッド生成", async () => 
   }
 });
 
-Deno.test("advanced: EventBuilder - withReactions()でリアクション生成", async () => {
+test("advanced: EventBuilder - withReactions()でリアクション生成", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -748,7 +754,7 @@ Deno.test("advanced: EventBuilder - withReactions()でリアクション生成",
   }
 });
 
-Deno.test("advanced: EventBuilder - bulk()とtimeline()の一括生成", async () => {
+test("advanced: EventBuilder - bulk()とtimeline()の一括生成", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 

@@ -7,7 +7,7 @@
  * @module
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, test } from "../_compat/mod.ts";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -81,7 +81,7 @@ function createTestOpts(
 
 // --- テストケース ---
 
-Deno.test("nostr-tools: timeline", async () => {
+test("nostr-tools: timeline", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.timeline.test");
 
@@ -105,7 +105,7 @@ Deno.test("nostr-tools: timeline", async () => {
   }
 });
 
-Deno.test("nostr-tools: post", async () => {
+test("nostr-tools: post", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.post.test");
 
@@ -126,7 +126,7 @@ Deno.test("nostr-tools: post", async () => {
   }
 });
 
-Deno.test("nostr-tools: reply", async () => {
+test("nostr-tools: reply", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.reply.test");
 
@@ -157,7 +157,7 @@ Deno.test("nostr-tools: reply", async () => {
   }
 });
 
-Deno.test("nostr-tools: repost", async () => {
+test("nostr-tools: repost", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.repost.test");
 
@@ -185,7 +185,7 @@ Deno.test("nostr-tools: repost", async () => {
   }
 });
 
-Deno.test("nostr-tools: like", async () => {
+test("nostr-tools: like", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.like.test");
 
@@ -210,7 +210,7 @@ Deno.test("nostr-tools: like", async () => {
   }
 });
 
-Deno.test("nostr-tools: delete", async () => {
+test("nostr-tools: delete", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.delete.test");
 
@@ -235,7 +235,7 @@ Deno.test("nostr-tools: delete", async () => {
   }
 });
 
-Deno.test("nostr-tools: search", async () => {
+test("nostr-tools: search", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.search.test");
 
@@ -257,7 +257,7 @@ Deno.test("nostr-tools: search", async () => {
   }
 });
 
-Deno.test("nostr-tools: profile", async () => {
+test("nostr-tools: profile", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.profile.test");
 
@@ -284,7 +284,7 @@ Deno.test("nostr-tools: profile", async () => {
   }
 });
 
-Deno.test("nostr-tools: multi-relay aggregation", async () => {
+test("nostr-tools: multi-relay aggregation", async () => {
   const mockPool = new MockPool();
   const relay1 = mockPool.relay("wss://relay1.multi.test");
   const relay2 = mockPool.relay("wss://relay2.multi.test");
@@ -311,7 +311,7 @@ Deno.test("nostr-tools: multi-relay aggregation", async () => {
   }
 });
 
-Deno.test("nostr-tools: rejects events with bad signatures", async () => {
+test("nostr-tools: rejects events with bad signatures", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.badsig.test");
 
@@ -353,7 +353,7 @@ Deno.test("nostr-tools: rejects events with bad signatures", async () => {
   }
 });
 
-Deno.test("nostr-tools: dm-post", async () => {
+test("nostr-tools: dm-post", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.dm.test");
 
@@ -380,7 +380,7 @@ Deno.test("nostr-tools: dm-post", async () => {
   }
 });
 
-Deno.test("nostr-tools: powa", async () => {
+test("nostr-tools: powa", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.powa.test");
 
@@ -399,7 +399,7 @@ Deno.test("nostr-tools: powa", async () => {
   }
 });
 
-Deno.test("nostr-tools: puru", async () => {
+test("nostr-tools: puru", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.puru.test");
 
@@ -418,7 +418,7 @@ Deno.test("nostr-tools: puru", async () => {
   }
 });
 
-Deno.test("nostr-tools: assertion helpers", async () => {
+test("nostr-tools: assertion helpers", async () => {
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.assert.test");
 
