@@ -34,6 +34,7 @@ permissionMode: bypassPermissions
 
 - `.github/workflows/ci.yml` — CI パイプライン（test, e2e, マルチランタイム）
 - `.github/workflows/publish.yml` — JSR 公開パイプライン
+- `.github/workflows/deploy-docs.yml` — VitePress ドキュメントデプロイ
 - `tests/e2e/e2e_client_test.ts` — クロスランタイム E2E
   テスト（Deno/Node.js/Bun）
 - `tests/e2e/e2e_nostr_tools_test.ts` — nostr-tools 互換性テスト

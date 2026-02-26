@@ -38,8 +38,9 @@ permissionMode: bypassPermissions
 - `src/mod.ts` — 公開エクスポート
 - `src/testing/mod.ts` — テスト支援ヘルパーエクスポート
 - `deno.json` — プロジェクト設定
-- `docs/API_REFERENCE.md` — 公開APIドキュメント
-- `docs/NIP_SUPPORT.md` — NIP対応状況
+- `docs/reference/api.md` — 公開APIドキュメント
+- `docs/reference/nip-support.md` — NIP対応状況
+- `docs/_shared/` — 日英共有コンテンツ（snippets/, tables/）
 
 ## ワークフロー
 
