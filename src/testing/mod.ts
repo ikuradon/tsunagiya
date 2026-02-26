@@ -13,7 +13,11 @@ export type {
   CalendarDateEventOptions,
   CalendarRsvpOptions,
   CalendarTimeEventOptions,
+  ChatMessageOptions,
   CorruptOptions,
+  GiftWrapOptions,
+  ListOptions,
+  LongFormOptions,
   TimelineOptions,
   ZapRequestOptions,
 } from "./event_builder.ts";

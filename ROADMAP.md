@@ -20,7 +20,7 @@
 
 ---
 
-## 実装済み（v0.2.4）
+## 実装済み（v0.3.0）
 
 ### リレーモック実装
 
@@ -40,15 +40,20 @@
 
 ### EventBuilder テンプレート
 
-| NIP    | 内容                                  | 対応バージョン |
-| ------ | ------------------------------------- | -------------- |
-| NIP-04 | Encrypted DM ⚠️ deprecated (→ NIP-17) | v0.2.0         |
-| NIP-10 | Reply Threading (e/p タグ)            | v0.2.0         |
-| NIP-25 | Reactions                             | v0.2.0         |
-| NIP-29 | Relay-based Groups                    | v0.2.0         |
-| NIP-30 | Custom Emoji タグ                     | v0.2.0         |
-| NIP-52 | Calendar Events（全4種対応）          | v0.2.5         |
-| NIP-57 | Lightning Zaps                        | v0.2.0         |
+| NIP    | 内容                                  | 対応バージョン        |
+| ------ | ------------------------------------- | --------------------- |
+| NIP-04 | Encrypted DM ⚠️ deprecated (→ NIP-17) | v0.2.0                |
+| NIP-10 | Reply Threading (e/p タグ)            | v0.2.0                |
+| NIP-17 | Private Direct Messages               | v0.3.0                |
+| NIP-18 | Reposts                               | v0.3.0                |
+| NIP-23 | Long-form Content                     | v0.3.0                |
+| NIP-25 | Reactions                             | v0.2.0 (拡充: v0.3.0) |
+| NIP-29 | Relay-based Groups                    | v0.2.0                |
+| NIP-30 | Custom Emoji タグ                     | v0.2.0                |
+| NIP-51 | Lists                                 | v0.3.0                |
+| NIP-52 | Calendar Events（全4種対応）          | v0.2.5                |
+| NIP-57 | Lightning Zaps                        | v0.2.0                |
+| NIP-65 | Relay List Metadata                   | v0.3.0                |
 
 ### v0.2.3 品質改善（監査対応）
 
@@ -59,19 +64,6 @@
 - assertNoErrors 不正メッセージ検出の改善
 - connectionTimeout 修正
 - examples の OK:false エラーハンドリング追加
-
----
-
-## v0.3.0（よく使う機能）
-
-ソーシャル機能の基本NIP：
-
-1. **NIP-17** - Private Direct Messages（NIP-04 deprecated に伴う移行先）
-2. **NIP-25** - Reactions（kind:7 リレー側処理）
-3. **NIP-51** - Lists（replaceable処理）
-4. **NIP-23** - Long-form（NIP-01 Addressable Events の実例）
-5. **NIP-18** - Reposts（kind:6処理）
-6. **NIP-65** - Relay List（kind:10002処理）
 
 ---
 

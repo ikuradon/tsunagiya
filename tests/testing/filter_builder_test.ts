@@ -69,3 +69,46 @@ Deno.test("FilterBuilder - rsvps()", () => {
   const filter = FilterBuilder.rsvps("31922:pubkey1:meetup");
   assertEquals(filter, { kinds: [31925], "#a": ["31922:pubkey1:meetup"] });
 });
+
+// ===== NIP-65 Relay List Metadata =====
+
+Deno.test("FilterBuilder - relayList()", () => {
+  const filter = FilterBuilder.relayList("pubkey123");
+  assertEquals(filter, { kinds: [10002], authors: ["pubkey123"] });
+});
+
+// ===== NIP-18 Reposts =====
+
+Deno.test("FilterBuilder - reposts()", () => {
+  const filter = FilterBuilder.reposts("event123");
+  assertEquals(filter, { kinds: [6], "#e": ["event123"] });
+});
+
+Deno.test("FilterBuilder - allReposts()", () => {
+  const filter = FilterBuilder.allReposts("event123");
+  assertEquals(filter, { kinds: [6, 16], "#e": ["event123"] });
+});
+
+// ===== NIP-23 Long-form Content =====
+
+Deno.test("FilterBuilder - longFormContent() without pubkey", () => {
+  const filter = FilterBuilder.longFormContent();
+  assertEquals(filter, { kinds: [30023] });
+});
+
+Deno.test("FilterBuilder - longFormContent() with pubkey", () => {
+  const filter = FilterBuilder.longFormContent("pubkey123");
+  assertEquals(filter, { kinds: [30023], authors: ["pubkey123"] });
+});
+
+Deno.test("FilterBuilder - longFormByTag()", () => {
+  const filter = FilterBuilder.longFormByTag("nostr");
+  assertEquals(filter, { kinds: [30023], "#t": ["nostr"] });
+});
+
+// ===== NIP-25 Reactions =====
+
+Deno.test("FilterBuilder - reactionsTo()", () => {
+  const filter = FilterBuilder.reactionsTo("30023:pubkey:article");
+  assertEquals(filter, { kinds: [7], "#a": ["30023:pubkey:article"] });
+});

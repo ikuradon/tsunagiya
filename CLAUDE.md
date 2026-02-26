@@ -60,15 +60,24 @@ deno task docs:dev      # ドキュメント開発サーバー
 - **NIP-10**: e/p タグ（EventBuilderで対応）
 - **NIP-11**: Relay Information Document（setInfo/getInfo + fetch
   インターセプト）
-- **NIP-25**: Reactions（EventBuilder withReactions）
+- **NIP-17**: Private Direct Messages（EventBuilder
+  chatMessage/seal/giftWrap/dmRelayList）
+- **NIP-18**: Reposts（EventBuilder repost/genericRepost）
+- **NIP-23**: Long-form Content（EventBuilder longFormContent/longFormDraft）
+- **NIP-25**: Reactions（EventBuilder withReactions[options] +
+  externalReaction）
 - **NIP-29**: Relay-based Groups（EventBuilderで対応）
 - **NIP-30**: Custom Emoji タグ（EventBuilderで対応）
 - **NIP-42**: AUTH チャレンジ/レスポンス
 - **NIP-45**: COUNT メッセージ対応
 - **NIP-50**: Search フィルター対応（content 部分一致検索）
+- **NIP-51**: Lists（EventBuilder
+  muteList/pinList/bookmarks/followSet/relaySet/emojiSet）
 - **NIP-52**: Calendar Events（EventBuilder テンプレート — 全4種対応:
   Date/Time/Collection/RSVP）
 - **NIP-57**: Lightning Zaps（EventBuilderテンプレート）
+- **NIP-65**: Relay List Metadata（EventBuilder relayList / FilterBuilder
+  relayList）
 
 ## テスト支援ヘルパー (`src/testing/`)
 
@@ -77,8 +86,10 @@ deno task docs:dev      # ドキュメント開発サーバー
   - バルク生成（bulk, timeline）
   - リレーションシップ（thread, withReactions）
   - Common tags（geohash, e/p, emoji）
-  - NIP別テンプレート（metadata, contacts, DM, zap等）
-- **FilterBuilder**: よくあるフィルターパターン生成
+  - NIP別テンプレート（metadata, contacts, DM, zap, repost, longForm, lists,
+    chatMessage等）
+- **FilterBuilder**:
+  よくあるフィルターパターン生成（NIP-17/18/23/25/51/52/65対応）
 - **リアルタイムシミュレート**: streamEvents, startStream
 - **スナップショット**: relay.snapshot() / restore()
 - **アサーションヘルパー**: assertReceivedREQ, assertEventPublished等

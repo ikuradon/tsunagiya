@@ -108,11 +108,109 @@ const updated = EventBuilder.kind(30023)
 relay.store(updated); // true（古いバージョンが削除される）
 ```
 
+NIP-17 Private Direct Messages:
+
+```typescript
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+// Chat Message (kind:14)
+const chatMsg = EventBuilder.chatMessage({
+  recipientPubkey: "recipient-pubkey",
+  content: "hello!",
+  subject: "greeting",
+}).build();
+
+// Seal (kind:13) — chat message をラップ
+const seal = EventBuilder.seal(chatMsg).build();
+
+// Gift Wrap (kind:1059) — seal をランダムpubkeyでラップ
+const wrapped = EventBuilder.giftWrap({
+  recipientPubkey: "recipient-pubkey",
+  innerEvent: seal,
+}).build();
+
+// DM Relay List (kind:10050)
+const dmList = EventBuilder.dmRelayList([
+  "wss://dm.relay1.com",
+  "wss://dm.relay2.com",
+]).build();
+
+// フィルター
+FilterBuilder.giftWraps("recipient-pubkey"); // { kinds: [1059], "#p": [...] }
+FilterBuilder.dmRelayList("pubkey"); // { kinds: [10050], authors: [...] }
+```
+
+NIP-18 Reposts:
+
+```typescript
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+const original = EventBuilder.kind1().content("original post").build();
+
+// Repost (kind:6)
+const repost = EventBuilder.repost(original, "wss://relay.example.com").build();
+// → kind: 6, content: JSON.stringify(original), tags: [["e", ...], ["p", ...]]
+
+// Generic Repost (kind:16) — kind:1 以外のイベント用
+const article = EventBuilder.kind(30023).tag("d", "my-article").build();
+const genericRepost = EventBuilder.genericRepost(article).build();
+// → kind: 16, tags: [["e", ...], ["p", ...], ["k", "30023"]]
+
+// フィルター
+FilterBuilder.reposts(original.id); // { kinds: [6], "#e": [...] }
+FilterBuilder.allReposts(original.id); // { kinds: [6, 16], "#e": [...] }
+```
+
+NIP-23 Long-form Content:
+
+```typescript
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+// Long-form Content (kind:30023)
+const article = EventBuilder.longFormContent({
+  identifier: "my-article-2026",
+  title: "Nostr の使い方",
+  content: "## はじめに\nNostr とは...",
+  summary: "Nostr の基礎をわかりやすく解説",
+  publishedAt: 1740000000,
+  hashtags: ["nostr", "tutorial"],
+}).build();
+
+// Long-form Draft (kind:30024)
+const draft = EventBuilder.longFormDraft({
+  identifier: "draft-article",
+  title: "下書き記事",
+  content: "作業中の内容...",
+}).build();
+
+// フィルター
+FilterBuilder.longFormContent(); // { kinds: [30023] }
+FilterBuilder.longFormContent("author-pk"); // { kinds: [30023], authors: [...] }
+FilterBuilder.longFormByTag("nostr"); // { kinds: [30023], "#t": ["nostr"] }
+```
+
 NIP-25 リアクション:
 
 ```typescript
 const [post, reactions] = EventBuilder.withReactions(5);
 // reactions[n]: kind: 7, content: "+", tags: [["e", post.id], ["p", post.pubkey]]
+
+// オプション指定（content, targetKind）
+const [post2, reactions2] = EventBuilder.withReactions(3, {
+  content: "🤙",
+  targetKind: 1,
+});
+// reactions2[n]: kind: 7, content: "🤙", tags: [..., ["k", "1"]]
+
+// 外部コンテンツへのリアクション (kind:17, NIP-25)
+const externalReaction = EventBuilder.externalReaction(
+  "https://example.com/article",
+  "text/html",
+).build();
+// → kind: 17, content: "+", tags: [["i", url], ["k", contentType]]
+
+// フィルター（アドレス指定）
+FilterBuilder.reactionsTo("30023:pubkey:my-article"); // { kinds: [7], "#a": [...] }
 ```
 
 NIP-29 グループチャット:
@@ -238,6 +336,69 @@ FilterBuilder.calendarTimeEvents(); // { kinds: [31923] }
 FilterBuilder.calendarEvents(); // { kinds: [31922, 31923] }
 FilterBuilder.calendarCollections(); // { kinds: [31924] }
 FilterBuilder.rsvps("31922:pubkey:meetup"); // { kinds: [31925], "#a": [...] }
+```
+
+NIP-51 Lists:
+
+```typescript
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+// Mute List (kind:10000)
+const mute = EventBuilder.muteList({
+  pubkeys: ["muted-pubkey-1", "muted-pubkey-2"],
+  hashtags: ["spam"],
+  words: ["badword"],
+}).build();
+
+// Pin List (kind:10001)
+const pins = EventBuilder.pinList(["event-id-1", "event-id-2"]).build();
+
+// Bookmarks (kind:10003)
+const bookmarks = EventBuilder.bookmarks({
+  eventIds: ["event-id-1"],
+  addresses: ["30023:pubkey:article-slug"],
+}).build();
+
+// Follow Set (kind:30000)
+const followSet = EventBuilder.followSet("my-friends", [
+  "pubkey-alice",
+  "pubkey-bob",
+]).build();
+
+// Relay Set (kind:30002)
+const relaySet = EventBuilder.relaySet("my-relays", [
+  "wss://relay1.example.com",
+  "wss://relay2.example.com",
+]).build();
+
+// Emoji Set (kind:30030)
+const emojiSet = EventBuilder.emojiSet("my-emojis", [
+  ["sushi", "https://example.com/sushi.png"],
+  ["nostr", "https://example.com/nostr.png"],
+]).build();
+
+// フィルター
+FilterBuilder.muteList("pubkey"); // { kinds: [10000], authors: [...] }
+FilterBuilder.pinList("pubkey"); // { kinds: [10001], authors: [...] }
+FilterBuilder.bookmarks("pubkey"); // { kinds: [10003], authors: [...] }
+FilterBuilder.followSets("pubkey"); // { kinds: [30000], authors: [...] }
+```
+
+NIP-65 Relay List Metadata:
+
+```typescript
+import { EventBuilder, FilterBuilder } from "@ikuradon/tsunagiya/testing";
+
+// Relay List Metadata (kind:10002)
+const relayList = EventBuilder.relayList([
+  { url: "wss://relay1.example.com" }, // 読み書き両用
+  { url: "wss://relay2.example.com", marker: "read" }, // 読み取り専用
+  { url: "wss://relay3.example.com", marker: "write" }, // 書き込み専用
+]).build();
+// → kind: 10002, tags: [["r", url], ["r", url, "read"], ["r", url, "write"]]
+
+// フィルター
+FilterBuilder.relayList("pubkey"); // { kinds: [10002], authors: ["pubkey"] }
 ```
 
 NIP-57 Lightning Zaps:

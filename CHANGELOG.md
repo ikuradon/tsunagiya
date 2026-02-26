@@ -1,15 +1,40 @@
 # Changelog
 
-## v0.3.0 (unreleased)
+## v0.3.0 (2026-02-27)
 
-### New Features
+### Test Helpers
 
-- NIP-17: Private Direct Messages (EventBuilder template)
-- NIP-25: Reactions (kind:7 relay-side processing)
-- NIP-51: Lists (replaceable event handling)
-- NIP-23: Long-form Content (Addressable Events example)
-- NIP-18: Reposts (kind:6 processing)
-- NIP-65: Relay List Metadata (kind:10002 processing)
+- NIP-17 Private Direct Messages:
+  - `EventBuilder.chatMessage()` (kind:14)
+  - `EventBuilder.seal()` (kind:13)
+  - `EventBuilder.giftWrap()` (kind:1059)
+  - `EventBuilder.dmRelayList()` (kind:10050)
+  - `FilterBuilder.giftWraps()`, `FilterBuilder.dmRelayList()`
+- NIP-18 Reposts:
+  - `EventBuilder.repost()` (kind:6)
+  - `EventBuilder.genericRepost()` (kind:16)
+  - `FilterBuilder.reposts()`, `FilterBuilder.allReposts()`
+- NIP-23 Long-form Content:
+  - `EventBuilder.longFormContent()` (kind:30023)
+  - `EventBuilder.longFormDraft()` (kind:30024)
+  - `FilterBuilder.longFormContent()`, `FilterBuilder.longFormByTag()`
+- NIP-25 Reactions (拡充):
+  - `EventBuilder.withReactions(count, options)` — `content` / `targetKind`
+    オプション追加
+  - `EventBuilder.externalReaction()` (kind:17)
+  - `FilterBuilder.reactionsTo()`
+- NIP-51 Lists:
+  - `EventBuilder.muteList()` (kind:10000)
+  - `EventBuilder.pinList()` (kind:10001)
+  - `EventBuilder.bookmarks()` (kind:10003)
+  - `EventBuilder.followSet()` (kind:30000)
+  - `EventBuilder.relaySet()` (kind:30002)
+  - `EventBuilder.emojiSet()` (kind:30030)
+  - `FilterBuilder.muteList()`, `FilterBuilder.pinList()`,
+    `FilterBuilder.bookmarks()`, `FilterBuilder.followSets()`
+- NIP-65 Relay List Metadata:
+  - `EventBuilder.relayList()` (kind:10002)
+  - `FilterBuilder.relayList()`
 
 ## v0.2.5 (2026-02-26)
 

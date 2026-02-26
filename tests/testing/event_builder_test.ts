@@ -471,6 +471,193 @@ Deno.test("EventBuilder - calendarRsvp() returns EventBuilder for customization"
   assertEquals(event.kind, 31925);
 });
 
+// ===== NIP-65 Relay List Metadata =====
+
+Deno.test("EventBuilder - relayList() creates kind:10002 with r tags", () => {
+  const event = EventBuilder.relayList([
+    { url: "wss://relay1.example.com" },
+    { url: "wss://relay2.example.com", marker: "read" },
+    { url: "wss://relay3.example.com", marker: "write" },
+  ]).build();
+
+  assertEquals(event.kind, 10002);
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "r" && t[1] === "wss://relay1.example.com" && t.length === 2
+    ),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "r" && t[1] === "wss://relay2.example.com" &&
+      t[2] === "read"
+    ),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "r" && t[1] === "wss://relay3.example.com" &&
+      t[2] === "write"
+    ),
+    true,
+  );
+});
+
+// ===== NIP-18 Reposts =====
+
+Deno.test("EventBuilder - repost() creates kind:6 with target event", () => {
+  const target = EventBuilder.kind1().content("original post").build();
+  const event = EventBuilder.repost(target, "wss://relay.example.com").build();
+
+  assertEquals(event.kind, 6);
+  assertEquals(JSON.parse(event.content).id, target.id);
+  assertEquals(
+    event.tags.some((t) => t[0] === "e" && t[1] === target.id),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === target.pubkey),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - genericRepost() creates kind:16 with k tag", () => {
+  const target = EventBuilder.kind(30023).content("long form").build();
+  const event = EventBuilder.genericRepost(target).build();
+
+  assertEquals(event.kind, 16);
+  assertEquals(
+    event.tags.some((t) => t[0] === "e" && t[1] === target.id),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === target.pubkey),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "k" && t[1] === "30023"),
+    true,
+  );
+});
+
+// ===== NIP-23 Long-form Content =====
+
+Deno.test("EventBuilder - longFormContent() creates kind:30023 with required tags", () => {
+  const event = EventBuilder.longFormContent({
+    identifier: "my-article",
+    title: "My Article",
+    content: "# Hello\n\nThis is my article.",
+  }).build();
+
+  assertEquals(event.kind, 30023);
+  assertEquals(event.content, "# Hello\n\nThis is my article.");
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "my-article"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "title" && t[1] === "My Article"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - longFormContent() with optional tags", () => {
+  const event = EventBuilder.longFormContent({
+    identifier: "full-article",
+    title: "Full Article",
+    content: "content",
+    summary: "A summary",
+    image: "https://example.com/image.png",
+    publishedAt: 1700000000,
+    hashtags: ["nostr", "article"],
+  }).build();
+
+  assertEquals(
+    event.tags.some((t) => t[0] === "summary" && t[1] === "A summary"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "image" && t[1] === "https://example.com/image.png"
+    ),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "published_at" && t[1] === "1700000000"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "nostr"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "article"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - longFormDraft() creates kind:30024", () => {
+  const event = EventBuilder.longFormDraft({
+    identifier: "my-draft",
+    title: "Draft Post",
+    content: "WIP content",
+  }).build();
+
+  assertEquals(event.kind, 30024);
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "my-draft"),
+    true,
+  );
+});
+
+// ===== NIP-25 Reactions 拡充 =====
+
+Deno.test("EventBuilder - withReactions() backward compatible (no options)", () => {
+  const [post, reactions] = EventBuilder.withReactions(2);
+  assertEquals(post.kind, 1);
+  assertEquals(reactions.length, 2);
+  for (const r of reactions) {
+    assertEquals(r.content, "+");
+  }
+});
+
+Deno.test("EventBuilder - withReactions() with targetKind adds k tag", () => {
+  const [_post, reactions] = EventBuilder.withReactions(2, {
+    targetKind: 30023,
+  });
+  for (const r of reactions) {
+    assertEquals(
+      r.tags.some((t) => t[0] === "k" && t[1] === "30023"),
+      true,
+    );
+  }
+});
+
+Deno.test("EventBuilder - withReactions() with content for downvote", () => {
+  const [_post, reactions] = EventBuilder.withReactions(1, { content: "-" });
+  assertEquals(reactions[0].content, "-");
+});
+
+Deno.test("EventBuilder - externalReaction() creates kind:17 with i and k tags", () => {
+  const event = EventBuilder.externalReaction(
+    "https://example.com/article",
+    "text/html",
+  ).build();
+
+  assertEquals(event.kind, 17);
+  assertEquals(event.content, "+");
+  assertEquals(
+    event.tags.some((t) =>
+      t[0] === "i" && t[1] === "https://example.com/article"
+    ),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "k" && t[1] === "text/html"),
+    true,
+  );
+});
+
 // ===== build() produces independent copies =====
 
 Deno.test("EventBuilder - build() returns independent objects", () => {
