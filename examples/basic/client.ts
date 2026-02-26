@@ -131,7 +131,10 @@ export async function post(
   const event = buildEvent(1, content, pubkey);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 
@@ -153,7 +156,10 @@ export async function reply(
   ]);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 
@@ -173,7 +179,10 @@ export async function repost(
   ]);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 
@@ -194,7 +203,10 @@ export async function like(
   ]);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 
@@ -213,7 +225,10 @@ export async function deleteEvent(
   ]);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 
@@ -312,7 +327,10 @@ export async function dmPost(
   ]);
   const okPromise = waitOK(ws, event.id);
   ws.send(JSON.stringify(["EVENT", event]));
-  await okPromise;
+  const accepted = await okPromise;
+  if (!accepted) {
+    throw new Error("Relay rejected the event");
+  }
   return event.id;
 }
 

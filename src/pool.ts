@@ -86,6 +86,8 @@ function isNip11Request(
  * ```
  */
 export class MockPool {
+  static #currentInstance: MockPool | null = null;
+
   #relays: Map<string, MockRelay> = new Map();
   #originalWebSocket: typeof globalThis.WebSocket | null = null;
   #originalFetch: typeof globalThis.fetch | null = null;
@@ -120,6 +122,9 @@ export class MockPool {
   install(): void {
     if (this.#installed) {
       throw new Error("MockPool is already installed");
+    }
+    if (MockPool.#currentInstance && MockPool.#currentInstance !== this) {
+      throw new Error("Another MockPool instance is already installed");
     }
 
     this.#originalWebSocket = globalThis.WebSocket;
@@ -162,6 +167,7 @@ export class MockPool {
       return originalFetch(request as RequestInfo, init);
     };
 
+    MockPool.#currentInstance = this;
     this.#installed = true;
   }
 
@@ -188,6 +194,7 @@ export class MockPool {
     MockWebSocket._resolveRelay = null;
     this.#originalWebSocket = null;
     this.#originalFetch = null;
+    MockPool.#currentInstance = null;
     this.#installed = false;
   }
 

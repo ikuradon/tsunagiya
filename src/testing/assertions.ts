@@ -70,12 +70,21 @@ export function assertNoErrors(relay: MockRelay): void {
 /**
  * AUTH応答が受信され、成功していることを検証する
  *
- * @throws {Error} AUTH応答が見つからない場合
+ * @throws {Error} AUTH応答が見つからない場合、または認証が成功していない場合
  */
 export function assertAuthCompleted(relay: MockRelay): void {
   const authMessages = relay.received.filter((m) => m[0] === "AUTH");
   if (authMessages.length === 0) {
     throw new Error("Expected AUTH response but none found.");
+  }
+  const results = relay.authResults;
+  const hasSuccess = results.some((r) => r.accepted);
+  if (!hasSuccess) {
+    throw new Error(
+      `AUTH was sent but no successful authentication found. Results: ${
+        JSON.stringify(results)
+      }`,
+    );
   }
 }
 

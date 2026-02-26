@@ -87,7 +87,6 @@ export class MockWebSocket extends EventTarget {
           this.#fireClose(1006, "Connection timeout");
         }
       }, timeout);
-      return;
     }
 
     // 非同期で接続完了をシミュレート

@@ -64,6 +64,8 @@ export class MockRelay {
   #pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
   #logger: Logger | null = null;
   #errors: string[] = [];
+  #authResults: Array<{ eventId: string; accepted: boolean; message: string }> =
+    [];
   #deletedIds: Set<string> = new Set();
 
   constructor(url: string, options: MockRelayOptions = {}) {
@@ -110,6 +112,7 @@ export class MockRelay {
     if (event.kind === 5) {
       this.#handleDeletion(event);
       this.#store.push(event);
+      this._broadcastEvent(event);
       return true;
     }
     const { stored, ephemeral } = this.#classifyAndStore(event);
@@ -341,6 +344,13 @@ export class MockRelay {
     return this.#errors;
   }
 
+  /** AUTH認証結果のログ */
+  get authResults(): ReadonlyArray<
+    { eventId: string; accepted: boolean; message: string }
+  > {
+    return this.#authResults;
+  }
+
   /** ロガーインスタンス（設定済みの場合） */
   get logger(): Logger | null {
     return this.#logger;
@@ -367,8 +377,17 @@ export class MockRelay {
           const event = { ...msg[1], tags: msg[1].tags.map((t) => [...t]) };
           return ["EVENT", event] as ClientMessage;
         }
-        if (msg[0] === "REQ") {
-          return [...msg] as ClientMessage;
+        if (msg[0] === "REQ" || msg[0] === "COUNT") {
+          const [type, subId, ...filters] = msg as [
+            "REQ" | "COUNT",
+            string,
+            ...NostrFilter[],
+          ];
+          return [
+            type,
+            subId,
+            ...filters.map((f) => structuredClone(f)),
+          ] as ClientMessage;
         }
         return [...msg] as ClientMessage;
       }),
@@ -395,6 +414,19 @@ export class MockRelay {
           ...(msg as ["EVENT", NostrEvent])[1],
           tags: (msg as ["EVENT", NostrEvent])[1].tags.map((t) => [...t]),
         }] as ClientMessage
+        : (msg[0] === "REQ" || msg[0] === "COUNT")
+        ? (() => {
+          const [type, subId, ...filters] = msg as [
+            "REQ" | "COUNT",
+            string,
+            ...NostrFilter[],
+          ];
+          return [
+            type,
+            subId,
+            ...filters.map((f) => structuredClone(f)),
+          ] as ClientMessage;
+        })()
         : [...msg] as ClientMessage,
       socket: null,
     }));
@@ -417,6 +449,7 @@ export class MockRelay {
     this.#refused = false;
     this.#authState.reset();
     this.#errors = [];
+    this.#authResults = [];
     this.#deletedIds.clear();
     this.#info = {};
     for (const timer of this.#pendingTimers) {
@@ -499,6 +532,7 @@ export class MockRelay {
       const raw: unknown = JSON.parse(data);
       // メッセージ構造の基本検証
       if (!Array.isArray(raw) || raw.length < 1) {
+        this.#errors.push("error: invalid message format");
         const notice: RelayMessage = [
           "NOTICE",
           "error: invalid message format",
@@ -512,6 +546,7 @@ export class MockRelay {
           raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null ||
           typeof (raw[1] as Record<string, unknown>).id !== "string"
         ) {
+          this.#errors.push("error: malformed EVENT message");
           const notice: RelayMessage = [
             "NOTICE",
             "error: malformed EVENT message",
@@ -521,6 +556,7 @@ export class MockRelay {
         }
       } else if (type === "REQ" || type === "COUNT") {
         if (raw.length < 2 || typeof raw[1] !== "string") {
+          this.#errors.push(`error: malformed ${type} message`);
           const notice: RelayMessage = [
             "NOTICE",
             `error: malformed ${type} message`,
@@ -530,6 +566,7 @@ export class MockRelay {
         }
       } else if (type === "CLOSE") {
         if (raw.length < 2 || typeof raw[1] !== "string") {
+          this.#errors.push("error: malformed CLOSE message");
           const notice: RelayMessage = [
             "NOTICE",
             "error: malformed CLOSE message",
@@ -539,6 +576,7 @@ export class MockRelay {
         }
       } else if (type === "AUTH") {
         if (raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null) {
+          this.#errors.push("error: malformed AUTH message");
           const notice: RelayMessage = [
             "NOTICE",
             "error: malformed AUTH message",
@@ -628,6 +666,7 @@ export class MockRelay {
         // NIP-09: 削除リクエスト処理
         this.#handleDeletion(event);
         this.#store.push(event);
+        this._broadcastEvent(event);
         response = ["OK", event.id, true, ""];
       } else {
         const { stored, ephemeral } = this.#classifyAndStore(event);
@@ -704,6 +743,7 @@ export class MockRelay {
       ws,
       authEvent,
     );
+    this.#authResults.push({ eventId: authEvent.id, accepted, message });
     const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
     ws._receiveMessage(JSON.stringify(ok));
   }

@@ -323,6 +323,64 @@ Deno.test("NIP-09 - store() rejects deleted event IDs", async () => {
   }
 });
 
+Deno.test("NIP-09 - kind:5 is broadcast to subscribers in real-time", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  const pubkey = "aabb";
+  const target = EventBuilder.kind1().pubkey(pubkey).content("to delete")
+    .build();
+  relay.store(target);
+
+  pool.install();
+  try {
+    // 購読側: kinds:[5] で削除イベントを待つ
+    const ws1 = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws1.onopen = () => resolve();
+    });
+
+    const received: string[] = [];
+    ws1.addEventListener("message", (e) => {
+      received.push(e.data as string);
+    });
+
+    // kinds:[5] で購読
+    ws1.send(JSON.stringify(["REQ", "del-sub", { kinds: [5] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+    // EOSE をクリア
+    received.length = 0;
+
+    // 送信側: 削除イベントを送信
+    const ws2 = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws2.onopen = () => resolve();
+    });
+
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws2.send(JSON.stringify(["EVENT", deletion]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // 購読側に kind:5 イベントが配信されていることを確認
+    const deletionEvents = received
+      .map((d) => JSON.parse(d))
+      .filter((m: unknown[]) =>
+        m[0] === "EVENT" && m[1] === "del-sub" &&
+        (m[2] as { kind: number }).kind === 5
+      );
+    assertEquals(deletionEvents.length, 1);
+
+    ws1.close();
+    ws2.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  } finally {
+    pool.uninstall();
+  }
+});
+
 // ===== EventBuilder テスト =====
 
 Deno.test("NIP-09 EventBuilder - deletion() creates kind:5 with e-tags", () => {
