@@ -4,11 +4,11 @@ outline: deep
 
 # NIP Support Status
 
-NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.3.
+NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.4.
 
 ---
 
-## Supported NIPs (v0.2.3)
+## Supported NIPs (v0.2.4)
 
 <!--@include: ../../_shared/tables/nip-support.md-->
 
@@ -37,23 +37,28 @@ NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.3.
 
 ---
 
-## NIP-16: Event Type Store Behavior
+## NIP-01: Event Type Store Behavior (formerly NIP-16/NIP-33)
 
-| Type                      | kind Range                             | Store Behavior                                                   |
-| ------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
-| Regular                   | 1-2, 4-9999, 40000+ (except kind 0, 3) | Added normally                                                   |
-| Replaceable               | 0, 3, 10000-19999                      | Old events with same kind+pubkey are deleted before adding       |
-| Ephemeral                 | 20000-29999                            | Not stored, broadcast only                                       |
-| Parameterized Replaceable | 30000-39999                            | Old events with same kind+pubkey+d-tag are deleted before adding |
+> NIP-16 (Event Treatment) and NIP-33 (Parameterized Replaceable Events →
+> Addressable Events) have been merged into NIP-01.
+
+| Type                                             | kind Range                             | Store Behavior                                                   |
+| ------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------- |
+| Regular                                          | 1-2, 4-9999, 40000+ (except kind 0, 3) | Added normally                                                   |
+| Replaceable                                      | 0, 3, 10000-19999                      | Old events with same kind+pubkey are deleted before adding       |
+| Ephemeral                                        | 20000-29999                            | Not stored, broadcast only                                       |
+| Addressable (formerly Parameterized Replaceable) | 30000-39999                            | Old events with same kind+pubkey+d-tag are deleted before adding |
 
 ---
 
 ## Planned NIPs (v0.3.0 and later)
 
-| NIP    | Description         | Target Version | Overview                       |
-| ------ | ------------------- | -------------- | ------------------------------ |
-| NIP-65 | Relay List Metadata | v0.3.0         | Template for kind:10002 events |
-| NIP-94 | File Metadata       | v0.3.0         | Template for kind:1063         |
+| NIP    | Description             | Target Version | Overview                                |
+| ------ | ----------------------- | -------------- | --------------------------------------- |
+| NIP-17 | Private Direct Messages | v0.3.0         | DM template replacing deprecated NIP-04 |
+| NIP-40 | Expiration Timestamp    | v0.3.0         | `EventBuilder.withExpiration()` method  |
+| NIP-65 | Relay List Metadata     | v0.3.0         | Template for kind:10002 events          |
+| NIP-94 | File Metadata           | v0.3.0         | Template for kind:1063                  |
 
 ---
 

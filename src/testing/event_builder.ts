@@ -59,6 +59,44 @@ export interface ZapRequestOptions {
   recipientPubkey?: string;
 }
 
+/** NIP-52 Date-based Calendar Event オプション */
+export interface CalendarDateEventOptions {
+  title: string;
+  startDate: string; // ISO 8601 (e.g. "2026-03-01")
+  endDate?: string;
+  location?: string;
+  geohash?: string;
+  participants?: string[]; // pubkeys
+  hashtags?: string[];
+}
+
+/** NIP-52 Time-based Calendar Event オプション */
+export interface CalendarTimeEventOptions {
+  title: string;
+  start: number; // UNIX timestamp
+  end?: number;
+  startTzid?: string; // IANA timezone
+  endTzid?: string;
+  location?: string;
+  geohash?: string;
+  participants?: string[];
+  hashtags?: string[];
+}
+
+/** NIP-52 Calendar Collection オプション */
+export interface CalendarCollectionOptions {
+  title: string;
+  events: string[]; // "a" tag coordinates (e.g. "31922:pubkey:d-tag")
+}
+
+/** NIP-52 Calendar Event RSVP オプション */
+export interface CalendarRsvpOptions {
+  eventAddress: string; // "a" tag coordinate
+  status: "accepted" | "declined" | "tentative";
+  freebusy?: "free" | "busy";
+  content?: string;
+}
+
 /**
  * テスト用Nostrイベントのビルダー
  *
@@ -411,5 +449,85 @@ export class EventBuilder {
     return EventBuilder.kind(24133)
       .content("mock-nip07-request")
       .build();
+  }
+
+  // ===== NIP-52 Calendar Events =====
+
+  /**
+   * Date-based Calendar Event (kind:31922, NIP-52) ビルダーを作成する
+   */
+  static calendarDateEvent(options: CalendarDateEventOptions): EventBuilder {
+    const builder = new EventBuilder(31922)
+      .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
+      .tag("title", options.title)
+      .tag("start", options.startDate);
+    if (options.endDate) builder.tag("end", options.endDate);
+    if (options.location) builder.tag("location", options.location);
+    if (options.geohash) builder.tag("g", options.geohash);
+    if (options.participants) {
+      for (const p of options.participants) {
+        builder.tag("p", p);
+      }
+    }
+    if (options.hashtags) {
+      for (const t of options.hashtags) {
+        builder.tag("t", t);
+      }
+    }
+    return builder;
+  }
+
+  /**
+   * Time-based Calendar Event (kind:31923, NIP-52) ビルダーを作成する
+   */
+  static calendarTimeEvent(options: CalendarTimeEventOptions): EventBuilder {
+    const builder = new EventBuilder(31923)
+      .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
+      .tag("title", options.title)
+      .tag("start", String(options.start));
+    if (options.end) {
+      builder.tag("end", String(options.end));
+    }
+    if (options.startTzid) builder.tag("start_tzid", options.startTzid);
+    if (options.endTzid) builder.tag("end_tzid", options.endTzid);
+    if (options.location) builder.tag("location", options.location);
+    if (options.geohash) builder.tag("g", options.geohash);
+    if (options.participants) {
+      for (const p of options.participants) {
+        builder.tag("p", p);
+      }
+    }
+    if (options.hashtags) {
+      for (const t of options.hashtags) {
+        builder.tag("t", t);
+      }
+    }
+    return builder;
+  }
+
+  /**
+   * Calendar Collection (kind:31924, NIP-52) ビルダーを作成する
+   */
+  static calendarCollection(options: CalendarCollectionOptions): EventBuilder {
+    const builder = new EventBuilder(31924)
+      .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
+      .tag("title", options.title);
+    for (const eventRef of options.events) {
+      builder.tag("a", eventRef);
+    }
+    return builder;
+  }
+
+  /**
+   * Calendar Event RSVP (kind:31925, NIP-52) ビルダーを作成する
+   */
+  static calendarRsvp(options: CalendarRsvpOptions): EventBuilder {
+    const builder = new EventBuilder(31925)
+      .tag("a", options.eventAddress)
+      .tag("d", options.eventAddress)
+      .tag("status", options.status);
+    if (options.freebusy) builder.tag("freebusy", options.freebusy);
+    if (options.content) builder.content(options.content);
+    return builder;
   }
 }

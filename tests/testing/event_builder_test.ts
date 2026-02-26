@@ -265,6 +265,212 @@ Deno.test("EventBuilder - nip07Request() creates kind:24133", () => {
   assertEquals(event.kind, 24133);
 });
 
+// ===== NIP-52 Calendar Events =====
+
+Deno.test("EventBuilder - calendarDateEvent() creates kind:31922 with required tags", () => {
+  const event = EventBuilder.calendarDateEvent({
+    title: "Nostr Meetup",
+    startDate: "2026-03-01",
+  }).build();
+
+  assertEquals(event.kind, 31922);
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "nostr-meetup"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "title" && t[1] === "Nostr Meetup"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "start" && t[1] === "2026-03-01"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarDateEvent() with optional tags", () => {
+  const event = EventBuilder.calendarDateEvent({
+    title: "Conference",
+    startDate: "2026-03-01",
+    endDate: "2026-03-03",
+    location: "Tokyo",
+    geohash: "xn76g",
+    participants: ["pub1", "pub2"],
+    hashtags: ["nostr", "conference"],
+  }).build();
+
+  assertEquals(
+    event.tags.some((t) => t[0] === "end" && t[1] === "2026-03-03"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "location" && t[1] === "Tokyo"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "g" && t[1] === "xn76g"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === "pub1"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === "pub2"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "nostr"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "conference"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarTimeEvent() creates kind:31923 with required tags", () => {
+  const start = 1740000000;
+  const event = EventBuilder.calendarTimeEvent({
+    title: "Online Seminar",
+    start,
+  }).build();
+
+  assertEquals(event.kind, 31923);
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "online-seminar"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "title" && t[1] === "Online Seminar"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "start" && t[1] === String(start)),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarTimeEvent() with optional tags", () => {
+  const start = 1740000000;
+  const end = 1740003600;
+  const event = EventBuilder.calendarTimeEvent({
+    title: "Workshop",
+    start,
+    end,
+    startTzid: "Asia/Tokyo",
+    endTzid: "Asia/Tokyo",
+    location: "Shibuya",
+    geohash: "xn76g",
+    participants: ["pub1"],
+    hashtags: ["workshop"],
+  }).build();
+
+  assertEquals(
+    event.tags.some((t) => t[0] === "end" && t[1] === String(end)),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "start_tzid" && t[1] === "Asia/Tokyo"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "end_tzid" && t[1] === "Asia/Tokyo"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "location" && t[1] === "Shibuya"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "g" && t[1] === "xn76g"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "p" && t[1] === "pub1"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "workshop"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarCollection() creates kind:31924 with a tags", () => {
+  const event = EventBuilder.calendarCollection({
+    title: "Tech Events 2026",
+    events: ["31922:pubkey1:meetup", "31923:pubkey2:seminar"],
+  }).build();
+
+  assertEquals(event.kind, 31924);
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "tech-events-2026"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "title" && t[1] === "Tech Events 2026"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "a" && t[1] === "31922:pubkey1:meetup"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "a" && t[1] === "31923:pubkey2:seminar"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarRsvp() creates kind:31925 with status", () => {
+  const event = EventBuilder.calendarRsvp({
+    eventAddress: "31922:pubkey1:meetup",
+    status: "accepted",
+  }).build();
+
+  assertEquals(event.kind, 31925);
+  assertEquals(
+    event.tags.some((t) => t[0] === "a" && t[1] === "31922:pubkey1:meetup"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "d" && t[1] === "31922:pubkey1:meetup"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "status" && t[1] === "accepted"),
+    true,
+  );
+});
+
+Deno.test("EventBuilder - calendarRsvp() with freebusy and content", () => {
+  const event = EventBuilder.calendarRsvp({
+    eventAddress: "31923:pubkey1:seminar",
+    status: "tentative",
+    freebusy: "busy",
+    content: "Maybe I'll join",
+  }).build();
+
+  assertEquals(
+    event.tags.some((t) => t[0] === "status" && t[1] === "tentative"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "freebusy" && t[1] === "busy"),
+    true,
+  );
+  assertEquals(event.content, "Maybe I'll join");
+});
+
+Deno.test("EventBuilder - calendarRsvp() returns EventBuilder for customization", () => {
+  const event = EventBuilder.calendarRsvp({
+    eventAddress: "31922:pubkey1:meetup",
+    status: "accepted",
+  }).pubkey("my-pubkey").build();
+
+  assertEquals(event.pubkey, "my-pubkey");
+  assertEquals(event.kind, 31925);
+});
+
 // ===== build() produces independent copies =====
 
 Deno.test("EventBuilder - build() returns independent objects", () => {

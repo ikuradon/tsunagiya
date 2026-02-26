@@ -42,3 +42,30 @@ Deno.test("FilterBuilder - search()", () => {
   const filter = FilterBuilder.search("nostr");
   assertEquals(filter, { search: "nostr" });
 });
+
+// ===== NIP-52 Calendar Events =====
+
+Deno.test("FilterBuilder - calendarDateEvents()", () => {
+  const filter = FilterBuilder.calendarDateEvents();
+  assertEquals(filter, { kinds: [31922] });
+});
+
+Deno.test("FilterBuilder - calendarTimeEvents()", () => {
+  const filter = FilterBuilder.calendarTimeEvents();
+  assertEquals(filter, { kinds: [31923] });
+});
+
+Deno.test("FilterBuilder - calendarEvents()", () => {
+  const filter = FilterBuilder.calendarEvents();
+  assertEquals(filter, { kinds: [31922, 31923] });
+});
+
+Deno.test("FilterBuilder - calendarCollections()", () => {
+  const filter = FilterBuilder.calendarCollections();
+  assertEquals(filter, { kinds: [31924] });
+});
+
+Deno.test("FilterBuilder - rsvps()", () => {
+  const filter = FilterBuilder.rsvps("31922:pubkey1:meetup");
+  assertEquals(filter, { kinds: [31925], "#a": ["31922:pubkey1:meetup"] });
+});

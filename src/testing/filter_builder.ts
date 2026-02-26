@@ -68,4 +68,41 @@ export class FilterBuilder {
   static search(keyword: string): NostrFilter {
     return { search: keyword };
   }
+
+  // ===== NIP-52 Calendar Events =====
+
+  /**
+   * Date-based Calendar Event フィルター (kind:31922, NIP-52)
+   */
+  static calendarDateEvents(): NostrFilter {
+    return { kinds: [31922] };
+  }
+
+  /**
+   * Time-based Calendar Event フィルター (kind:31923, NIP-52)
+   */
+  static calendarTimeEvents(): NostrFilter {
+    return { kinds: [31923] };
+  }
+
+  /**
+   * 全 Calendar Event フィルター (kind:31922 + 31923, NIP-52)
+   */
+  static calendarEvents(): NostrFilter {
+    return { kinds: [31922, 31923] };
+  }
+
+  /**
+   * Calendar Collection フィルター (kind:31924, NIP-52)
+   */
+  static calendarCollections(): NostrFilter {
+    return { kinds: [31924] };
+  }
+
+  /**
+   * Calendar Event RSVP フィルター (kind:31925, NIP-52)
+   */
+  static rsvps(eventAddress: string): NostrFilter {
+    return { kinds: [31925], "#a": [eventAddress] };
+  }
 }

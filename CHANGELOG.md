@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.2.5 (2026-02-26)
+
+### Test Helpers
+
+- NIP-52 Calendar Events full support:
+  - `EventBuilder.calendarDateEvent()` (kind:31922)
+  - `EventBuilder.calendarTimeEvent()` (kind:31923)
+  - `EventBuilder.calendarCollection()` (kind:31924)
+  - `EventBuilder.calendarRsvp()` (kind:31925)
+  - `FilterBuilder.calendarDateEvents()`, `calendarTimeEvents()`,
+    `calendarEvents()`, `calendarCollections()`, `rsvps()`
+
+### Documentation
+
+- Update NIP support table to reflect upstream NIP spec changes:
+  - NIP-16 (Event Treatment) and NIP-33 (Parameterized Replaceable Events) are
+    now part of NIP-01; removed as separate entries and expanded NIP-01
+    description
+  - NIP-04 (Encrypted DM): added deprecation notice (superseded by NIP-17)
+  - NIP-52: corrected description from "Geohash" to "Calendar Events" (`g` tag
+    only)
+  - NIP-29: corrected description to "Relay-based Groups"
+  - NIP-57: corrected description to "Lightning Zaps"
+  - Renamed "Parameterized Replaceable" to "Addressable" in event type tables
+- Add NIP-17 (Private Direct Messages) and NIP-40 (Expiration Timestamp) to
+  planned NIPs roadmap
+- Update version references in documentation pages (v0.2.3 → v0.2.4)
+
 ## v0.2.3 (2026-02-26)
 
 ### Bug Fixes

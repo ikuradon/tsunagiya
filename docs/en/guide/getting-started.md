@@ -23,8 +23,8 @@ you can test **existing Nostr client code without any modifications**.
 - Unstable relay simulation (latency, error rate, disconnection)
 - NIP-42 AUTH challenge/response
 - Sent message recording and verification helpers
-- NIP-16 automatic event type handling (Regular/Replaceable/Ephemeral)
-- NIP-33 Parameterized Replaceable Events
+- NIP-01 automatic event type handling
+  (Regular/Replaceable/Ephemeral/Addressable)
 - NIP-09 Event Deletion Request
 - NIP-45 COUNT message support
 - NIP-50 search filter support

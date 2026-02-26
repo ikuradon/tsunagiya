@@ -19,6 +19,8 @@
 
 - [x] NIP-11 (Relay Information Document) — `relay.setInfo()` / `getInfo()` +
       fetch インターセプト
+- [ ] NIP-17 (Private Direct Messages) — NIP-04 deprecated に伴い
+      `EventBuilder.privateDM()` テンプレート追加
 - [ ] NIP-40 (Expiration Timestamp) — `EventBuilder.withExpiration()`
       メソッド追加
 
