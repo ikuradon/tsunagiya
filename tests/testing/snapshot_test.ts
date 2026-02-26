@@ -111,6 +111,46 @@ Deno.test("snapshot - timestamp is recorded", () => {
   assertEquals(snap.timestamp <= after, true);
 });
 
+Deno.test("snapshot - received REQ filters are deep copied", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], authors: ["abc"] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const snap = snapshot(relay);
+
+    // スナップショットのフィルターを変更
+    const reqMsg = snap.received[0] as ["REQ", string, ...unknown[]];
+    const filter = reqMsg[2] as { kinds: number[]; authors: string[] };
+    filter.kinds[0] = 999;
+    filter.authors[0] = "modified";
+
+    // リレーの received は変更されていないことを確認
+    const currentReq = relay.received[0] as ["REQ", string, ...unknown[]];
+    const currentFilter = currentReq[2] as {
+      kinds: number[];
+      authors: string[];
+    };
+    assertEquals(currentFilter.kinds[0], 1);
+    assertEquals(currentFilter.authors[0], "abc");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("snapshot - empty relay produces empty snapshot", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");

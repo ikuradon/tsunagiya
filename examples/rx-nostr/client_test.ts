@@ -177,11 +177,11 @@ test("rx-nostr: stream (forward)", testOpts, async () => {
     sh.stop();
     handle.stop();
 
-    assertGreater(received.length, 0);
+    assertEquals(received.length, 3);
     const contents = received.map((e) => e.content);
-    // ストリームで少なくとも1つ以上届いているはず
-    const hasStreamEvent = contents.some((c) => c.startsWith("stream event"));
-    assertEquals(hasStreamEvent, true);
+    assertEquals(contents.includes("stream event 1"), true);
+    assertEquals(contents.includes("stream event 2"), true);
+    assertEquals(contents.includes("stream event 3"), true);
 
     rxNostr.dispose();
   } finally {

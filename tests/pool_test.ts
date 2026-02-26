@@ -86,6 +86,39 @@ Deno.test("MockPool - connections tracking", async () => {
   }
 });
 
+Deno.test("MockPool - another instance install throws while first is installed", () => {
+  const pool1 = new MockPool();
+  const pool2 = new MockPool();
+
+  pool1.install();
+  try {
+    assertThrows(
+      () => pool2.install(),
+      Error,
+      "Another MockPool instance is already installed",
+    );
+  } finally {
+    pool1.uninstall();
+  }
+});
+
+Deno.test("MockPool - second instance can install after first uninstalls", () => {
+  const pool1 = new MockPool();
+  const pool2 = new MockPool();
+  pool2.relay("wss://relay.example.com");
+
+  pool1.install();
+  pool1.uninstall();
+
+  // pool1 が uninstall 済みなら pool2 は install できる
+  pool2.install();
+  try {
+    assertEquals(pool2.installed, true);
+  } finally {
+    pool2.uninstall();
+  }
+});
+
 Deno.test("MockPool - reset clears all relays", () => {
   const pool = new MockPool();
   const r1 = pool.relay("wss://relay1.example.com");

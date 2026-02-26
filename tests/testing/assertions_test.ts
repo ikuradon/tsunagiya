@@ -237,6 +237,49 @@ Deno.test("assertAuthCompleted - throws when no AUTH", () => {
   );
 });
 
+Deno.test("assertAuthCompleted - throws when AUTH sent but validation fails", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  // バリデーターは常に false を返す
+  relay.requireAuth(() => false);
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+
+    // AUTHチャレンジを受信
+    const challenge = await new Promise<string>((resolve) => {
+      ws.onmessage = (ev: MessageEvent) => {
+        const msg = JSON.parse(ev.data as string);
+        if (msg[0] === "AUTH") resolve(msg[1]);
+      };
+    });
+
+    // AUTH応答を送信（バリデーターは失敗する）
+    const authEvent = EventBuilder.kind(22242)
+      .tag("challenge", challenge)
+      .tag("relay", "wss://relay.example.com")
+      .build();
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // AUTH は送信されたが認証失敗 → assertAuthCompleted はスローする
+    assertThrows(
+      () => assertAuthCompleted(relay),
+      Error,
+      "no successful authentication found",
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("assertClosed - passes when CLOSE found", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");

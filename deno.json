@@ -1,6 +1,6 @@
 {
   "name": "@ikuradon/tsunagiya",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "description": "Nostr relay mock library for testing. Intercepts WebSocket to test existing Nostr clients without code changes. Supports NIP-01, NIP-42, unstable relay simulation, and test helpers.",
   "license": "MIT",
   "exports": {
