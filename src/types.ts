@@ -122,9 +122,23 @@ export type EVENTHandler = (
   | ["OK", string, boolean, string]
   | Promise<["OK", string, boolean, string]>;
 
-/** AUTHバリデーター型 */
+/** AUTH検証コンテキスト */
+export interface AuthContext {
+  /** リレーURL */
+  relayUrl: string;
+  /** チャレンジ文字列 */
+  challenge: string;
+}
+
+/**
+ * AUTHバリデーター型
+ *
+ * カスタム設定時は標準のリレーURLチェックを置き換える。
+ * context から relayUrl や challenge を参照して独自の検証ロジックを実装できる。
+ */
 export type AuthValidator = (
   authEvent: NostrEvent,
+  context: AuthContext,
 ) => boolean | Promise<boolean>;
 
 /** COUNTハンドラー型 */

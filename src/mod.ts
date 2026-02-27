@@ -37,6 +37,7 @@ export type { EventKind } from "./event_kind.ts";
 export { AuthState, generateChallenge } from "./auth.ts";
 export { createLogger, Logger } from "./logger.ts";
 export type {
+  AuthContext,
   AuthValidator,
   ClientMessage,
   COUNTHandler,

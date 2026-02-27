@@ -6,7 +6,12 @@
  * @module
  */
 
-import type { AuthValidator, NostrEvent, RelayMessage } from "./types.ts";
+import type {
+  AuthContext,
+  AuthValidator,
+  NostrEvent,
+  RelayMessage,
+} from "./types.ts";
 import type { MockWebSocket } from "./websocket.ts";
 
 /**
@@ -54,11 +59,16 @@ export class AuthState {
   /**
    * AUTH応答を検証する
    *
+   * kind:22242 と challenge タグは常にチェックする。
+   * カスタムバリデーター設定時はそれを呼び出し、
+   * 未設定時は relay タグの URL 一致を標準チェックする。
+   *
    * @returns [accepted, message] - 認証結果
    */
   async handleAuthResponse(
     ws: MockWebSocket,
     authEvent: NostrEvent,
+    relayUrl: string,
   ): Promise<[boolean, string]> {
     const challenge = this.#challenges.get(ws);
     if (!challenge) {
@@ -78,11 +88,20 @@ export class AuthState {
       return [false, "auth-required: challenge mismatch"];
     }
 
-    // カスタムバリデーター
     if (this.#validator) {
-      const valid = await this.#validator(authEvent);
+      // カスタムバリデーター: 標準の relay 検証を置き換える
+      const context: AuthContext = { relayUrl, challenge };
+      const valid = await this.#validator(authEvent, context);
       if (!valid) {
         return [false, "auth-required: validation failed"];
+      }
+    } else {
+      // 標準: relay タグの URL 一致を確認
+      const relayTag = authEvent.tags.find(
+        (t) => t[0] === "relay" && t[1] === relayUrl,
+      );
+      if (!relayTag) {
+        return [false, "auth-required: relay URL mismatch"];
       }
     }
 

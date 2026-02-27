@@ -134,6 +134,8 @@ export class MockRelay {
    * EVENTハンドラーを設定する
    *
    * クライアントからEVENTメッセージを受信したときの処理をカスタマイズする。
+   * 署名検証（NIP-01）を行う場合はこのハンドラー内で独自に実装する。
+   * 未設定の場合、署名検証は行わずストアへの保存とブロードキャストのみ行う。
    */
   onEVENT(handler: EVENTHandler): void {
     this.#eventHandler = handler;
@@ -223,6 +225,11 @@ export class MockRelay {
    *
    * バリデーターを設定すると、接続時にAUTHチャレンジが送信される。
    * 既存の接続にも即座にチャレンジが送信される。
+   *
+   * 標準検証（バリデーター未設定時）は kind:22242・challenge タグ・
+   * relay タグの URL 一致のみを確認する。
+   * カスタムバリデーターを設定すると relay URL チェックを置き換え、
+   * context から relayUrl や challenge を参照して独自の検証を実装できる。
    */
   requireAuth(validator: AuthValidator): void {
     this.#authState.setValidator(validator);
@@ -739,6 +746,7 @@ export class MockRelay {
     const [accepted, message] = await this.#authState.handleAuthResponse(
       ws,
       authEvent,
+      this.url,
     );
     this.#authResults.push({ eventId: authEvent.id, accepted, message });
     const ok: RelayMessage = ["OK", authEvent.id, accepted, message];

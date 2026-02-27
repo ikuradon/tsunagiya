@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
-import type { NostrEvent } from "../src/types.ts";
+import type { AuthContext, NostrEvent } from "../src/types.ts";
 
 function makeAuthEvent(
   challenge: string,
@@ -367,6 +367,147 @@ Deno.test("AUTH - allows REQ after successful authentication", async () => {
 
     const eoseMsg = JSON.parse(messages[3]);
     assertEquals(eoseMsg[0], "EOSE");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - standard validation checks relay URL match", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const authMsg = JSON.parse(messages[0]);
+    const challenge = authMsg[1] as string;
+
+    // 正しいリレーURLで認証
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const okMsg = JSON.parse(messages[1]);
+    assertEquals(okMsg[0], "OK");
+    assertEquals(okMsg[2], true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - standard validation rejects relay URL mismatch", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const authMsg = JSON.parse(messages[0]);
+    const challenge = authMsg[1] as string;
+
+    // 間違ったリレーURLで認証
+    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const okMsg = JSON.parse(messages[1]);
+    assertEquals(okMsg[0], "OK");
+    assertEquals(okMsg[2], false);
+    assertEquals(
+      (okMsg[3] as string).includes("relay URL mismatch"),
+      true,
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - custom validator overrides relay URL check", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://auth.relay.com");
+
+  // relay URLチェックを行わないカスタムバリデーター
+  relay.requireAuth((_authEvent, _context) => true);
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const authMsg = JSON.parse(messages[0]);
+    const challenge = authMsg[1] as string;
+
+    // 間違ったリレーURLでも、カスタムバリデーターが許可すれば通る
+    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const okMsg = JSON.parse(messages[1]);
+    assertEquals(okMsg[0], "OK");
+    assertEquals(okMsg[2], true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("AUTH - custom validator receives AuthContext", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://auth.relay.com");
+
+  let receivedContext: AuthContext | null = null;
+  relay.requireAuth((_authEvent, context) => {
+    receivedContext = context;
+    return true;
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const authMsg = JSON.parse(messages[0]);
+    const challenge = authMsg[1] as string;
+
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // context が正しく渡されているか検証
+    assertEquals(receivedContext !== null, true);
+    assertEquals(receivedContext!.relayUrl, "wss://auth.relay.com");
+    assertEquals(receivedContext!.challenge, challenge);
 
     ws.close();
     await new Promise<void>((resolve) => {
