@@ -37,7 +37,7 @@ async function openWs(url: string): Promise<WebSocket> {
 
 // ===== カスタムハンドラー =====
 
-test("advanced: カスタムREQハンドラー - onREQ()でフィルターロジック上書き", async () => {
+test("advanced: custom REQ handler - overrides filter logic with onREQ()", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -69,7 +69,7 @@ test("advanced: カスタムREQハンドラー - onREQ()でフィルターロジ
   }
 });
 
-test("advanced: カスタムEVENTハンドラー - onEVENT()でバリデーション/拒否", async () => {
+test("advanced: custom EVENT handler - validates and rejects with onEVENT()", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -127,7 +127,7 @@ test("advanced: カスタムEVENTハンドラー - onEVENT()でバリデーシ�
 
 // ===== レイテンシ =====
 
-test("advanced: レイテンシ - latency設定で遅延確認", async () => {
+test("advanced: latency - verifies delay with latency option", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, {
     latency: { min: 50, max: 80 },
@@ -175,7 +175,7 @@ test("advanced: レイテンシ - latency設定で遅延確認", async () => {
 
 // ===== 切断 =====
 
-test("advanced: disconnect() - 即座切断", async () => {
+test("advanced: disconnect() - closes connections immediately", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -196,7 +196,7 @@ test("advanced: disconnect() - 即座切断", async () => {
   }
 });
 
-test("advanced: disconnectAfter() - 遅延切断", async () => {
+test("advanced: disconnectAfter() - closes connections after delay", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -220,7 +220,7 @@ test("advanced: disconnectAfter() - 遅延切断", async () => {
   }
 });
 
-test("advanced: close(1006) - 異常切断コード", async () => {
+test("advanced: close(1006) - closes with abnormal close code", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -243,7 +243,7 @@ test("advanced: close(1006) - 異常切断コード", async () => {
 
 // ===== 接続拒否 =====
 
-test("advanced: refuse() - 接続拒否", async () => {
+test("advanced: refuse() - rejects new connections", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   relay.refuse();
@@ -270,7 +270,7 @@ test("advanced: refuse() - 接続拒否", async () => {
 
 // ===== NIP-42 AUTH =====
 
-test("advanced: NIP-42 AUTH - requiresAuth + requireAuth()チャレンジ/レスポンス", async () => {
+test("advanced: NIP-42 AUTH - handles challenge/response with requiresAuth", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, { requiresAuth: true });
 
@@ -329,7 +329,7 @@ test("advanced: NIP-42 AUTH - requiresAuth + requireAuth()チャレンジ/レス
 
 // ===== スナップショット =====
 
-test("advanced: snapshot() / restore() - 状態管理", async () => {
+test("advanced: snapshot/restore - saves and restores relay state", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -380,7 +380,7 @@ test("advanced: snapshot() / restore() - 状態管理", async () => {
 
 // ===== リアルタイムストリーム =====
 
-test("advanced: streamEvents() - イベント配列の時間差配信", async () => {
+test("advanced: streamEvents() - delivers events with timed intervals", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -415,7 +415,7 @@ test("advanced: streamEvents() - イベント配列の時間差配信", async ()
   }
 });
 
-test("advanced: startStream() - ジェネレーターベースの継続配信", async () => {
+test("advanced: startStream() - delivers events via generator-based streaming", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
   pool.install();
@@ -460,7 +460,7 @@ test("advanced: startStream() - ジェネレーターベースの継続配信", 
 
 // ===== NIP-16 イベント種別 =====
 
-test("advanced: NIP-16 - Replaceable イベントの自動処理", async () => {
+test("advanced: NIP-16 - handles replaceable events automatically", async () => {
   const pool = new MockPool();
   pool.relay(TEST_RELAY);
   pool.install();
@@ -518,7 +518,7 @@ test("advanced: NIP-16 - Replaceable イベントの自動処理", async () => {
 
 // ===== NIP-33 Parameterized Replaceable =====
 
-test("advanced: NIP-33 - Parameterized Replaceable (kind+pubkey+d-tag置き換え)", async () => {
+test("advanced: NIP-33 - replaces parameterized events by kind+pubkey+d-tag", async () => {
   const pool = new MockPool();
   pool.relay(TEST_RELAY);
   pool.install();
@@ -580,7 +580,7 @@ test("advanced: NIP-33 - Parameterized Replaceable (kind+pubkey+d-tag置き換�
 
 // ===== NIP-45 COUNT =====
 
-test("advanced: NIP-45 COUNT - onCOUNT()ハンドラー", async () => {
+test("advanced: NIP-45 COUNT - handles COUNT with onCOUNT() handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -627,7 +627,7 @@ test("advanced: NIP-45 COUNT - onCOUNT()ハンドラー", async () => {
 
 // ===== ログ機能 =====
 
-test("advanced: ログ機能 - logging: true + カスタムハンドラー", async () => {
+test("advanced: logging - enables logging with custom handler", async () => {
   const logs: unknown[] = [];
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY, {
@@ -667,7 +667,7 @@ test("advanced: ログ機能 - logging: true + カスタムハンドラー", asy
 
 // ===== EventBuilder 活用 =====
 
-test("advanced: EventBuilder - thread()でスレッド生成", async () => {
+test("advanced: EventBuilder thread() - generates reply chain", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -703,7 +703,7 @@ test("advanced: EventBuilder - thread()でスレッド生成", async () => {
   }
 });
 
-test("advanced: EventBuilder - withReactions()でリアクション生成", async () => {
+test("advanced: EventBuilder withReactions() - generates reactions for post", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 
@@ -754,7 +754,7 @@ test("advanced: EventBuilder - withReactions()でリアクション生成", asyn
   }
 });
 
-test("advanced: EventBuilder - bulk()とtimeline()の一括生成", async () => {
+test("advanced: EventBuilder bulk/timeline - generates events in batch", async () => {
   const pool = new MockPool();
   const relay = pool.relay(TEST_RELAY);
 

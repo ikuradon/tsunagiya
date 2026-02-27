@@ -189,7 +189,7 @@ test("rx-nostr: stream (forward)", testOpts, async () => {
   }
 });
 
-test("rx-nostr: 複数リレー", testOpts, async () => {
+test("rx-nostr: multi-relay", testOpts, async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.rx-multi.test");
   const relay2 = pool.relay("wss://relay2.rx-multi.test");
@@ -217,7 +217,7 @@ test("rx-nostr: 複数リレー", testOpts, async () => {
   }
 });
 
-test("rx-nostr: クリーンアップ (dispose)", testOpts, () => {
+test("rx-nostr: cleanup (dispose)", testOpts, () => {
   const pool = new MockPool();
   pool.relay("wss://relay.rx-cleanup.test");
 

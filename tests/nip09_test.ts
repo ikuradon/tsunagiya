@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
 
-Deno.test("NIP-09 - kind:5 deletes event by e-tag", async () => {
+Deno.test("NIP-09 deletion - deletes event by e-tag", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -52,7 +52,7 @@ Deno.test("NIP-09 - kind:5 deletes event by e-tag", async () => {
   }
 });
 
-Deno.test("NIP-09 - pubkey mismatch prevents deletion", async () => {
+Deno.test("NIP-09 deletion - prevents deletion on pubkey mismatch", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -92,7 +92,7 @@ Deno.test("NIP-09 - pubkey mismatch prevents deletion", async () => {
   }
 });
 
-Deno.test("NIP-09 - deleted event cannot be re-published", async () => {
+Deno.test("NIP-09 deletion - rejects re-publish of deleted event", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -131,7 +131,7 @@ Deno.test("NIP-09 - deleted event cannot be re-published", async () => {
   }
 });
 
-Deno.test("NIP-09 - multiple events deleted with single kind:5", async () => {
+Deno.test("NIP-09 deletion - deletes multiple events with single kind:5", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -161,7 +161,7 @@ Deno.test("NIP-09 - multiple events deleted with single kind:5", async () => {
   }
 });
 
-Deno.test("NIP-09 - a-tag deletes parameterized replaceable event", async () => {
+Deno.test("NIP-09 deletion - deletes parameterized replaceable event by a-tag", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -192,7 +192,7 @@ Deno.test("NIP-09 - a-tag deletes parameterized replaceable event", async () => 
   }
 });
 
-Deno.test("NIP-09 - kind:5 event itself is stored", async () => {
+Deno.test("NIP-09 deletion - stores kind:5 event itself", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -231,13 +231,13 @@ Deno.test("NIP-09 - kind:5 event itself is stored", async () => {
   }
 });
 
-Deno.test("NIP-09 - deletedIds getter returns correct set", () => {
+Deno.test("NIP-09 deletion - returns empty deletedIds set initially", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   assertEquals(relay.deletedIds.size, 0);
 });
 
-Deno.test("NIP-09 - reset clears deletedIds", async () => {
+Deno.test("NIP-09 deletion - clears deletedIds on reset", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -265,7 +265,7 @@ Deno.test("NIP-09 - reset clears deletedIds", async () => {
   }
 });
 
-Deno.test("NIP-09 - snapshot/restore preserves deletedIds", async () => {
+Deno.test("NIP-09 deletion - preserves deletedIds across snapshot/restore", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -296,7 +296,7 @@ Deno.test("NIP-09 - snapshot/restore preserves deletedIds", async () => {
   }
 });
 
-Deno.test("NIP-09 - store() rejects deleted event IDs", async () => {
+Deno.test("NIP-09 deletion - rejects store of deleted event IDs", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -323,7 +323,7 @@ Deno.test("NIP-09 - store() rejects deleted event IDs", async () => {
   }
 });
 
-Deno.test("NIP-09 - kind:5 is broadcast to subscribers in real-time", async () => {
+Deno.test("NIP-09 deletion - broadcasts kind:5 to subscribers in real-time", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -383,7 +383,7 @@ Deno.test("NIP-09 - kind:5 is broadcast to subscribers in real-time", async () =
 
 // ===== EventBuilder テスト =====
 
-Deno.test("NIP-09 EventBuilder - deletion() creates kind:5 with e-tags", () => {
+Deno.test("NIP-09 EventBuilder.deletion() - creates kind:5 with e-tags", () => {
   const builder = EventBuilder.deletion(["id1", "id2"]);
   const event = builder.build();
   assertEquals(event.kind, 5);
@@ -392,7 +392,7 @@ Deno.test("NIP-09 EventBuilder - deletion() creates kind:5 with e-tags", () => {
   assertEquals(event.tags[1], ["e", "id2"]);
 });
 
-Deno.test("NIP-09 EventBuilder - deletionByAddress() creates kind:5 with a-tags", () => {
+Deno.test("NIP-09 EventBuilder.deletionByAddress() - creates kind:5 with a-tags", () => {
   const builder = EventBuilder.deletionByAddress(["30000:pubkey:d-tag"]);
   const event = builder.build();
   assertEquals(event.kind, 5);

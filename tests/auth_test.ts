@@ -38,7 +38,7 @@ function collectMessages(ws: WebSocket): string[] {
   return messages;
 }
 
-Deno.test("AUTH - sends challenge on connect with requiresAuth option", async () => {
+Deno.test("NIP-42 AUTH - sends challenge on connect with requiresAuth option", async () => {
   const pool = new MockPool();
   pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -73,7 +73,7 @@ Deno.test("AUTH - sends challenge on connect with requiresAuth option", async ()
   }
 });
 
-Deno.test("AUTH - requireAuth() sends challenge and validates", async () => {
+Deno.test("NIP-42 AUTH - validates auth response via requireAuth()", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -117,7 +117,7 @@ Deno.test("AUTH - requireAuth() sends challenge and validates", async () => {
   }
 });
 
-Deno.test("AUTH - validation failure returns OK with false", async () => {
+Deno.test("NIP-42 AUTH - returns OK false on validation failure", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -157,7 +157,7 @@ Deno.test("AUTH - validation failure returns OK with false", async () => {
   }
 });
 
-Deno.test("AUTH - wrong challenge is rejected", async () => {
+Deno.test("NIP-42 AUTH - rejects wrong challenge", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -196,7 +196,7 @@ Deno.test("AUTH - wrong challenge is rejected", async () => {
   }
 });
 
-Deno.test("AUTH - wrong kind is rejected", async () => {
+Deno.test("NIP-42 AUTH - rejects wrong event kind", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -237,7 +237,7 @@ Deno.test("AUTH - wrong kind is rejected", async () => {
   }
 });
 
-Deno.test("AUTH - rejects REQ from unauthenticated connection", async () => {
+Deno.test("NIP-42 AUTH - rejects REQ from unauthenticated connection", async () => {
   const pool = new MockPool();
   pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -272,7 +272,7 @@ Deno.test("AUTH - rejects REQ from unauthenticated connection", async () => {
   }
 });
 
-Deno.test("AUTH - rejects EVENT from unauthenticated connection", async () => {
+Deno.test("NIP-42 AUTH - rejects EVENT from unauthenticated connection", async () => {
   const pool = new MockPool();
   pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -316,7 +316,7 @@ Deno.test("AUTH - rejects EVENT from unauthenticated connection", async () => {
   }
 });
 
-Deno.test("AUTH - allows REQ after successful authentication", async () => {
+Deno.test("NIP-42 AUTH - allows REQ after successful authentication", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -377,7 +377,7 @@ Deno.test("AUTH - allows REQ after successful authentication", async () => {
   }
 });
 
-Deno.test("AUTH - standard validation checks relay URL match", async () => {
+Deno.test("NIP-42 AUTH - accepts matching relay URL", async () => {
   const pool = new MockPool();
   pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -409,7 +409,7 @@ Deno.test("AUTH - standard validation checks relay URL match", async () => {
   }
 });
 
-Deno.test("AUTH - standard validation rejects relay URL mismatch", async () => {
+Deno.test("NIP-42 AUTH - rejects mismatched relay URL", async () => {
   const pool = new MockPool();
   pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
@@ -445,7 +445,7 @@ Deno.test("AUTH - standard validation rejects relay URL mismatch", async () => {
   }
 });
 
-Deno.test("AUTH - custom validator overrides relay URL check", async () => {
+Deno.test("NIP-42 AUTH - overrides relay URL check with custom validator", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -480,7 +480,7 @@ Deno.test("AUTH - custom validator overrides relay URL check", async () => {
   }
 });
 
-Deno.test("AUTH - custom validator receives AuthContext", async () => {
+Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 
@@ -518,7 +518,7 @@ Deno.test("AUTH - custom validator receives AuthContext", async () => {
   }
 });
 
-Deno.test("AUTH - requireAuth on existing connection sends challenge", async () => {
+Deno.test("NIP-42 AUTH - sends challenge to existing connection on requireAuth", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");
 

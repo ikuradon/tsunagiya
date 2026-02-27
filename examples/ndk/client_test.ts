@@ -25,15 +25,7 @@ const _bootstrap = new MockPool();
 _bootstrap.relay("wss://bootstrap");
 _bootstrap.install();
 
-// NDK 関連の dynamic import
-const ndkMod = await import("@nostr-dev-kit/ndk");
-const NDK = ndkMod.default;
-type NDK = InstanceType<typeof NDK>;
-const NDKEvent = ndkMod.NDKEvent;
-type NDKEvent = InstanceType<typeof NDKEvent>;
-const NDKPrivateKeySigner = ndkMod.NDKPrivateKeySigner;
-
-// client モジュールの dynamic import
+// client モジュールの dynamic import（NDK はここで暗黙的にロードされる）
 const client = await import("./client.ts");
 
 _bootstrap.uninstall();
@@ -44,30 +36,6 @@ const pk = getPublicKey(sk);
 const hexSk = Array.from(sk).map((b) => b.toString(16).padStart(2, "0")).join(
   "",
 );
-
-// NDK インスタンス生成
-function createNDK(relayUrls: string[], withSigner = false): NDK {
-  const opts: Record<string, unknown> = {
-    explicitRelayUrls: relayUrls,
-    autoConnectUserRelays: false,
-    enableOutboxModel: false,
-  };
-  if (withSigner) {
-    opts.signer = new NDKPrivateKeySigner(hexSk);
-  }
-  return new NDK(opts);
-}
-
-// NDK クリーンアップ
-function cleanupNDK(ndk: NDK): void {
-  try {
-    for (const r of ndk.pool.relays.values()) {
-      try {
-        r.disconnect();
-      } catch { /* ignore */ }
-    }
-  } catch { /* cleanup errors are expected */ }
-}
 
 // 正規署名付きイベント生成
 let _ts = Math.floor(Date.now() / 1000);
@@ -96,7 +64,7 @@ test("ndk client: timeline", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"]);
+    const ndk = client.createNDK(["wss://relay.test"]);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -109,7 +77,7 @@ test("ndk client: timeline", testOpts, async () => {
     const contents = events.map((e) => e.content).sort();
     assertEquals(contents, ["hello from timeline", "second note"]);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -121,7 +89,7 @@ test("ndk client: post", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"], true);
+    const ndk = client.createNDK(["wss://relay.test"], hexSk);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -138,7 +106,7 @@ test("ndk client: post", testOpts, async () => {
     );
     assertEquals(received.length, 1);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -153,7 +121,7 @@ test("ndk client: reply", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"], true);
+    const ndk = client.createNDK(["wss://relay.test"], hexSk);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -174,7 +142,7 @@ test("ndk client: reply", testOpts, async () => {
     assertExists(eTag);
     assertEquals(eTag[1], original.id);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -189,7 +157,7 @@ test("ndk client: like", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"], true);
+    const ndk = client.createNDK(["wss://relay.test"], hexSk);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -210,7 +178,7 @@ test("ndk client: like", testOpts, async () => {
     assertExists(eTag);
     assertEquals(eTag[1], target.id);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -225,7 +193,7 @@ test("ndk client: delete", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"], true);
+    const ndk = client.createNDK(["wss://relay.test"], hexSk);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -245,7 +213,7 @@ test("ndk client: delete", testOpts, async () => {
     assertExists(eTag);
     assertEquals(eTag[1], target.id);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -263,7 +231,7 @@ test("ndk client: profile", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"]);
+    const ndk = client.createNDK(["wss://relay.test"]);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -277,7 +245,7 @@ test("ndk client: profile", testOpts, async () => {
     assertEquals(parsed.name, "testuser");
     assertEquals(parsed.about, "test profile");
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -293,7 +261,7 @@ test("ndk client: multi-relay", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK([
+    const ndk = client.createNDK([
       "wss://relay1.test",
       "wss://relay2.test",
     ]);
@@ -310,7 +278,7 @@ test("ndk client: multi-relay", testOpts, async () => {
     const contents = events.map((e) => e.content).sort();
     assertEquals(contents, ["from relay1", "from relay2"]);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }
@@ -340,7 +308,7 @@ test("ndk client: EventBuilder integration", testOpts, async () => {
 
   pool.install();
   try {
-    const ndk = createNDK(["wss://relay.test"]);
+    const ndk = client.createNDK(["wss://relay.test"]);
     await ndk.connect();
 
     const opts: CommandOptions = {
@@ -353,7 +321,7 @@ test("ndk client: EventBuilder integration", testOpts, async () => {
     const contents = events.map((e) => e.content).sort();
     assertEquals(contents, ["builder event 1", "builder event 2"]);
 
-    cleanupNDK(ndk);
+    client.cleanupNDK(ndk);
   } finally {
     pool.uninstall();
   }

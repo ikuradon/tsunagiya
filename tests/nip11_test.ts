@@ -4,13 +4,13 @@ import type { RelayInformation } from "../src/types.ts";
 
 // ===== MockRelay setInfo/getInfo ユニットテスト =====
 
-Deno.test("NIP-11 - default getInfo returns empty object", () => {
+Deno.test("NIP-11 info - returns empty object by default", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   assertEquals(relay.getInfo(), {});
 });
 
-Deno.test("NIP-11 - setInfo/getInfo basic", () => {
+Deno.test("NIP-11 info - stores and retrieves basic info", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -24,7 +24,7 @@ Deno.test("NIP-11 - setInfo/getInfo basic", () => {
   assertEquals(info.supported_nips, [1, 11, 42]);
 });
 
-Deno.test("NIP-11 - setInfo merges fields across calls", () => {
+Deno.test("NIP-11 info - merges fields across setInfo calls", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -36,7 +36,7 @@ Deno.test("NIP-11 - setInfo merges fields across calls", () => {
   assertEquals(info.description, "A test relay");
 });
 
-Deno.test("NIP-11 - setInfo overwrites same field", () => {
+Deno.test("NIP-11 info - overwrites same field on setInfo", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -46,7 +46,7 @@ Deno.test("NIP-11 - setInfo overwrites same field", () => {
   assertEquals(relay.getInfo().name, "Second");
 });
 
-Deno.test("NIP-11 - limitation support", () => {
+Deno.test("NIP-11 info - stores limitation fields", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -64,7 +64,7 @@ Deno.test("NIP-11 - limitation support", () => {
   assertEquals(info.limitation?.auth_required, true);
 });
 
-Deno.test("NIP-11 - getInfo returns a copy", () => {
+Deno.test("NIP-11 info - returns a defensive copy from getInfo", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -76,7 +76,7 @@ Deno.test("NIP-11 - getInfo returns a copy", () => {
   assertEquals(relay.getInfo().name, "Original");
 });
 
-Deno.test("NIP-11 - snapshot includes info", () => {
+Deno.test("NIP-11 info - includes info in snapshot", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -90,7 +90,7 @@ Deno.test("NIP-11 - snapshot includes info", () => {
   assertEquals(snap.info?.supported_nips, [1, 11]);
 });
 
-Deno.test("NIP-11 - restore recovers info", () => {
+Deno.test("NIP-11 info - recovers info on restore", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -104,7 +104,7 @@ Deno.test("NIP-11 - restore recovers info", () => {
   assertEquals(relay.getInfo().name, "Before");
 });
 
-Deno.test("NIP-11 - restore backward compat (snapshot without info)", () => {
+Deno.test("NIP-11 info - handles restore of legacy snapshot without info", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -121,7 +121,7 @@ Deno.test("NIP-11 - restore backward compat (snapshot without info)", () => {
   assertEquals(relay.getInfo(), {});
 });
 
-Deno.test("NIP-11 - reset clears info", () => {
+Deno.test("NIP-11 info - clears info on reset", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -133,7 +133,7 @@ Deno.test("NIP-11 - reset clears info", () => {
 
 // ===== fetch インターセプト テスト =====
 
-Deno.test("NIP-11 - fetch returns relay information with nostr+json Accept header", async () => {
+Deno.test("NIP-11 fetch - returns relay information with nostr+json Accept header", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   relay.setInfo({
@@ -161,7 +161,7 @@ Deno.test("NIP-11 - fetch returns relay information with nostr+json Accept heade
   }
 });
 
-Deno.test("NIP-11 - fetch normalizes trailing slash in URL", async () => {
+Deno.test("NIP-11 fetch - normalizes trailing slash in URL", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com").setInfo({ name: "Slash Test" });
 
@@ -177,7 +177,7 @@ Deno.test("NIP-11 - fetch normalizes trailing slash in URL", async () => {
   }
 });
 
-Deno.test("NIP-11 - fetch converts http to ws scheme", async () => {
+Deno.test("NIP-11 fetch - converts http to ws scheme", async () => {
   const pool = new MockPool();
   pool.relay("ws://localhost:8080").setInfo({ name: "Local Relay" });
 
@@ -193,7 +193,7 @@ Deno.test("NIP-11 - fetch converts http to ws scheme", async () => {
   }
 });
 
-Deno.test("NIP-11 - fetch returns independent info for different relays", async () => {
+Deno.test("NIP-11 fetch - returns independent info for different relays", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay1.example.com").setInfo({ name: "Relay One" });
   pool.relay("wss://relay2.example.com").setInfo({ name: "Relay Two" });
@@ -214,7 +214,7 @@ Deno.test("NIP-11 - fetch returns independent info for different relays", async 
   }
 });
 
-Deno.test("NIP-11 - fetch falls back to original for unregistered relay", async () => {
+Deno.test("NIP-11 fetch - falls back to original fetch for unregistered relay", async () => {
   const realFetch = globalThis.fetch;
   let fallbackCalled = false;
   globalThis.fetch = (
@@ -241,7 +241,7 @@ Deno.test("NIP-11 - fetch falls back to original for unregistered relay", async 
   }
 });
 
-Deno.test("NIP-11 - fetch falls back when Accept header is not nostr+json", async () => {
+Deno.test("NIP-11 fetch - falls back when Accept header is not nostr+json", async () => {
   const realFetch = globalThis.fetch;
   let fallbackCalled = false;
   globalThis.fetch = (

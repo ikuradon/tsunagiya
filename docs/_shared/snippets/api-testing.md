@@ -99,6 +99,64 @@ FilterBuilder.reactions("event1");
 
 FilterBuilder.search("nostr");
 // → { search: "nostr" }
+
+// NIP-17: Private Direct Messages
+FilterBuilder.giftWraps("recipient-pubkey");
+// → { kinds: [1059], "#p": ["recipient-pubkey"] }
+
+FilterBuilder.dmRelayList("pubkey1");
+// → { kinds: [10050], authors: ["pubkey1"] }
+
+// NIP-18: Reposts
+FilterBuilder.reposts("event-id");
+// → { kinds: [6], "#e": ["event-id"] }
+
+FilterBuilder.allReposts("event-id");
+// → { kinds: [6, 16], "#e": ["event-id"] }
+
+// NIP-23: Long-form Content
+FilterBuilder.longFormContent("pubkey1");
+// → { kinds: [30023], authors: ["pubkey1"] }
+
+FilterBuilder.longFormByTag("nostr");
+// → { kinds: [30023], "#t": ["nostr"] }
+
+// NIP-25: Reactions (アドレス指定)
+FilterBuilder.reactionsTo("30023:pubkey1:article-slug");
+// → { kinds: [7], "#a": ["30023:pubkey1:article-slug"] }
+
+// NIP-51: Lists
+FilterBuilder.muteList("pubkey1");
+// → { kinds: [10000], authors: ["pubkey1"] }
+
+FilterBuilder.pinList("pubkey1");
+// → { kinds: [10001], authors: ["pubkey1"] }
+
+FilterBuilder.bookmarks("pubkey1");
+// → { kinds: [10003], authors: ["pubkey1"] }
+
+FilterBuilder.followSets("pubkey1");
+// → { kinds: [30000], authors: ["pubkey1"] }
+
+// NIP-52: Calendar Events
+FilterBuilder.calendarDateEvents();
+// → { kinds: [31922] }
+
+FilterBuilder.calendarTimeEvents();
+// → { kinds: [31923] }
+
+FilterBuilder.calendarEvents();
+// → { kinds: [31922, 31923] }
+
+FilterBuilder.calendarCollections();
+// → { kinds: [31924] }
+
+FilterBuilder.rsvps("31922:pubkey1:event-slug");
+// → { kinds: [31925], "#a": ["31922:pubkey1:event-slug"] }
+
+// NIP-65: Relay List Metadata
+FilterBuilder.relayList("pubkey1");
+// → { kinds: [10002], authors: ["pubkey1"] }
 ```
 
 アサーション関数:

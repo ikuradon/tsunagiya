@@ -242,7 +242,7 @@ export class EventBuilder {
    * モック署名を生成する
    *
    * 実際の暗号署名ではなく、ランダムなhex文字列を署名として設定する。
-   * 引数の秘密鍵は署名の一部として使用するが、暗号的に正しい署名ではない。
+   * 引数の秘密鍵は互換性のために受け付けるが、実際には使用しない（モック署名のためランダム文字列を生成）。
    */
   sign(_privateKey?: string): EventBuilder {
     this.#sig = randomHex(64);

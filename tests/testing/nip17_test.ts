@@ -4,7 +4,7 @@ import { FilterBuilder } from "../../src/testing/filter_builder.ts";
 
 // ===== NIP-17 Chat Message (kind:14) =====
 
-Deno.test("EventBuilder - chatMessage() creates kind:14 with p tag", () => {
+Deno.test("EventBuilder.chatMessage() - creates kind:14 with p tag", () => {
   const event = EventBuilder.chatMessage({
     recipientPubkey: "recipient-pub",
     content: "Hello, this is a private message",
@@ -18,7 +18,7 @@ Deno.test("EventBuilder - chatMessage() creates kind:14 with p tag", () => {
   );
 });
 
-Deno.test("EventBuilder - chatMessage() with replyTo adds e tag", () => {
+Deno.test("EventBuilder.chatMessage() - adds e tag with replyTo", () => {
   const event = EventBuilder.chatMessage({
     recipientPubkey: "recipient-pub",
     content: "This is a reply",
@@ -34,7 +34,7 @@ Deno.test("EventBuilder - chatMessage() with replyTo adds e tag", () => {
   );
 });
 
-Deno.test("EventBuilder - chatMessage() with subject adds subject tag", () => {
+Deno.test("EventBuilder.chatMessage() - adds subject tag", () => {
   const event = EventBuilder.chatMessage({
     recipientPubkey: "recipient-pub",
     content: "Message with subject",
@@ -48,7 +48,7 @@ Deno.test("EventBuilder - chatMessage() with subject adds subject tag", () => {
   );
 });
 
-Deno.test("EventBuilder - chatMessage() with all options", () => {
+Deno.test("EventBuilder.chatMessage() - supports all options combined", () => {
   const event = EventBuilder.chatMessage({
     recipientPubkey: "recipient-pub",
     content: "Full message",
@@ -74,7 +74,7 @@ Deno.test("EventBuilder - chatMessage() with all options", () => {
 
 // ===== NIP-17 Seal (kind:13) =====
 
-Deno.test("EventBuilder - seal() creates kind:13 with mock encrypted content", () => {
+Deno.test("EventBuilder.seal() - creates kind:13 with mock encrypted content", () => {
   const inner = EventBuilder.chatMessage({
     recipientPubkey: "pub1",
     content: "secret",
@@ -90,7 +90,7 @@ Deno.test("EventBuilder - seal() creates kind:13 with mock encrypted content", (
 
 // ===== NIP-17 Gift Wrap (kind:1059) =====
 
-Deno.test("EventBuilder - giftWrap() creates kind:1059 with random pubkey", () => {
+Deno.test("EventBuilder.giftWrap() - creates kind:1059 with random pubkey", () => {
   const inner = EventBuilder.kind1().content("inner event").build();
   const event = EventBuilder.giftWrap({
     recipientPubkey: "recipient-pub",
@@ -107,7 +107,7 @@ Deno.test("EventBuilder - giftWrap() creates kind:1059 with random pubkey", () =
   assertEquals(event.content.startsWith("mock-giftwrapped:"), true);
 });
 
-Deno.test("EventBuilder - giftWrap() has randomized created_at", () => {
+Deno.test("EventBuilder.giftWrap() - randomizes created_at timestamp", () => {
   const inner = EventBuilder.kind1().build();
   const event = EventBuilder.giftWrap({
     recipientPubkey: "pub1",
@@ -120,7 +120,7 @@ Deno.test("EventBuilder - giftWrap() has randomized created_at", () => {
   assertEquals(event.created_at >= now - 172800, true);
 });
 
-Deno.test("EventBuilder - giftWrap() content contains inner event", () => {
+Deno.test("EventBuilder.giftWrap() - wraps inner event in content", () => {
   const inner = EventBuilder.kind1().content("wrapped content").build();
   const event = EventBuilder.giftWrap({
     recipientPubkey: "pub1",
@@ -136,7 +136,7 @@ Deno.test("EventBuilder - giftWrap() content contains inner event", () => {
 
 // ===== NIP-17 DM Relay List (kind:10050) =====
 
-Deno.test("EventBuilder - dmRelayList() creates kind:10050 with relay tags", () => {
+Deno.test("EventBuilder.dmRelayList() - creates kind:10050 with relay tags", () => {
   const event = EventBuilder.dmRelayList([
     "wss://dm-relay1.example.com",
     "wss://dm-relay2.example.com",
@@ -159,12 +159,12 @@ Deno.test("EventBuilder - dmRelayList() creates kind:10050 with relay tags", () 
 
 // ===== NIP-17 FilterBuilder =====
 
-Deno.test("FilterBuilder - giftWraps()", () => {
+Deno.test("FilterBuilder.giftWraps() - creates kind:1059 filter", () => {
   const filter = FilterBuilder.giftWraps("pubkey123");
   assertEquals(filter, { kinds: [1059], "#p": ["pubkey123"] });
 });
 
-Deno.test("FilterBuilder - dmRelayList()", () => {
+Deno.test("FilterBuilder.dmRelayList() - creates kind:10050 filter", () => {
   const filter = FilterBuilder.dmRelayList("pubkey123");
   assertEquals(filter, { kinds: [10050], authors: ["pubkey123"] });
 });

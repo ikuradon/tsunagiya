@@ -30,7 +30,7 @@ if (!("Deno" in globalThis)) {
   if (typeof mod.after === "function") {
     mod.after(() => {
       // deno-lint-ignore no-process-global
-      setTimeout(() => process.exit(), 100);
+      setTimeout(() => process.exit(), 500);
     });
   }
 }

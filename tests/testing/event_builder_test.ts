@@ -3,7 +3,7 @@ import { EventBuilder } from "../../src/testing/event_builder.ts";
 
 // ===== 基本ビルダー =====
 
-Deno.test("EventBuilder - kind1() builds kind:1 event", () => {
+Deno.test("EventBuilder.kind1() - builds kind:1 event with valid fields", () => {
   const event = EventBuilder.kind1().content("hello").build();
   assertEquals(event.kind, 1);
   assertEquals(event.content, "hello");
@@ -13,17 +13,17 @@ Deno.test("EventBuilder - kind1() builds kind:1 event", () => {
   assertEquals(typeof event.created_at, "number");
 });
 
-Deno.test("EventBuilder - kind0() builds kind:0 event", () => {
+Deno.test("EventBuilder.kind0() - builds kind:0 event", () => {
   const event = EventBuilder.kind0().build();
   assertEquals(event.kind, 0);
 });
 
-Deno.test("EventBuilder - kind(n) builds arbitrary kind", () => {
+Deno.test("EventBuilder.kind() - builds event with arbitrary kind", () => {
   const event = EventBuilder.kind(42).build();
   assertEquals(event.kind, 42);
 });
 
-Deno.test("EventBuilder - tag() adds tags", () => {
+Deno.test("EventBuilder.tag() - adds tags to event", () => {
   const event = EventBuilder.kind1()
     .tag("e", "event123", "wss://relay.com", "reply")
     .tag("p", "pubkey456")
@@ -34,7 +34,7 @@ Deno.test("EventBuilder - tag() adds tags", () => {
   assertEquals(event.tags[1], ["p", "pubkey456"]);
 });
 
-Deno.test("EventBuilder - pubkey() and id() set fields", () => {
+Deno.test("EventBuilder.pubkey()/id() - sets pubkey and id fields", () => {
   const event = EventBuilder.kind1()
     .pubkey("mypubkey")
     .id("myid")
@@ -43,19 +43,19 @@ Deno.test("EventBuilder - pubkey() and id() set fields", () => {
   assertEquals(event.id, "myid");
 });
 
-Deno.test("EventBuilder - createdAt() sets timestamp", () => {
+Deno.test("EventBuilder.createdAt() - sets created_at timestamp", () => {
   const event = EventBuilder.kind1().createdAt(1700000000).build();
   assertEquals(event.created_at, 1700000000);
 });
 
-Deno.test("EventBuilder - sign() generates mock signature", () => {
+Deno.test("EventBuilder.sign() - generates mock signature", () => {
   const event = EventBuilder.kind1().sign("privkey").build();
   assertEquals(event.sig.length, 128);
 });
 
 // ===== corrupt =====
 
-Deno.test("EventBuilder - corrupt() corrupts specified fields", () => {
+Deno.test("EventBuilder.corrupt() - corrupts specified fields", () => {
   const event = EventBuilder.kind1()
     .content("test")
     .corrupt({ id: true, sig: true })
@@ -66,7 +66,7 @@ Deno.test("EventBuilder - corrupt() corrupts specified fields", () => {
   assertEquals(event.content, "test");
 });
 
-Deno.test("EventBuilder - corrupt({ created_at }) sets -1", () => {
+Deno.test("EventBuilder.corrupt() - sets created_at to -1", () => {
   const event = EventBuilder.kind1()
     .corrupt({ created_at: true })
     .build();
@@ -75,12 +75,12 @@ Deno.test("EventBuilder - corrupt({ created_at }) sets -1", () => {
 
 // ===== Common Tags =====
 
-Deno.test("EventBuilder - geohash() adds g tag", () => {
+Deno.test("EventBuilder.geohash() - adds g tag", () => {
   const event = EventBuilder.kind1().geohash("9q8yy").build();
   assertEquals(event.tags[0], ["g", "9q8yy"]);
 });
 
-Deno.test("EventBuilder - emoji() adds emoji tag", () => {
+Deno.test("EventBuilder.emoji() - adds emoji tag", () => {
   const event = EventBuilder.kind1()
     .emoji("fire", "https://example.com/fire.png")
     .build();
@@ -93,21 +93,21 @@ Deno.test("EventBuilder - emoji() adds emoji tag", () => {
 
 // ===== random =====
 
-Deno.test("EventBuilder - random() generates valid event", () => {
+Deno.test("EventBuilder.random() - generates valid random event", () => {
   const event = EventBuilder.random({ kind: 1 });
   assertEquals(event.kind, 1);
   assertEquals(event.id.length, 64);
   assertEquals(event.content.startsWith("random:"), true);
 });
 
-Deno.test("EventBuilder - random() with pubkey", () => {
+Deno.test("EventBuilder.random() - accepts custom pubkey", () => {
   const event = EventBuilder.random({ pubkey: "mypub" });
   assertEquals(event.pubkey, "mypub");
 });
 
 // ===== bulk =====
 
-Deno.test("EventBuilder - bulk() generates multiple events", () => {
+Deno.test("EventBuilder.bulk() - generates multiple unique events", () => {
   const events = EventBuilder.bulk(5, { kind: 1 });
   assertEquals(events.length, 5);
   for (const event of events) {

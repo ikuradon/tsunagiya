@@ -544,7 +544,7 @@ export class MockRelay {
           "NOTICE",
           "error: invalid message format",
         ];
-        ws._receiveMessage(JSON.stringify(notice));
+        this.#sendWithLatency(ws, notice);
         return;
       }
       const type = raw[0];
@@ -558,7 +558,7 @@ export class MockRelay {
             "NOTICE",
             "error: malformed EVENT message",
           ];
-          ws._receiveMessage(JSON.stringify(notice));
+          this.#sendWithLatency(ws, notice);
           return;
         }
       } else if (type === "REQ" || type === "COUNT") {
@@ -568,7 +568,7 @@ export class MockRelay {
             "NOTICE",
             `error: malformed ${type} message`,
           ];
-          ws._receiveMessage(JSON.stringify(notice));
+          this.#sendWithLatency(ws, notice);
           return;
         }
       } else if (type === "CLOSE") {
@@ -578,7 +578,7 @@ export class MockRelay {
             "NOTICE",
             "error: malformed CLOSE message",
           ];
-          ws._receiveMessage(JSON.stringify(notice));
+          this.#sendWithLatency(ws, notice);
           return;
         }
       } else if (type === "AUTH") {
@@ -588,7 +588,7 @@ export class MockRelay {
             "NOTICE",
             "error: malformed AUTH message",
           ];
-          ws._receiveMessage(JSON.stringify(notice));
+          this.#sendWithLatency(ws, notice);
           return;
         }
       }
@@ -598,7 +598,7 @@ export class MockRelay {
       const msg = `error: invalid JSON (${detail})`;
       this.#errors.push(msg);
       const notice: RelayMessage = ["NOTICE", msg];
-      ws._receiveMessage(JSON.stringify(notice));
+      this.#sendWithLatency(ws, notice);
       return;
     }
 
@@ -687,7 +687,7 @@ export class MockRelay {
         const msg = `error: unsupported message type: ${String(parsed[0])}`;
         this.#errors.push(msg);
         const notice: RelayMessage = ["NOTICE", msg];
-        ws._receiveMessage(JSON.stringify(notice));
+        this.#sendWithLatency(ws, notice);
         break;
       }
     }
@@ -787,7 +787,7 @@ export class MockRelay {
       const msg = `error: internal error processing REQ (${detail})`;
       this.#errors.push(msg);
       const closed: RelayMessage = ["CLOSED", subId, msg];
-      ws._receiveMessage(JSON.stringify(closed));
+      this.#sendWithLatency(ws, closed);
     }
   }
 
@@ -804,13 +804,13 @@ export class MockRelay {
       );
       this.#authResults.push({ eventId: authEvent.id, accepted, message });
       const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
-      ws._receiveMessage(JSON.stringify(ok));
+      this.#sendWithLatency(ws, ok);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       const msg = `error: internal error processing AUTH (${detail})`;
       this.#errors.push(msg);
       const ok: RelayMessage = ["OK", authEvent.id, false, msg];
-      ws._receiveMessage(JSON.stringify(ok));
+      this.#sendWithLatency(ws, ok);
     }
   }
 
@@ -896,7 +896,7 @@ export class MockRelay {
       const msg = `error: internal error processing COUNT (${detail})`;
       this.#errors.push(msg);
       const notice: RelayMessage = ["NOTICE", msg];
-      ws._receiveMessage(JSON.stringify(notice));
+      this.#sendWithLatency(ws, notice);
     }
   }
 

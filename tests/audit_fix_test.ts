@@ -35,7 +35,7 @@ function collectMessages(ws: WebSocket): string[] {
 
 // ===== F-01: カスタムハンドラー例外処理 =====
 
-Deno.test("F-01 onEVENT throw → OK false + errors", async () => {
+Deno.test("MockRelay error handling - returns OK false when onEVENT throws", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -69,7 +69,7 @@ Deno.test("F-01 onEVENT throw → OK false + errors", async () => {
   }
 });
 
-Deno.test("F-01 onREQ throw → CLOSED + errors", async () => {
+Deno.test("MockRelay error handling - returns CLOSED when onREQ throws", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -102,7 +102,7 @@ Deno.test("F-01 onREQ throw → CLOSED + errors", async () => {
   }
 });
 
-Deno.test("F-01 onCOUNT throw → NOTICE + errors", async () => {
+Deno.test("MockRelay error handling - returns NOTICE when onCOUNT throws", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -131,7 +131,7 @@ Deno.test("F-01 onCOUNT throw → NOTICE + errors", async () => {
   }
 });
 
-Deno.test("F-01 requireAuth validator throw → OK false + errors", async () => {
+Deno.test("MockRelay error handling - returns OK false when auth validator throws", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -182,7 +182,7 @@ Deno.test("F-01 requireAuth validator throw → OK false + errors", async () => 
 
 // ===== F-02: streamEvents + kind:5 二重配信防止 =====
 
-Deno.test("F-02 streamEvents + kind:5 → EVENT delivered once", async () => {
+Deno.test("streamEvents - delivers kind:5 EVENT only once", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -227,7 +227,7 @@ Deno.test("F-02 streamEvents + kind:5 → EVENT delivered once", async () => {
 
 // ===== F-03: assertReceivedREQ フィルター拡張 =====
 
-Deno.test("F-03 assertReceivedREQ - since match", async () => {
+Deno.test("assertReceivedREQ - matches since filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   pool.install();
@@ -242,7 +242,7 @@ Deno.test("F-03 assertReceivedREQ - since match", async () => {
   }
 });
 
-Deno.test("F-03 assertReceivedREQ - until mismatch throws", async () => {
+Deno.test("assertReceivedREQ - throws on until mismatch", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   pool.install();
@@ -260,7 +260,7 @@ Deno.test("F-03 assertReceivedREQ - until mismatch throws", async () => {
   }
 });
 
-Deno.test("F-03 assertReceivedREQ - limit match", async () => {
+Deno.test("assertReceivedREQ - matches limit filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   pool.install();
@@ -275,7 +275,7 @@ Deno.test("F-03 assertReceivedREQ - limit match", async () => {
   }
 });
 
-Deno.test("F-03 assertReceivedREQ - search mismatch throws", async () => {
+Deno.test("assertReceivedREQ - throws on search mismatch", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   pool.install();
@@ -297,7 +297,7 @@ Deno.test("F-03 assertReceivedREQ - search mismatch throws", async () => {
 
 // ===== F-04: 未知メッセージタイプ =====
 
-Deno.test("F-04 unknown message type → NOTICE + errors", async () => {
+Deno.test("MockRelay error handling - returns NOTICE for unknown message type", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   pool.install();

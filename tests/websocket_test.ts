@@ -30,7 +30,7 @@ Deno.test("MockWebSocket - opens and closes properly", async () => {
   }
 });
 
-Deno.test("MockWebSocket - errors when no relay registered", async () => {
+Deno.test("MockWebSocket - closes with code 1006 when no relay registered", async () => {
   const pool = new MockPool();
   pool.install();
 
@@ -48,7 +48,7 @@ Deno.test("MockWebSocket - errors when no relay registered", async () => {
   }
 });
 
-Deno.test("MockWebSocket - send throws when not open", async () => {
+Deno.test("MockWebSocket - throws on send when not open", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
   pool.install();
@@ -81,7 +81,7 @@ Deno.test("MockWebSocket - send throws when not open", async () => {
   }
 });
 
-Deno.test("MockWebSocket - message event with addEventListener", async () => {
+Deno.test("MockWebSocket - receives messages via addEventListener", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
   relay.store({
@@ -134,7 +134,7 @@ Deno.test("MockWebSocket - message event with addEventListener", async () => {
   }
 });
 
-Deno.test("MockWebSocket - url property", async () => {
+Deno.test("MockWebSocket - returns correct url property", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
   pool.install();

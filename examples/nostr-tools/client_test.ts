@@ -82,6 +82,7 @@ function createTestOpts(
 // --- テストケース ---
 
 test("nostr-tools: timeline", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.timeline.test");
 
@@ -127,6 +128,7 @@ test("nostr-tools: post", async () => {
 });
 
 test("nostr-tools: reply", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.reply.test");
 
@@ -158,6 +160,7 @@ test("nostr-tools: reply", async () => {
 });
 
 test("nostr-tools: repost", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.repost.test");
 
@@ -186,6 +189,7 @@ test("nostr-tools: repost", async () => {
 });
 
 test("nostr-tools: like", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.like.test");
 
@@ -211,6 +215,7 @@ test("nostr-tools: like", async () => {
 });
 
 test("nostr-tools: delete", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.delete.test");
 
@@ -236,6 +241,7 @@ test("nostr-tools: delete", async () => {
 });
 
 test("nostr-tools: search", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.search.test");
 
@@ -258,6 +264,7 @@ test("nostr-tools: search", async () => {
 });
 
 test("nostr-tools: profile", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.profile.test");
 
@@ -285,6 +292,7 @@ test("nostr-tools: profile", async () => {
 });
 
 test("nostr-tools: multi-relay aggregation", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay1 = mockPool.relay("wss://relay1.multi.test");
   const relay2 = mockPool.relay("wss://relay2.multi.test");
@@ -312,6 +320,7 @@ test("nostr-tools: multi-relay aggregation", async () => {
 });
 
 test("nostr-tools: rejects events with bad signatures", async () => {
+  _ts = Math.floor(Date.now() / 1000);
   const mockPool = new MockPool();
   const relay = mockPool.relay("wss://relay.badsig.test");
 

@@ -1,22 +1,20 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 
-Deno.test("MockPool - install and uninstall", () => {
+Deno.test("MockPool - installs and uninstalls WebSocket override", () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
   const originalWS = globalThis.WebSocket;
 
   pool.install();
-  assertEquals(pool.installed, true);
-
-  // WebSocketが差し替わっている
-  assertEquals(globalThis.WebSocket !== originalWS, true);
-
-  pool.uninstall();
+  try {
+    assertEquals(pool.installed, true);
+    assertEquals(globalThis.WebSocket !== originalWS, true);
+  } finally {
+    pool.uninstall();
+  }
   assertEquals(pool.installed, false);
-
-  // 元に戻っている
   assertEquals(globalThis.WebSocket, originalWS);
 });
 
@@ -60,7 +58,7 @@ Deno.test("MockPool - relay returns different instances for different URLs", () 
   assertEquals(r1 !== r2, true);
 });
 
-Deno.test("MockPool - connections tracking", async () => {
+Deno.test("MockPool - tracks active connection count", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
@@ -86,7 +84,7 @@ Deno.test("MockPool - connections tracking", async () => {
   }
 });
 
-Deno.test("MockPool - another instance install throws while first is installed", () => {
+Deno.test("MockPool - throws when another instance is already installed", () => {
   const pool1 = new MockPool();
   const pool2 = new MockPool();
 
@@ -102,7 +100,7 @@ Deno.test("MockPool - another instance install throws while first is installed",
   }
 });
 
-Deno.test("MockPool - second instance can install after first uninstalls", () => {
+Deno.test("MockPool - allows install after first instance uninstalls", () => {
   const pool1 = new MockPool();
   const pool2 = new MockPool();
   pool2.relay("wss://relay.example.com");
@@ -119,7 +117,7 @@ Deno.test("MockPool - second instance can install after first uninstalls", () =>
   }
 });
 
-Deno.test("MockPool - reset clears all relays", () => {
+Deno.test("MockPool - clears all relay state on reset", () => {
   const pool = new MockPool();
   const r1 = pool.relay("wss://relay1.example.com");
   const r2 = pool.relay("wss://relay2.example.com");

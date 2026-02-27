@@ -159,7 +159,7 @@ test("nostr-fetch: profile (kind:0)", testOpts, async () => {
   }
 });
 
-test("nostr-fetch: 複数リレー集約", testOpts, async () => {
+test("nostr-fetch: multi-relay aggregation", testOpts, async () => {
   const mockPool = new MockPool();
   const relay1 = mockPool.relay("wss://relay1.test");
   const relay2 = mockPool.relay("wss://relay2.test");
@@ -189,7 +189,7 @@ test("nostr-fetch: 複数リレー集約", testOpts, async () => {
   }
 });
 
-test("nostr-fetch: client コア関数 (timeline)", testOpts, async () => {
+test("nostr-fetch: client core (timeline)", testOpts, async () => {
   // client.ts のコア関数を直接テスト
   const { timeline } = await import("./client.ts");
 
@@ -255,7 +255,7 @@ test(
   },
 );
 
-test("nostr-fetch: client コア関数 (search)", testOpts, async () => {
+test("nostr-fetch: client core (search)", testOpts, async () => {
   const { search } = await import("./client.ts");
 
   const mockPool = new MockPool();
@@ -280,7 +280,7 @@ test("nostr-fetch: client コア関数 (search)", testOpts, async () => {
   }
 });
 
-test("nostr-fetch: client コア関数 (profile)", testOpts, async () => {
+test("nostr-fetch: client core (profile)", testOpts, async () => {
   const { profile } = await import("./client.ts");
 
   const mockPool = new MockPool();

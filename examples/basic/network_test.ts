@@ -39,7 +39,7 @@ async function closeWs(ws: WebSocket): Promise<void> {
 // ===== F1: 複数リレーフォールバック =====
 
 test(
-  "network: F1 - 複数リレーフォールバック（遅いリレー→速いリレーに切替）",
+  "network: F1 multi-relay fallback - switches from slow to fast relay",
   async () => {
     const pool = new MockPool();
     // 遅いリレー: latency 1000ms
@@ -87,7 +87,7 @@ test(
 // ===== F2: オフライン/再接続シミュレーション =====
 
 test(
-  "network: F2 - オフライン/再接続シミュレーション（disconnect → 再接続 → データ再取得）",
+  "network: F2 reconnection - disconnects and reconnects to retrieve data",
   async () => {
     const pool = new MockPool();
     const relay = pool.relay("wss://reconnect.test");
@@ -131,7 +131,7 @@ test(
 // ===== F3: 部分的 AUTH 失敗 =====
 
 test(
-  "network: F3 - 部分的 AUTH 失敗（リレーA成功 + リレーB失敗の混合）",
+  "network: F3 partial auth failure - handles mixed auth success and failure",
   async () => {
     const pool = new MockPool();
 

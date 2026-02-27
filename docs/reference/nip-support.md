@@ -4,7 +4,7 @@ outline: deep
 
 # NIP 対応状況
 
-繋ぎ屋 v0.3.0 の NIP（Nostr Implementation Possibilities）対応状況です。
+繋ぎ屋 v0.3.0-dev の NIP（Nostr Implementation Possibilities）対応状況です。
 
 ---
 

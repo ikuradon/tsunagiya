@@ -64,7 +64,7 @@ async function withRelay(
 
 // ===== テストケース =====
 
-test("basic: timeline - store済みイベント取得、created_at降順ソート", async () => {
+test("basic: timeline - returns stored events sorted by created_at desc", async () => {
   await withRelay(async (relay, ws) => {
     // 時系列のイベントを3件登録（古い→新しい順）
     const events = EventBuilder.timeline(3, {
@@ -86,7 +86,7 @@ test("basic: timeline - store済みイベント取得、created_at降順ソー�
   });
 });
 
-test("basic: post - EVENT送信 → OK受信、relay.hasEvent()確認", async () => {
+test("basic: post - sends EVENT and receives OK, verifies with hasEvent()", async () => {
   await withRelay(async (relay, ws) => {
     const id = await post(ws, "hello nostr", TEST_PUBKEY);
 
@@ -103,7 +103,7 @@ test("basic: post - EVENT送信 → OK受信、relay.hasEvent()確認", async ()
   });
 });
 
-test("basic: reply - e/pタグ付きEVENT送信、relay側でタグ検証", async () => {
+test("basic: reply - sends EVENT with e/p tags and verifies on relay", async () => {
   await withRelay(async (relay, ws) => {
     const targetPubkey =
       "bbbb000000000000000000000000000000000000000000000000000000000000";
@@ -140,7 +140,7 @@ test("basic: reply - e/pタグ付きEVENT送信、relay側でタグ検証", asyn
   });
 });
 
-test("basic: repost - kind:6 リポストイベント送信", async () => {
+test("basic: repost - sends kind:6 repost event", async () => {
   await withRelay(async (relay, ws) => {
     const targetEvent = EventBuilder.kind1().content("original").build();
 
@@ -165,7 +165,7 @@ test("basic: repost - kind:6 リポストイベント送信", async () => {
   });
 });
 
-test("basic: like - kind:7 リアクションイベント送信", async () => {
+test("basic: like - sends kind:7 reaction event", async () => {
   await withRelay(async (relay, ws) => {
     const targetEvent = EventBuilder.kind1().content("likable").build();
     const id = await like(
@@ -190,7 +190,7 @@ test("basic: like - kind:7 リアクションイベント送信", async () => {
   });
 });
 
-test("basic: delete - kind:5 削除リクエスト送信、NIP-09処理確認", async () => {
+test("basic: delete - sends kind:5 deletion request and verifies NIP-09 processing", async () => {
   await withRelay(async (relay, ws) => {
     // 先にイベントを投稿
     const originalId = await post(ws, "to be deleted", TEST_PUBKEY);
@@ -215,7 +215,7 @@ test("basic: delete - kind:5 削除リクエスト送信、NIP-09処理確認", 
   });
 });
 
-test("basic: search - NIP-50 search フィルター、content部分一致", async () => {
+test("basic: search - filters with NIP-50 search and matches content substring", async () => {
   await withRelay(async (relay, ws) => {
     // 検索対象のイベントを登録
     const ev1 = EventBuilder.kind1().content("hello world").build();
@@ -235,7 +235,7 @@ test("basic: search - NIP-50 search フィルター、content部分一致", asyn
   });
 });
 
-test("basic: profile - kind:0 metadata取得、JSON解析", async () => {
+test("basic: profile - retrieves kind:0 metadata and parses JSON", async () => {
   await withRelay(async (relay, ws) => {
     const targetPubkey =
       "dddd000000000000000000000000000000000000000000000000000000000000";
@@ -253,7 +253,7 @@ test("basic: profile - kind:0 metadata取得、JSON解析", async () => {
   });
 });
 
-test("basic: stream - リアルタイム購読 + streamEvents()で時間差配信", async () => {
+test("basic: stream - subscribes in realtime and delivers events via streamEvents()", async () => {
   const { streamEvents } = await import("../../src/testing/mod.ts");
 
   const pool = new MockPool();
@@ -292,7 +292,7 @@ test("basic: stream - リアルタイム購読 + streamEvents()で時間差配�
   }
 });
 
-test("basic: dm-post - kind:4 DM送信", async () => {
+test("basic: dm-post - sends kind:4 encrypted DM", async () => {
   await withRelay(async (relay, ws) => {
     const recipientPk =
       "eeee000000000000000000000000000000000000000000000000000000000000";
@@ -314,7 +314,7 @@ test("basic: dm-post - kind:4 DM送信", async () => {
   });
 });
 
-test("basic: powa - 「ぽわ〜」投稿 → relay.hasEvent()で内容確認", async () => {
+test("basic: powa - posts content and verifies with hasEvent()", async () => {
   await withRelay(async (relay, ws) => {
     const id = await powa(ws, TEST_PUBKEY);
 
@@ -328,7 +328,7 @@ test("basic: powa - 「ぽわ〜」投稿 → relay.hasEvent()で内容確認", 
   });
 });
 
-test("basic: puru - 「ぷる」投稿 → relay.hasEvent()で内容確認", async () => {
+test("basic: puru - posts content and verifies with hasEvent()", async () => {
   await withRelay(async (relay, ws) => {
     const id = await puru(ws, TEST_PUBKEY);
 
@@ -342,7 +342,7 @@ test("basic: puru - 「ぷる」投稿 → relay.hasEvent()で内容確認", asy
   });
 });
 
-test("basic: 複数リレー - 2リレーへの同時接続・送受信", async () => {
+test("basic: multi-relay - connects to 2 relays simultaneously", async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.test");
   const relay2 = pool.relay("wss://relay2.test");
@@ -391,7 +391,7 @@ test("basic: 複数リレー - 2リレーへの同時接続・送受信", async 
   }
 });
 
-test("basic: 接続失敗 - 未登録URL → code:1006", async () => {
+test("basic: connection failure - returns code 1006 for unregistered URL", async () => {
   const pool = new MockPool();
   // relay.test のみ登録し、unknown.test は登録しない
   pool.relay(TEST_RELAY);

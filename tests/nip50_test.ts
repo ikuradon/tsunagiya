@@ -6,23 +6,23 @@ import { FilterBuilder } from "../src/testing/filter_builder.ts";
 
 // ===== matchFilter with search =====
 
-Deno.test("NIP-50 matchFilter - search partial match", () => {
+Deno.test("NIP-50 matchFilter - matches partial search text", () => {
   const event = EventBuilder.kind1().content("Hello World").build();
   assertEquals(matchFilter(event, { search: "hello" }), true);
 });
 
-Deno.test("NIP-50 matchFilter - search case insensitive", () => {
+Deno.test("NIP-50 matchFilter - matches case insensitively", () => {
   const event = EventBuilder.kind1().content("Hello World").build();
   assertEquals(matchFilter(event, { search: "HELLO" }), true);
   assertEquals(matchFilter(event, { search: "hello world" }), true);
 });
 
-Deno.test("NIP-50 matchFilter - search no match", () => {
+Deno.test("NIP-50 matchFilter - rejects non-matching search", () => {
   const event = EventBuilder.kind1().content("Hello World").build();
   assertEquals(matchFilter(event, { search: "goodbye" }), false);
 });
 
-Deno.test("NIP-50 matchFilter - search with other filter conditions (AND)", () => {
+Deno.test("NIP-50 matchFilter - applies search as AND with other conditions", () => {
   const event = EventBuilder.kind1().pubkey("aabb").content("Nostr rocks")
     .build();
 
@@ -45,19 +45,19 @@ Deno.test("NIP-50 matchFilter - search with other filter conditions (AND)", () =
   );
 });
 
-Deno.test("NIP-50 matchFilter - no search field matches everything", () => {
+Deno.test("NIP-50 matchFilter - matches everything without search field", () => {
   const event = EventBuilder.kind1().content("anything").build();
   assertEquals(matchFilter(event, { kinds: [1] }), true);
 });
 
-Deno.test("NIP-50 matchFilter - empty search matches everything", () => {
+Deno.test("NIP-50 matchFilter - matches everything with empty search", () => {
   const event = EventBuilder.kind1().content("anything").build();
   assertEquals(matchFilter(event, { search: "" }), true);
 });
 
 // ===== matchFilters with search =====
 
-Deno.test("NIP-50 matchFilters - OR across filters with search", () => {
+Deno.test("NIP-50 matchFilters - applies OR logic across search filters", () => {
   const event = EventBuilder.kind1().content("test message").build();
   assertEquals(
     matchFilters(event, [
@@ -70,7 +70,7 @@ Deno.test("NIP-50 matchFilters - OR across filters with search", () => {
 
 // ===== filterEvents with search =====
 
-Deno.test("NIP-50 filterEvents - search filters events", () => {
+Deno.test("NIP-50 filterEvents - filters events by search text", () => {
   const events = [
     EventBuilder.kind1().content("hello world").createdAt(100).build(),
     EventBuilder.kind1().content("goodbye world").createdAt(200).build(),
@@ -83,7 +83,7 @@ Deno.test("NIP-50 filterEvents - search filters events", () => {
   assertEquals(result[1].content, "hello world");
 });
 
-Deno.test("NIP-50 filterEvents - search with limit", () => {
+Deno.test("NIP-50 filterEvents - limits search results", () => {
   const events = [
     EventBuilder.kind1().content("hello 1").createdAt(100).build(),
     EventBuilder.kind1().content("hello 2").createdAt(200).build(),
@@ -96,7 +96,7 @@ Deno.test("NIP-50 filterEvents - search with limit", () => {
 
 // ===== Integration with MockRelay =====
 
-Deno.test("NIP-50 - search via REQ returns matching events", async () => {
+Deno.test("NIP-50 REQ - returns matching events via search filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -135,12 +135,12 @@ Deno.test("NIP-50 - search via REQ returns matching events", async () => {
 
 // ===== FilterBuilder.search =====
 
-Deno.test("NIP-50 FilterBuilder - search() creates filter with search", () => {
+Deno.test("NIP-50 FilterBuilder.search() - creates search filter", () => {
   const filter = FilterBuilder.search("hello");
   assertEquals(filter, { search: "hello" });
 });
 
-Deno.test("NIP-50 FilterBuilder - search filter works with matchFilter", () => {
+Deno.test("NIP-50 FilterBuilder.search() - works with matchFilter", () => {
   const filter = FilterBuilder.search("nostr");
   const event = EventBuilder.kind1().content("I love Nostr").build();
   assertEquals(matchFilter(event, filter), true);
@@ -148,7 +148,7 @@ Deno.test("NIP-50 FilterBuilder - search filter works with matchFilter", () => {
 
 // ===== COUNT with search =====
 
-Deno.test("NIP-50 COUNT - search filter works with COUNT", async () => {
+Deno.test("NIP-50 COUNT - counts events matching search filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 

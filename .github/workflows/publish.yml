@@ -14,8 +14,18 @@ jobs:
       - uses: actions/checkout@v6
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.7.1
       - run: deno task check
       - run: deno task test
+      - name: Check not a dev version
+        run: |
+          VERSION=$(deno eval "import denoJson from './deno.json' with { type: 'json' }; console.log(denoJson.version)")
+          if echo "$VERSION" | grep -q "\-dev"; then
+            echo "Error: version '$VERSION' contains '-dev'. Aborting publish."
+            exit 1
+          fi
+          echo "Version: $VERSION (OK)"
+      - name: Dry run publish
+        run: deno publish --dry-run
       - name: Publish package
-        run: npx jsr publish
+        run: deno publish

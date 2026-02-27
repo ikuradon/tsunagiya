@@ -34,10 +34,16 @@ function getHeaderValue(
     return headers.get(name);
   }
   if (Array.isArray(headers)) {
-    const entry = (headers as [string, string][]).find(
-      ([k]) => k.toLowerCase() === name.toLowerCase(),
-    );
-    return entry?.[1] ?? null;
+    for (const entry of headers) {
+      if (
+        Array.isArray(entry) && entry.length >= 2 &&
+        typeof entry[0] === "string" && typeof entry[1] === "string" &&
+        entry[0].toLowerCase() === name.toLowerCase()
+      ) {
+        return entry[1];
+      }
+    }
+    return null;
   }
   // Record<string, string>
   for (const [key, value] of Object.entries(headers)) {

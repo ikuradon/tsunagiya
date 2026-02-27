@@ -33,7 +33,7 @@ function collectMessages(ws: WebSocket): string[] {
   return messages;
 }
 
-Deno.test("MockRelay - store and REQ returns matched events", async () => {
+Deno.test("MockRelay - returns matched events for REQ after store", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -70,7 +70,7 @@ Deno.test("MockRelay - store and REQ returns matched events", async () => {
   }
 });
 
-Deno.test("MockRelay - onREQ handler overrides default", async () => {
+Deno.test("MockRelay - overrides default REQ behavior with onREQ handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -103,7 +103,7 @@ Deno.test("MockRelay - onREQ handler overrides default", async () => {
   }
 });
 
-Deno.test("MockRelay - onEVENT handler", async () => {
+Deno.test("MockRelay - invokes custom onEVENT handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -134,7 +134,7 @@ Deno.test("MockRelay - onEVENT handler", async () => {
   }
 });
 
-Deno.test("MockRelay - default EVENT handler stores and returns OK", async () => {
+Deno.test("MockRelay - stores event and returns OK with default handler", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
@@ -171,7 +171,7 @@ Deno.test("MockRelay - default EVENT handler stores and returns OK", async () =>
   }
 });
 
-Deno.test("MockRelay - verification helpers", async () => {
+Deno.test("MockRelay - provides verification helpers for REQ, EVENT, and CLOSE", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -228,7 +228,7 @@ Deno.test("MockRelay - verification helpers", async () => {
   }
 });
 
-Deno.test("MockRelay - reset clears state", () => {
+Deno.test("MockRelay - clears state on reset", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -245,9 +245,52 @@ Deno.test("MockRelay - reset clears state", () => {
   assertEquals(relay.countEvents(), 0);
 });
 
+Deno.test("MockRelay - resets handlers to default on reset", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  // Set custom handlers
+  relay.onREQ(() => [makeEvent({ id: "custom-req", kind: 1 })]);
+  relay.onEVENT((e) => ["OK", e.id, true, "custom"]);
+
+  relay.reset();
+
+  // After reset, default REQ handler should use store
+  relay.store(makeEvent({ id: "stored-after-reset", kind: 1 }));
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+
+    // REQ should use default handler (return from store)
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const eventMsg = JSON.parse(messages[0]);
+    assertEquals(eventMsg[0], "EVENT");
+    assertEquals(eventMsg[2].id, "stored-after-reset");
+
+    // EVENT should use default handler (store + OK)
+    const newEvent = makeEvent({ id: "new-event", kind: 1 });
+    ws.send(JSON.stringify(["EVENT", newEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const okMsg = JSON.parse(messages[messages.length - 1]);
+    assertEquals(okMsg, ["OK", "new-event", true, ""]);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 // ===== 回帰テスト: Issue 1 - subId 接続間衝突 =====
 
-Deno.test("Regression: subId does not collide across connections", async () => {
+Deno.test("MockRelay - isolates subId across connections", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -299,7 +342,7 @@ Deno.test("Regression: subId does not collide across connections", async () => {
 
 // ===== 回帰テスト: Issue 2 - 不正メッセージでクラッシュしない =====
 
-Deno.test("Regression: malformed EVENT message does not crash", async () => {
+Deno.test("MockRelay - handles malformed EVENT message without crash", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
@@ -327,7 +370,7 @@ Deno.test("Regression: malformed EVENT message does not crash", async () => {
   }
 });
 
-Deno.test("Regression: malformed REQ message does not crash", async () => {
+Deno.test("MockRelay - handles malformed REQ and CLOSE messages without crash", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.example.com");
 
@@ -370,7 +413,7 @@ Deno.test("Regression: malformed REQ message does not crash", async () => {
 
 // ===== 回帰テスト: Issue 3 - store(kind:5) で削除処理が走る =====
 
-Deno.test("Regression: store(kind:5) processes deletion", async () => {
+Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 

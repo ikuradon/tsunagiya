@@ -148,7 +148,7 @@ Deno.test("MockRelay - close(1006) simulates abnormal closure", async () => {
   }
 });
 
-Deno.test("MockRelay - close(1001) going away", async () => {
+Deno.test("MockRelay - closes with code 1001 going away", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -169,7 +169,7 @@ Deno.test("MockRelay - close(1001) going away", async () => {
   }
 });
 
-Deno.test("MockRelay - close(1011) server error", async () => {
+Deno.test("MockRelay - closes with code 1011 server error", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -309,7 +309,7 @@ Deno.test("MockRelay - latency delays responses", async () => {
   }
 });
 
-Deno.test("MockRelay - latency range {min, max}", async () => {
+Deno.test("MockRelay - delays responses with latency range {min, max}", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com", {
     latency: { min: 30, max: 60 },

@@ -2,7 +2,7 @@ import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
 
-Deno.test("NIP-45 COUNT - basic count returns correct number", async () => {
+Deno.test("NIP-45 COUNT - returns correct count for matching events", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -58,7 +58,7 @@ Deno.test("NIP-45 COUNT - returns 0 for no matches", async () => {
   }
 });
 
-Deno.test("NIP-45 COUNT - multiple filters (OR)", async () => {
+Deno.test("NIP-45 COUNT - applies OR logic across multiple filters", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -87,7 +87,7 @@ Deno.test("NIP-45 COUNT - multiple filters (OR)", async () => {
   }
 });
 
-Deno.test("NIP-45 COUNT - custom onCOUNT handler", async () => {
+Deno.test("NIP-45 COUNT - uses custom onCOUNT handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -115,7 +115,7 @@ Deno.test("NIP-45 COUNT - custom onCOUNT handler", async () => {
   }
 });
 
-Deno.test("NIP-45 COUNT - async onCOUNT handler", async () => {
+Deno.test("NIP-45 COUNT - supports async onCOUNT handler", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -144,7 +144,7 @@ Deno.test("NIP-45 COUNT - async onCOUNT handler", async () => {
   }
 });
 
-Deno.test("NIP-45 COUNT - with author filter", async () => {
+Deno.test("NIP-45 COUNT - filters count by author", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -177,7 +177,7 @@ Deno.test("NIP-45 COUNT - with author filter", async () => {
 
 // ===== 検証ヘルパー =====
 
-Deno.test("NIP-45 - countCOUNTs() counts COUNT messages", async () => {
+Deno.test("NIP-45 verification - countCOUNTs() counts COUNT messages", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -197,7 +197,7 @@ Deno.test("NIP-45 - countCOUNTs() counts COUNT messages", async () => {
   }
 });
 
-Deno.test("NIP-45 - findCOUNT() finds by subId", async () => {
+Deno.test("NIP-45 verification - findCOUNT() finds by subId", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -219,7 +219,7 @@ Deno.test("NIP-45 - findCOUNT() finds by subId", async () => {
   }
 });
 
-Deno.test("NIP-45 - hasCOUNT() checks existence", async () => {
+Deno.test("NIP-45 verification - hasCOUNT() checks existence", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -274,7 +274,7 @@ Deno.test("NIP-45 COUNT - deduplicates events across filters", async () => {
   }
 });
 
-Deno.test("NIP-45 COUNT - reset clears countHandler", async () => {
+Deno.test("NIP-45 COUNT - clears onCOUNT handler on reset", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
