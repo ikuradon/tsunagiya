@@ -23,6 +23,16 @@ deno task docs:build    # VitePress ドキュメントビルド
 deno task docs:dev      # ドキュメント開発サーバー
 ```
 
+## 開発ワークフロー
+
+モジュール完成後は**必ずこの順序**で品質チェックを行う:
+
+1. `deno task fmt` — コード自動整形（**必ず最初に実行**、formatエラー防止）
+2. `deno task test` — テスト実行
+3. `deno task check` — 品質確認（型チェック + lint + format確認）
+4. エラーがあれば修正し、再度 `deno task fmt` から実行
+5. 全チェックパス後に commit
+
 ## コーディング規約
 
 - `export` は各ファイルで行い、`src/mod.ts` で re-export
@@ -39,6 +49,42 @@ deno task docs:dev      # ドキュメント開発サーバー
 3. **MockWebSocket** — WebSocket APIの模倣。MockRelayへルーティング
 4. **filter.ts** — NIP-01フィルターマッチング（純粋関数）
 5. **auth.ts** — NIP-42 AUTH チャレンジ/レスポンス
+
+### ディレクトリ構造
+
+```
+src/
+├── mod.ts              # メインエントリポイント
+├── pool.ts             # MockPool
+├── relay.ts            # MockRelay
+├── websocket.ts        # MockWebSocket
+├── filter.ts           # フィルターマッチング
+├── auth.ts             # NIP-42 AUTH
+├── event_kind.ts       # イベント種別判定
+├── types.ts            # 型定義
+├── logger.ts           # ログ機能
+└── testing/
+    ├── mod.ts          # テスト支援エントリポイント
+    ├── event_builder.ts
+    ├── filter_builder.ts
+    ├── assertions.ts
+    ├── stream.ts
+    └── snapshot.ts
+
+tests/
+├── pool_test.ts
+├── relay_test.ts
+├── websocket_test.ts
+├── filter_test.ts
+├── auth_test.ts
+├── integration_test.ts
+└── testing/
+    ├── event_builder_test.ts
+    ├── filter_builder_test.ts
+    ├── assertions_test.ts
+    ├── stream_test.ts
+    └── snapshot_test.ts
+```
 
 ## テスト方針
 
@@ -129,6 +175,13 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
    - リアルタイムシミュレート
    - スナップショット
    - NIP別テンプレート拡充
+
+## E2E テスト
+
+- Deno: `deno task test`（`-A` フラグで全パーミッション付与）
+- Node.js 互換モード: `globalThis.WebSocket` の差し替えが前提のため、
+  WebSocket polyfill（`ws` パッケージ等）が必要
+- Node.js 環境での E2E テストは `deno task test:node`（設定済みの場合）で実行
 
 ## 注意点
 

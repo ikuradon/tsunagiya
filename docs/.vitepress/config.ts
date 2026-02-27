@@ -1,6 +1,7 @@
 import { defineConfig } from "vitepress";
+import { withMermaid } from "vitepress-plugin-mermaid";
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: "繋ぎ屋",
   description: "Nostr relay mock library for testing",
   base: "/tsunagiya/",
@@ -41,6 +42,7 @@ export default defineConfig({
                 { text: "チュートリアル", link: "/guide/tutorial" },
                 { text: "実践例集", link: "/guide/examples" },
                 { text: "テストパターン集", link: "/guide/test-patterns" },
+                { text: "開発ガイド", link: "/guide/contributing" },
               ],
             },
           ],
@@ -50,6 +52,7 @@ export default defineConfig({
               items: [
                 { text: "API リファレンス", link: "/reference/api" },
                 { text: "NIP 対応状況", link: "/reference/nip-support" },
+                { text: "アーキテクチャ", link: "/reference/architecture" },
               ],
             },
           ],
@@ -117,6 +120,7 @@ export default defineConfig({
                 { text: "Tutorial", link: "/en/guide/tutorial" },
                 { text: "Examples", link: "/en/guide/examples" },
                 { text: "Test Patterns", link: "/en/guide/test-patterns" },
+                { text: "Contributing", link: "/en/guide/contributing" },
               ],
             },
           ],
@@ -126,6 +130,7 @@ export default defineConfig({
               items: [
                 { text: "API Reference", link: "/en/reference/api" },
                 { text: "NIP Support", link: "/en/reference/nip-support" },
+                { text: "Architecture", link: "/en/reference/architecture" },
               ],
             },
           ],
@@ -167,4 +172,4 @@ export default defineConfig({
       copyright: "Copyright © 2024-2026 ikuradon",
     },
   },
-});
+}));
