@@ -4,11 +4,11 @@ outline: deep
 
 # NIP 対応状況
 
-繋ぎ屋 v0.2.4 の NIP（Nostr Implementation Possibilities）対応状況です。
+繋ぎ屋 v0.3.0 の NIP（Nostr Implementation Possibilities）対応状況です。
 
 ---
 
-## サポート済み NIP（v0.2.4）
+## サポート済み NIP（v0.3.0）
 
 <!--@include: ../_shared/tables/nip-support.md-->
 
@@ -53,12 +53,10 @@ outline: deep
 
 ## 実装予定 NIP（v0.3.0 以降）
 
-| NIP    | 内容                    | 予定バージョン | 概要                                     |
-| ------ | ----------------------- | -------------- | ---------------------------------------- |
-| NIP-17 | Private Direct Messages | v0.3.0         | NIP-04 deprecated に伴う DM テンプレート |
-| NIP-40 | Expiration Timestamp    | v0.3.0         | `EventBuilder.withExpiration()` メソッド |
-| NIP-65 | Relay List Metadata     | v0.3.0         | kind:10002 イベントのテンプレート        |
-| NIP-94 | File Metadata           | v0.3.0         | kind:1063 のテンプレート                 |
+| NIP    | 内容                 | 予定バージョン | 概要                                     |
+| ------ | -------------------- | -------------- | ---------------------------------------- |
+| NIP-40 | Expiration Timestamp | v0.3.0         | `EventBuilder.withExpiration()` メソッド |
+| NIP-94 | File Metadata        | v0.3.0         | kind:1063 のテンプレート                 |
 
 ---
 

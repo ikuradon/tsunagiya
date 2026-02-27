@@ -84,6 +84,14 @@ tests/
     ├── assertions_test.ts
     ├── stream_test.ts
     └── snapshot_test.ts
+
+examples/                  # E2E テスト兼ユーザー向け使用例
+├── _compat/               # クロスランタイム互換レイヤー
+├── basic/                 # raw WebSocket サンプル
+├── nostr-tools/           # nostr-tools 統合テスト
+├── ndk/                   # NDK 統合テスト
+├── rx-nostr/              # rx-nostr 統合テスト
+└── nostr-fetch/           # nostr-fetch 統合テスト
 ```
 
 ## テスト方針
@@ -178,10 +186,15 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
 
 ## E2E テスト
 
-- Deno: `deno task test`（`-A` フラグで全パーミッション付与）
-- Node.js 互換モード: `globalThis.WebSocket` の差し替えが前提のため、 WebSocket
-  polyfill（`ws` パッケージ等）が必要
-- Node.js 環境での E2E テストは `deno task test:node`（設定済みの場合）で実行
+`examples/` ディレクトリがユーザー向け使用例と E2E テストを兼ねる。
+各クライアントライブラリ（nostr-tools, NDK, rx-nostr, nostr-fetch）の
+`client.ts` が実装例、`client_test.ts` が MockPool を使ったテスト。 `_compat/`
+のクロスランタイム互換レイヤーにより Deno/Node.js/Bun で実行可能。
+
+- Deno: `deno task example` または `deno task example:<library>`
+- Node.js: `npx tsx <library>/client_test.ts`（examples/ 内で `npm install` 後）
+- Bun: `bun test <library>/client_test.ts`（examples/ 内で `bun install` 後）
+- 全テスト（ユニット + E2E）: `deno task test:all`
 
 ## 注意点
 
@@ -208,7 +221,7 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
 | **開発 (engineer)**            | src/ コード実装・修正・リファクタリング            | `src/**/*.ts`, `examples/**/*.ts`           | sonnet | bypassPermissions |
 | **QA (qa-engineer)**           | テスト計画・テスト作成・品質検証・ドキュメント検証 | `tests/**/*.ts`（作成）、全ファイル（検証） | opus   | default           |
 | **ドキュメント (tech-writer)** | ドキュメント作成・更新                             | `docs/**/*.md`, `README.md`                 | sonnet | bypassPermissions |
-| **DevOps (devops-engineer)**   | CI/CD・E2Eテスト・マルチランタイム互換性・JSR公開  | `.github/**`, `tests/e2e/**`, `deno.json`   | sonnet | bypassPermissions |
+| **DevOps (devops-engineer)**   | CI/CD・E2Eテスト・マルチランタイム互換性・JSR公開  | `.github/**`, `examples/**`, `deno.json`    | sonnet | bypassPermissions |
 
 ### ワークフロー順序
 

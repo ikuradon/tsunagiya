@@ -593,8 +593,9 @@ export class MockRelay {
         }
       }
       parsed = raw as ClientMessage;
-    } catch {
-      const msg = "error: invalid JSON";
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const msg = `error: invalid JSON (${detail})`;
       this.#errors.push(msg);
       const notice: RelayMessage = ["NOTICE", msg];
       ws._receiveMessage(JSON.stringify(notice));
@@ -646,21 +647,41 @@ export class MockRelay {
 
     switch (parsed[0]) {
       case "EVENT":
-        this.#handleEvent(ws, parsed[1]).catch(() => {});
+        this.#handleEvent(ws, parsed[1]).catch((err) => {
+          const msg = `error: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+          this.#errors.push(msg);
+        });
         break;
       case "REQ":
         this.#handleReq(ws, parsed[1], parsed.slice(2) as NostrFilter[])
-          .catch(() => {});
+          .catch((err) => {
+            const msg = `error: ${
+              err instanceof Error ? err.message : String(err)
+            }`;
+            this.#errors.push(msg);
+          });
         break;
       case "CLOSE":
         this.#handleClose(ws, parsed[1]);
         break;
       case "AUTH":
-        this.#handleAuth(ws, parsed[1]).catch(() => {});
+        this.#handleAuth(ws, parsed[1]).catch((err) => {
+          const msg = `error: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+          this.#errors.push(msg);
+        });
         break;
       case "COUNT":
         this.#handleCount(ws, parsed[1], parsed.slice(2) as NostrFilter[])
-          .catch(() => {});
+          .catch((err) => {
+            const msg = `error: ${
+              err instanceof Error ? err.message : String(err)
+            }`;
+            this.#errors.push(msg);
+          });
         break;
       default: {
         const msg = `error: unsupported message type: ${String(parsed[0])}`;
@@ -703,12 +724,13 @@ export class MockRelay {
           }
         }
       }
-    } catch {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       response = [
         "OK",
         event.id,
         false,
-        "error: internal error processing EVENT",
+        `error: internal error processing EVENT (${detail})`,
       ];
     }
 
@@ -739,10 +761,12 @@ export class MockRelay {
       } else {
         // デフォルト: ストアからフィルタリング
         events = [];
+        const seen = new Set<string>();
         for (const filter of filters) {
           const matched = filterEvents(this.#store, filter);
           for (const event of matched) {
-            if (!events.some((e) => e.id === event.id)) {
+            if (!seen.has(event.id)) {
+              seen.add(event.id);
               events.push(event);
             }
           }
@@ -758,8 +782,9 @@ export class MockRelay {
       // EOSE送信
       const eose: RelayMessage = ["EOSE", subId];
       this.#sendWithLatency(ws, eose);
-    } catch {
-      const msg = "error: internal error processing REQ";
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const msg = `error: internal error processing REQ (${detail})`;
       this.#errors.push(msg);
       const closed: RelayMessage = ["CLOSED", subId, msg];
       ws._receiveMessage(JSON.stringify(closed));
@@ -780,8 +805,9 @@ export class MockRelay {
       this.#authResults.push({ eventId: authEvent.id, accepted, message });
       const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
       ws._receiveMessage(JSON.stringify(ok));
-    } catch {
-      const msg = "error: internal error processing AUTH";
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const msg = `error: internal error processing AUTH (${detail})`;
       this.#errors.push(msg);
       const ok: RelayMessage = ["OK", authEvent.id, false, msg];
       ws._receiveMessage(JSON.stringify(ok));
@@ -789,13 +815,14 @@ export class MockRelay {
   }
 
   #handleDeletion(deletionEvent: NostrEvent): void {
+    const idsToDelete = new Set<string>();
+
     for (const tag of deletionEvent.tags) {
       if (tag[0] === "e" && tag[1]) {
         const targetId = tag[1];
         const target = this.#store.find((e) => e.id === targetId);
         if (target && target.pubkey === deletionEvent.pubkey) {
-          this.#store = this.#store.filter((e) => e.id !== targetId);
-          this.#deletedIds.add(targetId);
+          idsToDelete.add(targetId);
         }
       }
       if (tag[0] === "a" && tag[1]) {
@@ -803,6 +830,7 @@ export class MockRelay {
         const parts = tag[1].split(":");
         if (parts.length >= 3) {
           const aKind = parseInt(parts[0], 10);
+          if (isNaN(aKind)) continue;
           const aPubkey = parts[1];
           const aDtag = parts.slice(2).join(":");
           // pubkey 一致チェック
@@ -824,12 +852,18 @@ export class MockRelay {
               return false;
             });
             if (target) {
-              this.#deletedIds.add(target.id);
-              this.#store = this.#store.filter((e) => e.id !== target.id);
+              idsToDelete.add(target.id);
             }
           }
         }
       }
+    }
+
+    if (idsToDelete.size > 0) {
+      for (const id of idsToDelete) {
+        this.#deletedIds.add(id);
+      }
+      this.#store = this.#store.filter((e) => !idsToDelete.has(e.id));
     }
   }
 
@@ -857,8 +891,9 @@ export class MockRelay {
 
       const msg: RelayMessage = ["COUNT", subId, result];
       this.#sendWithLatency(ws, msg);
-    } catch {
-      const msg = "error: internal error processing COUNT";
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const msg = `error: internal error processing COUNT (${detail})`;
       this.#errors.push(msg);
       const notice: RelayMessage = ["NOTICE", msg];
       ws._receiveMessage(JSON.stringify(notice));
@@ -893,7 +928,13 @@ export class MockRelay {
         (e) => e.kind === event.kind && e.pubkey === event.pubkey,
       );
       if (existing) {
-        if (event.created_at <= existing.created_at) {
+        if (event.created_at < existing.created_at) {
+          return { stored: false, ephemeral: false };
+        }
+        if (
+          event.created_at === existing.created_at &&
+          event.id >= existing.id
+        ) {
           return { stored: false, ephemeral: false };
         }
         this.#store = this.#store.filter(
@@ -910,7 +951,13 @@ export class MockRelay {
         (e) => getParameterizedId(e) === newParamId,
       );
       if (existing) {
-        if (event.created_at <= existing.created_at) {
+        if (event.created_at < existing.created_at) {
+          return { stored: false, ephemeral: false };
+        }
+        if (
+          event.created_at === existing.created_at &&
+          event.id >= existing.id
+        ) {
           return { stored: false, ephemeral: false };
         }
         this.#store = this.#store.filter(

@@ -20,21 +20,21 @@ import type { NostrEvent, NostrFilter } from "./types.ts";
  */
 export function matchFilter(event: NostrEvent, filter: NostrFilter): boolean {
   // ids: プレフィックスマッチ
-  if (filter.ids !== undefined) {
+  if (filter.ids !== undefined && filter.ids.length > 0) {
     if (!filter.ids.some((prefix) => event.id.startsWith(prefix))) {
       return false;
     }
   }
 
   // authors: プレフィックスマッチ
-  if (filter.authors !== undefined) {
+  if (filter.authors !== undefined && filter.authors.length > 0) {
     if (!filter.authors.some((prefix) => event.pubkey.startsWith(prefix))) {
       return false;
     }
   }
 
   // kinds: 完全一致
-  if (filter.kinds !== undefined) {
+  if (filter.kinds !== undefined && filter.kinds.length > 0) {
     if (!filter.kinds.includes(event.kind)) {
       return false;
     }

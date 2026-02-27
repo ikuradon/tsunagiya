@@ -4,7 +4,7 @@ outline: deep
 
 # API Reference
 
-Full reference for all classes, functions, and types in tsunagiya v0.2.3.
+Full reference for all classes, functions, and types in tsunagiya v0.3.0.
 
 ## Table of Contents
 

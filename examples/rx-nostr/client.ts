@@ -459,8 +459,7 @@ async function main(): Promise<void> {
       case "repost": {
         const targetId = rest[0] ?? "";
         // 簡易: ダミーイベントを作成
-        const targetEvent = signEvent(sk, "", 1);
-        (targetEvent as { id: string }).id = targetId;
+        const targetEvent = { ...signEvent(sk, "", 1), id: targetId };
         await repost(rxNostr, targetEvent);
         console.log("Reposted");
         break;

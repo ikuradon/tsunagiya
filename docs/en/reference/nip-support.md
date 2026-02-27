@@ -4,11 +4,11 @@ outline: deep
 
 # NIP Support Status
 
-NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.4.
+NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.3.0.
 
 ---
 
-## Supported NIPs (v0.2.4)
+## Supported NIPs (v0.3.0)
 
 <!--@include: ../../_shared/tables/nip-support.md-->
 
@@ -53,12 +53,10 @@ NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.4.
 
 ## Planned NIPs (v0.3.0 and later)
 
-| NIP    | Description             | Target Version | Overview                                |
-| ------ | ----------------------- | -------------- | --------------------------------------- |
-| NIP-17 | Private Direct Messages | v0.3.0         | DM template replacing deprecated NIP-04 |
-| NIP-40 | Expiration Timestamp    | v0.3.0         | `EventBuilder.withExpiration()` method  |
-| NIP-65 | Relay List Metadata     | v0.3.0         | Template for kind:10002 events          |
-| NIP-94 | File Metadata           | v0.3.0         | Template for kind:1063                  |
+| NIP    | Description          | Target Version | Overview                               |
+| ------ | -------------------- | -------------- | -------------------------------------- |
+| NIP-40 | Expiration Timestamp | v0.3.0         | `EventBuilder.withExpiration()` method |
+| NIP-94 | File Metadata        | v0.3.0         | Template for kind:1063                 |
 
 ---
 

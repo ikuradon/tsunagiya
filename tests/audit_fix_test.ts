@@ -55,7 +55,10 @@ Deno.test("F-01 onEVENT throw → OK false + errors", async () => {
     const parsed = JSON.parse(messages[0]);
     assertEquals(parsed[0], "OK");
     assertEquals(parsed[2], false);
-    assertEquals(parsed[3], "error: internal error processing EVENT");
+    assert(
+      parsed[3].includes("error: internal error processing EVENT"),
+      `OK message should contain error detail, got: ${parsed[3]}`,
+    );
 
     assert(relay.errors.length > 0);
     assert(
@@ -86,7 +89,10 @@ Deno.test("F-01 onREQ throw → CLOSED + errors", async () => {
     const parsed = JSON.parse(messages[0]);
     assertEquals(parsed[0], "CLOSED");
     assertEquals(parsed[1], "sub1");
-    assertEquals(parsed[2], "error: internal error processing REQ");
+    assert(
+      parsed[2].includes("error: internal error processing REQ"),
+      `CLOSED message should contain error detail, got: ${parsed[2]}`,
+    );
 
     assert(
       relay.errors.some((e) => e.includes("internal error processing REQ")),
@@ -161,7 +167,10 @@ Deno.test("F-01 requireAuth validator throw → OK false + errors", async () => 
     const parsed = JSON.parse(messages[0]);
     assertEquals(parsed[0], "OK");
     assertEquals(parsed[2], false);
-    assertEquals(parsed[3], "error: internal error processing AUTH");
+    assert(
+      parsed[3].includes("error: internal error processing AUTH"),
+      `OK message should contain error detail, got: ${parsed[3]}`,
+    );
 
     assert(
       relay.errors.some((e) => e.includes("internal error processing AUTH")),
