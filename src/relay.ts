@@ -646,52 +646,70 @@ export class MockRelay {
 
     switch (parsed[0]) {
       case "EVENT":
-        this.#handleEvent(ws, parsed[1]);
+        this.#handleEvent(ws, parsed[1]).catch(() => {});
         break;
       case "REQ":
-        this.#handleReq(ws, parsed[1], parsed.slice(2) as NostrFilter[]);
+        this.#handleReq(ws, parsed[1], parsed.slice(2) as NostrFilter[])
+          .catch(() => {});
         break;
       case "CLOSE":
         this.#handleClose(ws, parsed[1]);
         break;
       case "AUTH":
-        this.#handleAuth(ws, parsed[1]);
+        this.#handleAuth(ws, parsed[1]).catch(() => {});
         break;
       case "COUNT":
-        this.#handleCount(ws, parsed[1], parsed.slice(2) as NostrFilter[]);
+        this.#handleCount(ws, parsed[1], parsed.slice(2) as NostrFilter[])
+          .catch(() => {});
         break;
+      default: {
+        const msg = `error: unsupported message type: ${String(parsed[0])}`;
+        this.#errors.push(msg);
+        const notice: RelayMessage = ["NOTICE", msg];
+        ws._receiveMessage(JSON.stringify(notice));
+        break;
+      }
     }
   }
 
   async #handleEvent(ws: MockWebSocket, event: NostrEvent): Promise<void> {
     let response: ["OK", string, boolean, string];
 
-    if (this.#eventHandler) {
-      response = await this.#eventHandler(event);
-    } else {
-      // 削除済みイベントの再投稿を拒否
-      if (this.#deletedIds.has(event.id)) {
-        response = ["OK", event.id, false, "blocked: event was deleted"];
-      } else if (event.kind === 5) {
-        // NIP-09: 削除リクエスト処理
-        this.#handleDeletion(event);
-        this.#store.push(event);
-        this.broadcast(event);
-        response = ["OK", event.id, true, ""];
+    try {
+      if (this.#eventHandler) {
+        response = await this.#eventHandler(event);
       } else {
-        const { stored, ephemeral } = this.#classifyAndStore(event);
-        if (stored || ephemeral) {
+        // 削除済みイベントの再投稿を拒否
+        if (this.#deletedIds.has(event.id)) {
+          response = ["OK", event.id, false, "blocked: event was deleted"];
+        } else if (event.kind === 5) {
+          // NIP-09: 削除リクエスト処理
+          this.#handleDeletion(event);
+          this.#store.push(event);
           this.broadcast(event);
           response = ["OK", event.id, true, ""];
         } else {
-          response = [
-            "OK",
-            event.id,
-            true,
-            "duplicate: already have a newer event",
-          ];
+          const { stored, ephemeral } = this.#classifyAndStore(event);
+          if (stored || ephemeral) {
+            this.broadcast(event);
+            response = ["OK", event.id, true, ""];
+          } else {
+            response = [
+              "OK",
+              event.id,
+              true,
+              "duplicate: already have a newer event",
+            ];
+          }
         }
       }
+    } catch {
+      response = [
+        "OK",
+        event.id,
+        false,
+        "error: internal error processing EVENT",
+      ];
     }
 
     if (!response[2] && response[3]) {
@@ -713,32 +731,39 @@ export class MockRelay {
     }
     wsSubscriptions.set(subId, filters);
 
-    let events: NostrEvent[];
+    try {
+      let events: NostrEvent[];
 
-    if (this.#reqHandler) {
-      events = await this.#reqHandler(subId, filters);
-    } else {
-      // デフォルト: ストアからフィルタリング
-      events = [];
-      for (const filter of filters) {
-        const matched = filterEvents(this.#store, filter);
-        for (const event of matched) {
-          if (!events.some((e) => e.id === event.id)) {
-            events.push(event);
+      if (this.#reqHandler) {
+        events = await this.#reqHandler(subId, filters);
+      } else {
+        // デフォルト: ストアからフィルタリング
+        events = [];
+        for (const filter of filters) {
+          const matched = filterEvents(this.#store, filter);
+          for (const event of matched) {
+            if (!events.some((e) => e.id === event.id)) {
+              events.push(event);
+            }
           }
         }
       }
-    }
 
-    // EVENT送信
-    for (const event of events) {
-      const msg: RelayMessage = ["EVENT", subId, event];
-      this.#sendWithLatency(ws, msg);
-    }
+      // EVENT送信
+      for (const event of events) {
+        const msg: RelayMessage = ["EVENT", subId, event];
+        this.#sendWithLatency(ws, msg);
+      }
 
-    // EOSE送信
-    const eose: RelayMessage = ["EOSE", subId];
-    this.#sendWithLatency(ws, eose);
+      // EOSE送信
+      const eose: RelayMessage = ["EOSE", subId];
+      this.#sendWithLatency(ws, eose);
+    } catch {
+      const msg = "error: internal error processing REQ";
+      this.#errors.push(msg);
+      const closed: RelayMessage = ["CLOSED", subId, msg];
+      ws._receiveMessage(JSON.stringify(closed));
+    }
   }
 
   #handleClose(ws: MockWebSocket, subId: string): void {
@@ -746,14 +771,21 @@ export class MockRelay {
   }
 
   async #handleAuth(ws: MockWebSocket, authEvent: NostrEvent): Promise<void> {
-    const [accepted, message] = await this.#authState.handleAuthResponse(
-      ws,
-      authEvent,
-      this.url,
-    );
-    this.#authResults.push({ eventId: authEvent.id, accepted, message });
-    const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
-    ws._receiveMessage(JSON.stringify(ok));
+    try {
+      const [accepted, message] = await this.#authState.handleAuthResponse(
+        ws,
+        authEvent,
+        this.url,
+      );
+      this.#authResults.push({ eventId: authEvent.id, accepted, message });
+      const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
+      ws._receiveMessage(JSON.stringify(ok));
+    } catch {
+      const msg = "error: internal error processing AUTH";
+      this.#errors.push(msg);
+      const ok: RelayMessage = ["OK", authEvent.id, false, msg];
+      ws._receiveMessage(JSON.stringify(ok));
+    }
   }
 
   #handleDeletion(deletionEvent: NostrEvent): void {
@@ -806,24 +838,31 @@ export class MockRelay {
     subId: string,
     filters: NostrFilter[],
   ): Promise<void> {
-    let result: { count: number };
+    try {
+      let result: { count: number };
 
-    if (this.#countHandler) {
-      result = await this.#countHandler(subId, filters);
-    } else {
-      // デフォルト: ストアに対してフィルタリングし、マッチ数を返す
-      const matchedIds = new Set<string>();
-      for (const filter of filters) {
-        const matched = filterEvents(this.#store, filter);
-        for (const event of matched) {
-          matchedIds.add(event.id);
+      if (this.#countHandler) {
+        result = await this.#countHandler(subId, filters);
+      } else {
+        // デフォルト: ストアに対してフィルタリングし、マッチ数を返す
+        const matchedIds = new Set<string>();
+        for (const filter of filters) {
+          const matched = filterEvents(this.#store, filter);
+          for (const event of matched) {
+            matchedIds.add(event.id);
+          }
         }
+        result = { count: matchedIds.size };
       }
-      result = { count: matchedIds.size };
-    }
 
-    const msg: RelayMessage = ["COUNT", subId, result];
-    this.#sendWithLatency(ws, msg);
+      const msg: RelayMessage = ["COUNT", subId, result];
+      this.#sendWithLatency(ws, msg);
+    } catch {
+      const msg = "error: internal error processing COUNT";
+      this.#errors.push(msg);
+      const notice: RelayMessage = ["NOTICE", msg];
+      ws._receiveMessage(JSON.stringify(notice));
+    }
   }
 
   // ===== イベント種別判定・ストア =====

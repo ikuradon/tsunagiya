@@ -150,6 +150,26 @@ function filtersMatch(actual: NostrFilter, expected: NostrFilter): boolean {
     }
   }
 
+  // since チェック
+  if (expected.since !== undefined && actual.since !== expected.since) {
+    return false;
+  }
+
+  // until チェック
+  if (expected.until !== undefined && actual.until !== expected.until) {
+    return false;
+  }
+
+  // limit チェック
+  if (expected.limit !== undefined && actual.limit !== expected.limit) {
+    return false;
+  }
+
+  // search チェック (NIP-50)
+  if (expected.search !== undefined && actual.search !== expected.search) {
+    return false;
+  }
+
   // タグフィルターチェック
   for (const key of Object.keys(expected)) {
     if (key.startsWith("#")) {
