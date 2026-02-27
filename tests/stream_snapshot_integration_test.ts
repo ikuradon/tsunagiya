@@ -21,7 +21,7 @@ function collectMessages(ws: WebSocket): unknown[][] {
   return messages;
 }
 
-Deno.test("Integration - stream + filter matching", async () => {
+Deno.test("Integration stream/snapshot - stream + filter matching", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -55,7 +55,7 @@ Deno.test("Integration - stream + filter matching", async () => {
   }
 });
 
-Deno.test("Integration - snapshot restore + query", async () => {
+Deno.test("Integration stream/snapshot - snapshot restore + query", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -94,7 +94,7 @@ Deno.test("Integration - snapshot restore + query", async () => {
   }
 });
 
-Deno.test("Integration - logging captures send/receive", async () => {
+Deno.test("Integration stream/snapshot - logging captures send/receive", async () => {
   const logs: LogEntry[] = [];
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com", {
@@ -127,7 +127,7 @@ Deno.test("Integration - logging captures send/receive", async () => {
   }
 });
 
-Deno.test("Integration - stream + snapshot combined", async () => {
+Deno.test("Integration stream/snapshot - stream + snapshot combined", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -168,7 +168,7 @@ Deno.test("Integration - stream + snapshot combined", async () => {
   }
 });
 
-Deno.test("Integration - startStream with snapshot save/restore", async () => {
+Deno.test("Integration stream/snapshot - startStream with snapshot save/restore", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 

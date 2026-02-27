@@ -346,6 +346,76 @@ Deno.test("assertReceived - custom predicate throws on false", () => {
   );
 });
 
+// ===== assertReceivedREQ filter matching (since/until/limit/search) =====
+
+Deno.test("assertReceivedREQ - matches since filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], since: 1000 }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertReceivedREQ(relay, { kinds: [1], since: 1000 });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - throws on until mismatch", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], until: 100 }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertThrows(
+      () => assertReceivedREQ(relay, { until: 999 }),
+      Error,
+    );
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - matches limit filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], limit: 50 }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertReceivedREQ(relay, { limit: 50 });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - throws on search mismatch", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(
+      JSON.stringify(["REQ", "sub1", { kinds: [1], search: "hello" }]),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertThrows(
+      () => assertReceivedREQ(relay, { search: "goodbye" }),
+      Error,
+    );
+  } finally {
+    pool.uninstall();
+  }
+});
+
 // ===== assertReceivedREQ with tag filters =====
 
 Deno.test("assertReceivedREQ - matches tag filters", async () => {

@@ -4,7 +4,7 @@ import { EventBuilder } from "../src/testing/event_builder.ts";
 
 // ===== NIP間の組み合わせテスト =====
 
-Deno.test("Integration v0.2.0 - replaceable event deletion", async () => {
+Deno.test("NIP combined - replaceable event deletion", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -49,7 +49,7 @@ Deno.test("Integration v0.2.0 - replaceable event deletion", async () => {
   }
 });
 
-Deno.test("Integration v0.2.0 - ephemeral event COUNT returns 0", async () => {
+Deno.test("NIP combined - ephemeral event COUNT returns 0", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -79,7 +79,7 @@ Deno.test("Integration v0.2.0 - ephemeral event COUNT returns 0", async () => {
   }
 });
 
-Deno.test("Integration v0.2.0 - search + kind filter combination", async () => {
+Deno.test("NIP combined - search + kind filter combination", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -116,7 +116,7 @@ Deno.test("Integration v0.2.0 - search + kind filter combination", async () => {
   }
 });
 
-Deno.test("Integration v0.2.0 - parameterized replaceable deletion by a-tag", async () => {
+Deno.test("NIP combined - parameterized replaceable deletion by a-tag", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
@@ -163,7 +163,7 @@ Deno.test("Integration v0.2.0 - parameterized replaceable deletion by a-tag", as
   }
 });
 
-Deno.test("Integration v0.2.0 - COUNT with search filter", async () => {
+Deno.test("NIP combined - COUNT with search filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 

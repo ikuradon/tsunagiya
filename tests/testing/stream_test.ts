@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../../src/pool.ts";
+import type { NostrEvent } from "../../src/types.ts";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { startStream, streamEvents } from "../../src/testing/stream.ts";
 
@@ -263,6 +264,72 @@ Deno.test("startStream - no count means unlimited until stop", async () => {
     await new Promise<void>((resolve) => {
       ws.onclose = () => resolve();
     });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== streamEvents + kind:5 二重配信防止 =====
+
+function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
+  return {
+    id: "event1",
+    pubkey: "pub1",
+    kind: 1,
+    content: "hello",
+    created_at: 1700000000,
+    tags: [],
+    sig: "sig1",
+    ...overrides,
+  };
+}
+
+function collectRawMessages(ws: WebSocket): string[] {
+  const messages: string[] = [];
+  ws.addEventListener("message", (ev: MessageEvent) => {
+    messages.push(ev.data as string);
+  });
+  return messages;
+}
+
+Deno.test("streamEvents - delivers kind:5 EVENT only once", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  // 削除対象イベントをストアに追加
+  relay.store(makeEvent({ id: "target1", kind: 1, pubkey: "pub1" }));
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectRawMessages(ws);
+
+    // kind:5 にマッチするサブスクリプション
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [5] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // EOSE 以降のメッセージをリセット
+    messages.length = 0;
+
+    // kind:5 deletion イベントをストリーミング
+    const deletionEvent = makeEvent({
+      id: "del1",
+      kind: 5,
+      pubkey: "pub1",
+      tags: [["e", "target1"]],
+    });
+
+    const handle = streamEvents(relay, [deletionEvent], { interval: 10 });
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    handle.stop();
+
+    // EVENT が1回のみ配信されたことを確認
+    const eventMessages = messages.filter((m) => JSON.parse(m)[0] === "EVENT");
+    assertEquals(
+      eventMessages.length,
+      1,
+      `Expected 1 EVENT but got ${eventMessages.length}`,
+    );
   } finally {
     pool.uninstall();
   }
