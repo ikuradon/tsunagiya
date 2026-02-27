@@ -121,9 +121,12 @@ relay.sendNotice("rate-limited");
 NIP-42 AUTH:
 
 ```typescript
-relay.requireAuth((authEvent) => {
+// 標準検証（バリデーター未設定）: kind:22242 + challenge + relay URL 一致
+// カスタムバリデーター: relay URL チェックを置き換える
+relay.requireAuth((authEvent, context) => {
+  // context.relayUrl, context.challenge が参照可能
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    (t) => t[0] === "relay" && t[1] === context.relayUrl,
   );
 });
 ```

@@ -130,9 +130,9 @@ Deno.test("AUTH チャレンジ/レスポンス", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
-  relay.requireAuth((authEvent) => {
+  relay.requireAuth((authEvent, context) => {
     return authEvent.tags.some(
-      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+      (t) => t[0] === "relay" && t[1] === context.relayUrl,
     );
   });
 

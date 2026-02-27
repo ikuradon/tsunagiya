@@ -4,7 +4,8 @@ outline: deep
 
 # アーキテクチャ
 
-繋ぎ屋は `globalThis.WebSocket` を差し替えることで、既存の Nostr クライアントコードを無変更でテスト可能にするモックライブラリです。
+繋ぎ屋は `globalThis.WebSocket` を差し替えることで、既存の Nostr
+クライアントコードを無変更でテスト可能にするモックライブラリです。
 
 ## 概要
 
@@ -92,14 +93,17 @@ classDiagram
 
 **主要メソッド:**
 
-- `relay(url, options?)` — MockRelay を登録・取得（同一 URL は既存インスタンスを返す）
+- `relay(url, options?)` — MockRelay を登録・取得（同一 URL
+  は既存インスタンスを返す）
 - `install()` — `globalThis.WebSocket` と `globalThis.fetch` を差し替え
 - `uninstall()` — 元の実装を復元
 - `reset()` — 全リレーの状態をクリア
 
 ### MockRelay (`src/relay.ts`)
 
-URL 単位で動作する仮想 Nostr リレー。イベントのストア・フィルタリング・カスタムハンドラー・検証ヘルパー・不安定性シミュレート・NIP-42 AUTH を提供する。
+URL 単位で動作する仮想 Nostr
+リレー。イベントのストア・フィルタリング・カスタムハンドラー・検証ヘルパー・不安定性シミュレート・NIP-42
+AUTH を提供する。
 
 | 主要フィールド   | 型                                               | 役割                             |
 | ---------------- | ------------------------------------------------ | -------------------------------- |
@@ -112,7 +116,8 @@ URL 単位で動作する仮想 Nostr リレー。イベントのストア・フ
 
 ### MockWebSocket (`src/websocket.ts`)
 
-`globalThis.WebSocket` の差し替え先。`EventTarget` を継承して WebSocket API を模倣する。
+`globalThis.WebSocket` の差し替え先。`EventTarget` を継承して WebSocket API
+を模倣する。
 
 | 主要メンバー                | 役割                                         |
 | --------------------------- | -------------------------------------------- |
@@ -266,7 +271,7 @@ flowchart TD
     KClass --> Regular["Regular\n→ store に追加"]
     KClass --> Repl["Replaceable\n→ 同一 kind+pubkey の古いものを置換"]
     KClass --> ParamRepl["Addressable\n→ 同一 kind+pubkey+d-tag の古いものを置換"]
-    KClass --> Ephem["Ephemeral\n→ store に追加しない\n（ブロードキャストのみ）"]
+    KClass --> Ephem["Ephemeral\n→ store に追加しない"]
 ```
 
 ### イベント種別の分類フロー
@@ -307,7 +312,7 @@ sequenceDiagram
     end
     MR->>C: EOSE メッセージ送信
 
-    Note over MR,C: 以降、_injectEvent() / _broadcastEvent() で<br>新着イベントをアクティブなサブスクリプションへ配信
+    Note over MR,C: 以降、store() + broadcast() で<br>新着イベントをアクティブなサブスクリプションへ配信
 ```
 
 ---
@@ -372,9 +377,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Inject["relay._injectEvent(event)\n（testing/ の streamEvents 等が使用）"]
-    Inject --> Classify["#classifyAndStore(event)\nでストアに保存"]
-    Inject --> Broadcast["_broadcastEvent(event)"]
+    Inject["relay.store(event) + relay.broadcast(event)\n（testing/ の streamEvents 等が使用）"]
+    Inject --> Classify["store(event)\nでストアに保存"]
+    Inject --> Broadcast["broadcast(event)"]
     Broadcast --> Filter["全アクティブサブスクリプションの\nフィルターと照合"]
     Filter --> Match["マッチした接続・サブスクリプションへ\nEVENT メッセージを送信"]
     Match --> Recv["MockWebSocket#_receiveMessage()\n→ クライアントの onmessage"]
@@ -438,7 +443,13 @@ flowchart LR
 
 ## 注意事項
 
-- **テスト間の干渉**: `globalThis.WebSocket` の差し替えはグローバル操作のため、テストの `finally` ブロックで必ず `pool.uninstall()` を呼ぶこと
-- **署名検証なし**: テスト用ライブラリとして、イベント署名は文字列として扱う（実際の暗号処理は依存を増やすため実装しない）
-- **非同期配信**: レイテンシ 0 の場合でも `queueMicrotask` で非同期配信する（`send()` 内で同期的にレスポンスを返すと一部クライアントが誤動作する）
+- **テスト間の干渉**: `globalThis.WebSocket`
+  の差し替えはグローバル操作のため、テストの `finally` ブロックで必ず
+  `pool.uninstall()` を呼ぶこと
+- **署名検証なし**:
+  テスト用ライブラリとして、イベント署名は文字列として扱う（実際の暗号処理は依存を増やすため実装しない）。署名検証が必要な場合は
+  `onEVENT` ハンドラーで独自に実装する
+- **非同期配信**: レイテンシ 0 の場合でも `queueMicrotask`
+  で非同期配信する（`send()`
+  内で同期的にレスポンスを返すと一部クライアントが誤動作する）
 - **単一インスタンス**: `MockPool` は同時に 1 インスタンスのみ `install` 可能

@@ -46,9 +46,11 @@ const relay = pool.relay("wss://auth.relay.com", {
   requiresAuth: true,
 });
 
-relay.requireAuth((authEvent) => {
+// Standard validation (no validator): automatically checks relay URL match
+// Custom validator: context.relayUrl / context.challenge available
+relay.requireAuth((authEvent, context) => {
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    (t) => t[0] === "relay" && t[1] === context.relayUrl,
   );
 });
 ```

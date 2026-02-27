@@ -6,7 +6,8 @@ outline: deep
 
 ## Overview
 
-Tsunagiya is a mock library that makes existing Nostr client code testable without modification by replacing `globalThis.WebSocket`.
+Tsunagiya is a mock library that makes existing Nostr client code testable
+without modification by replacing `globalThis.WebSocket`.
 
 ```mermaid
 flowchart LR
@@ -44,67 +45,71 @@ src/
 
 ### MockPool (`src/pool.ts`)
 
-A container that manages multiple MockRelay instances keyed by URL. The entry point for tests.
+A container that manages multiple MockRelay instances keyed by URL. The entry
+point for tests.
 
-| Member               | Type                       | Role                                           |
-| -------------------- | -------------------------- | ---------------------------------------------- |
-| `#relays`            | `Map<string, MockRelay>`   | URL → MockRelay mapping                        |
-| `#originalWebSocket` | `typeof WebSocket \| null` | Stores original WebSocket for uninstall        |
-| `#originalFetch`     | `typeof fetch \| null`     | Stores original fetch for uninstall            |
+| Member               | Type                       | Role                                    |
+| -------------------- | -------------------------- | --------------------------------------- |
+| `#relays`            | `Map<string, MockRelay>`   | URL → MockRelay mapping                 |
+| `#originalWebSocket` | `typeof WebSocket \| null` | Stores original WebSocket for uninstall |
+| `#originalFetch`     | `typeof fetch \| null`     | Stores original fetch for uninstall     |
 
 **Key methods:**
 
-- `relay(url, options?)` — Register/retrieve a MockRelay (returns existing instance for same URL)
+- `relay(url, options?)` — Register/retrieve a MockRelay (returns existing
+  instance for same URL)
 - `install()` — Replaces `globalThis.WebSocket` and `globalThis.fetch`
 - `uninstall()` — Restores original implementations
 - `reset()` — Clears state of all relays
 
 ### MockRelay (`src/relay.ts`)
 
-A virtual Nostr relay operating per URL. Provides event store, filtering, custom handlers, assertion helpers, instability simulation, and NIP-42 AUTH.
+A virtual Nostr relay operating per URL. Provides event store, filtering, custom
+handlers, assertion helpers, instability simulation, and NIP-42 AUTH.
 
-| Field            | Type                                             | Role                                        |
-| ---------------- | ------------------------------------------------ | ------------------------------------------- |
-| `#store`         | `NostrEvent[]`                                   | Event store (persistent events)             |
-| `#received`      | `ReceivedMessage[]`                              | Log of received messages                    |
-| `#connections`   | `Set<MockWebSocket>`                             | List of active connections                  |
-| `#subscriptions` | `Map<MockWebSocket, Map<string, NostrFilter[]>>` | Subscriptions per connection                |
-| `#authState`     | `AuthState`                                      | NIP-42 authentication state                 |
-| `#pendingTimers` | `Set<ReturnType<typeof setTimeout>>`             | Pending timers (cleared on reset)           |
+| Field            | Type                                             | Role                              |
+| ---------------- | ------------------------------------------------ | --------------------------------- |
+| `#store`         | `NostrEvent[]`                                   | Event store (persistent events)   |
+| `#received`      | `ReceivedMessage[]`                              | Log of received messages          |
+| `#connections`   | `Set<MockWebSocket>`                             | List of active connections        |
+| `#subscriptions` | `Map<MockWebSocket, Map<string, NostrFilter[]>>` | Subscriptions per connection      |
+| `#authState`     | `AuthState`                                      | NIP-42 authentication state       |
+| `#pendingTimers` | `Set<ReturnType<typeof setTimeout>>`             | Pending timers (cleared on reset) |
 
 ### MockWebSocket (`src/websocket.ts`)
 
-The replacement for `globalThis.WebSocket`. Extends `EventTarget` to emulate the WebSocket API.
+The replacement for `globalThis.WebSocket`. Extends `EventTarget` to emulate the
+WebSocket API.
 
-| Member                      | Role                                                        |
-| --------------------------- | ----------------------------------------------------------- |
-| `static _resolveRelay`      | URL → MockRelay resolver function set by MockPool           |
-| `#relay`                    | The MockRelay this socket is routed to                      |
-| `send(data)`                | Forwards to `relay._handleMessage()`                        |
-| `_receiveMessage(data)`     | Receive callback invoked by the relay                       |
-| `_forceClose(code, reason)` | Forced disconnect invoked by the relay                      |
+| Member                      | Role                                              |
+| --------------------------- | ------------------------------------------------- |
+| `static _resolveRelay`      | URL → MockRelay resolver function set by MockPool |
+| `#relay`                    | The MockRelay this socket is routed to            |
+| `send(data)`                | Forwards to `relay._handleMessage()`              |
+| `_receiveMessage(data)`     | Receive callback invoked by the relay             |
+| `_forceClose(code, reason)` | Forced disconnect invoked by the relay            |
 
 ### filter.ts
 
 Pure functions for NIP-01 filter matching. No side effects.
 
-| Function                       | Description                                                            |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `matchFilter(event, filter)`   | Checks if an event matches a single filter (all conditions AND)        |
-| `matchFilters(event, filters)` | Checks if an event matches any of multiple filters (OR between filters)|
-| `filterEvents(events, filter)` | Filters event array, sorts descending, applies limit                   |
+| Function                       | Description                                                             |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `matchFilter(event, filter)`   | Checks if an event matches a single filter (all conditions AND)         |
+| `matchFilters(event, filters)` | Checks if an event matches any of multiple filters (OR between filters) |
+| `filterEvents(events, filter)` | Filters event array, sorts descending, applies limit                    |
 
 ### auth.ts (NIP-42)
 
 Manages AUTH challenge/response per connection.
 
-| Member                               | Role                                                    |
-| ------------------------------------ | ------------------------------------------------------- |
-| `#validator`                         | Custom validator function                               |
-| `#challenges`                        | Connection → challenge string mapping                   |
-| `#authenticated`                     | Set of authenticated connections                        |
-| `sendChallenge(ws)`                  | Generates a random challenge and sends AUTH message     |
-| `handleAuthResponse(ws, event, url)` | Validates kind:22242 AUTH response                      |
+| Member                               | Role                                                |
+| ------------------------------------ | --------------------------------------------------- |
+| `#validator`                         | Custom validator function                           |
+| `#challenges`                        | Connection → challenge string mapping               |
+| `#authenticated`                     | Set of authenticated connections                    |
+| `sendChallenge(ws)`                  | Generates a random challenge and sends AUTH message |
+| `handleAuthResponse(ws, event, url)` | Validates kind:22242 AUTH response                  |
 
 ### Class Relationship Diagram
 
@@ -125,7 +130,7 @@ classDiagram
         +AuthState authState
         +_handleMessage(ws, data) void
         +_injectEvent(event) void
-        +_broadcastEvent(event) void
+        +broadcast(event) void
     }
 
     class MockWebSocket {
@@ -297,7 +302,7 @@ flowchart TD
     REPL -->|no| ADDR{"Addressable?\n(kind 30000–39999)"}
     ADDR -->|yes| ADDRREPLACE["Replace old event\nwith same kind+pubkey+d-tag"]
     ADDR -->|no| EPH{"Ephemeral?\n(kind 20000–29999)"}
-    EPH -->|yes| SKIP["Do not add to store\n(broadcast only)"]
+    EPH -->|yes| SKIP["Do not add to store"]
     EPH -->|no| ADD
 ```
 
@@ -341,7 +346,7 @@ sequenceDiagram
     end
     MR->>C: send(["EOSE", "sub1"])
 
-    Note over MR,C: Subsequent _injectEvent() / _broadcastEvent()<br>delivers new events to active subscriptions
+    Note over MR,C: Subsequent store() + broadcast()<br>delivers new events to active subscriptions
 ```
 
 ### Subscription Data Structure
@@ -426,9 +431,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    INJECT["relay._injectEvent(event)\nUsed by streamEvents etc. in testing/"]
-    INJECT --> CLASSIFY["#classifyAndStore(event)\nSave to store"]
-    CLASSIFY --> BROADCAST["_broadcastEvent(event)"]
+    INJECT["relay.store(event) + relay.broadcast(event)\nUsed by streamEvents etc. in testing/"]
+    INJECT --> CLASSIFY["store(event)\nSave to store"]
+    CLASSIFY --> BROADCAST["broadcast(event)"]
     BROADCAST --> MATCH["Match against all active\nsubscription filters"]
     MATCH --> SEND{"Matched?"}
     SEND -->|yes| EVMSG["Send EVENT message\nto matched connections/subscriptions"]
@@ -498,7 +503,14 @@ flowchart LR
 
 ## Notes
 
-- **Test interference**: Since replacing `globalThis.WebSocket` is a global operation, always call `pool.uninstall()` in the `finally` block of each test.
-- **No signature verification**: As a testing library, event signatures are treated as plain strings (actual cryptographic processing is not implemented to avoid adding dependencies).
-- **Async delivery**: Even with latency 0, responses are delivered asynchronously via `queueMicrotask` (returning responses synchronously inside `send()` would cause some clients to malfunction).
-- **Single instance**: Only one `MockPool` instance can be `install`ed at a time.
+- **Test interference**: Since replacing `globalThis.WebSocket` is a global
+  operation, always call `pool.uninstall()` in the `finally` block of each test.
+- **No signature verification**: As a testing library, event signatures are
+  treated as plain strings (actual cryptographic processing is not implemented
+  to avoid adding dependencies). If you need signature verification, implement
+  it yourself in an `onEVENT` handler.
+- **Async delivery**: Even with latency 0, responses are delivered
+  asynchronously via `queueMicrotask` (returning responses synchronously inside
+  `send()` would cause some clients to malfunction).
+- **Single instance**: Only one `MockPool` instance can be `install`ed at a
+  time.

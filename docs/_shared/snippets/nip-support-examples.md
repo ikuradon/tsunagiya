@@ -235,9 +235,11 @@ NIP-42 AUTH:
 ```typescript
 const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
 
-relay.requireAuth((authEvent) => {
+// 標準検証（バリデーター未設定）: kind:22242 + challenge + relay URL 一致
+// カスタムバリデーター: context から relayUrl / challenge を参照可能
+relay.requireAuth((authEvent, context) => {
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    (t) => t[0] === "relay" && t[1] === context.relayUrl,
   );
 });
 ```

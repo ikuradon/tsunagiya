@@ -46,7 +46,7 @@ NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.2.4.
 | ------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------- |
 | Regular                                          | 1-2, 4-9999, 40000+ (except kind 0, 3) | Added normally                                                   |
 | Replaceable                                      | 0, 3, 10000-19999                      | Old events with same kind+pubkey are deleted before adding       |
-| Ephemeral                                        | 20000-29999                            | Not stored, broadcast only                                       |
+| Ephemeral                                        | 20000-29999                            | Not stored                                                       |
 | Addressable (formerly Parameterized Replaceable) | 30000-39999                            | Old events with same kind+pubkey+d-tag are deleted before adding |
 
 ---
