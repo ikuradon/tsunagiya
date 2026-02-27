@@ -26,12 +26,12 @@ deno task check  # 型チェック + lint + format確認
 
 ## コマンド一覧
 
-| コマンド | 説明 |
-| --- | --- |
-| `deno task test` | テスト実行 |
-| `deno task check` | 型チェック + lint + format確認 |
-| `deno task fmt` | コード自動整形 |
-| `deno publish --dry-run` | JSR 公開プレビュー |
+| コマンド                 | 説明                           |
+| ------------------------ | ------------------------------ |
+| `deno task test`         | テスト実行                     |
+| `deno task check`        | 型チェック + lint + format確認 |
+| `deno task fmt`          | コード自動整形                 |
+| `deno publish --dry-run` | JSR 公開プレビュー             |
 
 ```bash
 deno task test          # テスト実行
@@ -125,8 +125,11 @@ flowchart TD
 deno task test  # 全テスト実行（-A フラグで全パーミッション付与）
 ```
 
-Deno テストは `deno.json` の `test` タスク定義で `-A`（全パーミッション）フラグを使用しています。個別パーミッションを指定する場合は `--allow-net --allow-read` 等を明示してください。
+Deno テストは `deno.json` の `test` タスク定義で
+`-A`（全パーミッション）フラグを使用しています。個別パーミッションを指定する場合は
+`--allow-net --allow-read` 等を明示してください。
 
 ### Node.js 互換モード
 
-`globalThis.WebSocket` の差し替えが前提のため、Node.js で使用する場合は WebSocket polyfill（`ws` パッケージ等）が必要です。
+`globalThis.WebSocket` の差し替えが前提のため、Node.js で使用する場合は
+WebSocket polyfill（`ws` パッケージ等）が必要です。

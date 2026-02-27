@@ -133,8 +133,8 @@ deno task test    # Run all tests (uses the -A flag for full permissions)
 ```
 
 The `test` task in `deno.json` passes `-A` (all permissions) to Deno. If you
-need stricter permission control, specify flags such as `--allow-net --allow-read`
-explicitly.
+need stricter permission control, specify flags such as
+`--allow-net --allow-read` explicitly.
 
 ### Node.js Compatibility
 

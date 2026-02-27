@@ -179,8 +179,8 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
 ## E2E テスト
 
 - Deno: `deno task test`（`-A` フラグで全パーミッション付与）
-- Node.js 互換モード: `globalThis.WebSocket` の差し替えが前提のため、
-  WebSocket polyfill（`ws` パッケージ等）が必要
+- Node.js 互換モード: `globalThis.WebSocket` の差し替えが前提のため、 WebSocket
+  polyfill（`ws` パッケージ等）が必要
 - Node.js 環境での E2E テストは `deno task test:node`（設定済みの場合）で実行
 
 ## 注意点
