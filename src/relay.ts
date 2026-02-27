@@ -594,7 +594,10 @@ export class MockRelay {
       }
       parsed = raw as ClientMessage;
     } catch {
-      // 不正なJSONは無視
+      const msg = "error: invalid JSON";
+      this.#errors.push(msg);
+      const notice: RelayMessage = ["NOTICE", msg];
+      ws._receiveMessage(JSON.stringify(notice));
       return;
     }
 
