@@ -413,6 +413,74 @@ Deno.test("MockRelay - handles malformed REQ and CLOSE messages without crash", 
 
 // ===== 回帰テスト: Issue 3 - store(kind:5) で削除処理が走る =====
 
+Deno.test("MockRelay - manages multiple connections and handles partial disconnect", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  relay.store(makeEvent({ id: "e1", kind: 1, content: "hello" }));
+
+  pool.install();
+  try {
+    // 3つの接続を開く
+    const ws1 = await openWs("wss://relay.example.com");
+    const ws2 = await openWs("wss://relay.example.com");
+    const ws3 = await openWs("wss://relay.example.com");
+    const messages1 = collectMessages(ws1);
+    const messages2 = collectMessages(ws2);
+    const messages3 = collectMessages(ws3);
+
+    assertEquals(relay.connectionCount, 3);
+
+    // 全接続で購読
+    ws1.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    ws2.send(JSON.stringify(["REQ", "sub2", { kinds: [1] }]));
+    ws3.send(JSON.stringify(["REQ", "sub3", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+    // 全接続がイベントを受信
+    assertEquals(messages1.length, 2); // EVENT + EOSE
+    assertEquals(messages2.length, 2);
+    assertEquals(messages3.length, 2);
+
+    // ws2 を切断
+    ws2.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertEquals(relay.connectionCount, 2);
+
+    // 新しいイベントをブロードキャスト
+    const newEvent = makeEvent({ id: "e2", kind: 1, content: "new" });
+    relay.store(newEvent);
+    relay.broadcast(newEvent);
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+    // ws1, ws3 はブロードキャストを受信、ws2 は受信しない
+    const ws1Events = messages1.filter((m) => JSON.parse(m)[0] === "EVENT");
+    const ws3Events = messages3.filter((m) => JSON.parse(m)[0] === "EVENT");
+    assert(ws1Events.length >= 2, "ws1 should receive broadcast");
+    assert(ws3Events.length >= 2, "ws3 should receive broadcast");
+
+    // ws2 のメッセージは切断前の2件のまま
+    assertEquals(messages2.length, 2);
+
+    // 残りの接続でREQが正常動作
+    ws1.send(JSON.stringify(["REQ", "sub1-new", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // e1 + e2 の2件 + EOSE
+    const ws1NewMsgs = messages1.slice(messages1.length - 3);
+    assert(ws1NewMsgs.length >= 2, "ws1 should still receive REQ results");
+
+    ws1.close();
+    ws3.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertEquals(relay.connectionCount, 0);
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");

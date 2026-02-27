@@ -518,6 +518,115 @@ Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
   }
 });
 
+Deno.test("NIP-42 AUTH - re-issues challenge when requireAuth is called on existing connection", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://auth.relay.com");
+
+  pool.install();
+  try {
+    // 先に接続を開く（AUTH なし）
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    // REQ が通ることを確認（認証不要）
+    ws.send(JSON.stringify(["REQ", "sub-before", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const eoseMsg = JSON.parse(messages[messages.length - 1]);
+    assertEquals(eoseMsg[0], "EOSE");
+
+    // 後から requireAuth を設定
+    relay.requireAuth((authEvent) => {
+      return authEvent.tags.some(
+        (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+      );
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 既存接続にチャレンジが送られる
+    const authMsg = JSON.parse(messages[messages.length - 1]);
+    assertEquals(authMsg[0], "AUTH");
+    const challenge = authMsg[1] as string;
+    assertEquals(typeof challenge, "string");
+    assertEquals(challenge.length, 64);
+
+    // 未認証状態でREQを送ると CLOSED が返る
+    ws.send(JSON.stringify(["REQ", "sub-after", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const closedMsg = JSON.parse(messages[messages.length - 1]);
+    assertEquals(closedMsg[0], "CLOSED");
+    assertEquals(closedMsg[1], "sub-after");
+    assertEquals(
+      (closedMsg[2] as string).startsWith("auth-required:"),
+      true,
+    );
+
+    // AUTH応答を送信して認証
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    ws.send(JSON.stringify(["AUTH", authEvent]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const okMsg = JSON.parse(messages[messages.length - 1]);
+    assertEquals(okMsg[0], "OK");
+    assertEquals(okMsg[2], true);
+
+    // 認証後はREQが通る
+    relay.store({
+      id: "stored-event",
+      pubkey: "pub1",
+      kind: 1,
+      content: "test",
+      created_at: 1700000000,
+      tags: [],
+      sig: "sig1",
+    });
+
+    ws.send(JSON.stringify(["REQ", "sub-authed", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const eventMsg = JSON.parse(messages[messages.length - 2]);
+    assertEquals(eventMsg[0], "EVENT");
+    assertEquals(eventMsg[2].id, "stored-event");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-42 AUTH - new connection after requireAuth also gets challenge", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://auth.relay.com");
+
+  // 先に requireAuth を設定
+  relay.requireAuth(() => true);
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://auth.relay.com");
+    const messages = collectMessages(ws);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // 新規接続にもチャレンジが送られる
+    assertEquals(messages.length, 1);
+    const authMsg = JSON.parse(messages[0]);
+    assertEquals(authMsg[0], "AUTH");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("NIP-42 AUTH - sends challenge to existing connection on requireAuth", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://auth.relay.com");

@@ -12,6 +12,7 @@ import type {
   ClientMessage,
   COUNTHandler,
   EVENTHandler,
+  LogLevel,
   MockRelayOptions,
   NostrEvent,
   NostrFilter,
@@ -597,6 +598,7 @@ export class MockRelay {
       const detail = error instanceof Error ? error.message : String(error);
       const msg = `error: invalid JSON (${detail})`;
       this.#errors.push(msg);
+      this.#log("receive", data, "error");
       const notice: RelayMessage = ["NOTICE", msg];
       this.#sendWithLatency(ws, notice);
       return;
@@ -1018,7 +1020,11 @@ export class MockRelay {
     }
   }
 
-  #log(direction: "send" | "receive", data: unknown): void {
+  #log(
+    direction: "send" | "receive",
+    data: unknown,
+    level: LogLevel = "info",
+  ): void {
     if (!this.#logger) return;
     this.#logger.log(
       {
@@ -1027,7 +1033,7 @@ export class MockRelay {
         direction,
         data,
       },
-      "info",
+      level,
     );
   }
 }

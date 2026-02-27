@@ -437,21 +437,20 @@ export class EventBuilder {
    */
   static metadata(
     profile: { name?: string; about?: string; picture?: string },
-  ): NostrEvent {
+  ): EventBuilder {
     return EventBuilder.kind0()
-      .content(JSON.stringify(profile))
-      .build();
+      .content(JSON.stringify(profile));
   }
 
   /**
    * Contacts イベント (kind:3) を生成する
    */
-  static contacts(pubkeys: string[]): NostrEvent {
+  static contacts(pubkeys: string[]): EventBuilder {
     const builder = EventBuilder.kind3();
     for (const pk of pubkeys) {
       builder.tag("p", pk);
     }
-    return builder.build();
+    return builder;
   }
 
   /**
@@ -476,7 +475,7 @@ export class EventBuilder {
   /**
    * Zap Request (kind:9734, NIP-57) を生成する
    */
-  static zapRequest(options: ZapRequestOptions): NostrEvent {
+  static zapRequest(options: ZapRequestOptions): EventBuilder {
     const builder = EventBuilder.kind(9734)
       .content("")
       .tag("amount", String(options.amount))
@@ -488,16 +487,15 @@ export class EventBuilder {
     if (options.recipientPubkey) {
       builder.tag("p", options.recipientPubkey);
     }
-    return builder.build();
+    return builder;
   }
 
   /**
    * NIP-07 Request (kind:24133) を生成する
    */
-  static nip07Request(): NostrEvent {
+  static nip07Request(): EventBuilder {
     return EventBuilder.kind(24133)
-      .content("mock-nip07-request")
-      .build();
+      .content("mock-nip07-request");
   }
 
   // ===== NIP-52 Calendar Events =====

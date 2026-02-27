@@ -159,3 +159,79 @@ Deno.test("snapshot - empty relay produces empty snapshot", () => {
   assertEquals(snap.store.length, 0);
   assertEquals(snap.received.length, 0);
 });
+
+/** WebSocketを開いて待機するヘルパー */
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+Deno.test("snapshot - restores state after disconnectAfter()", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  // イベントをストアに追加
+  const event1 = EventBuilder.kind1().id("ev-before").content(
+    "before disconnect",
+  ).build();
+  relay.store(event1);
+
+  // スナップショット取得
+  const snap = snapshot(relay);
+
+  pool.install();
+  try {
+    // 接続して正常動作を確認
+    const ws1 = await openWs("wss://relay.example.com");
+    const messages1: string[] = [];
+    ws1.addEventListener("message", (ev: MessageEvent) => {
+      messages1.push(ev.data as string);
+    });
+
+    ws1.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertEquals(messages1.length, 2); // EVENT + EOSE
+
+    // disconnectAfter で切断
+    relay.disconnectAfter(50);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+
+    // 切断されたことを確認
+    assertEquals(ws1.readyState, WebSocket.CLOSED);
+
+    // スナップショット復元
+    restore(relay, snap);
+
+    // 復元後に新しい接続でストアが正しいことを確認
+    const ws2 = await openWs("wss://relay.example.com");
+    const messages2: string[] = [];
+    ws2.addEventListener("message", (ev: MessageEvent) => {
+      messages2.push(ev.data as string);
+    });
+
+    ws2.send(JSON.stringify(["REQ", "sub2", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // スナップショット時点のイベントが取得できる
+    const eventMsgs = messages2
+      .map((m) => JSON.parse(m))
+      .filter((m: unknown[]) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 1);
+    assertEquals((eventMsgs[0] as unknown[])[2], snap.store[0]);
+
+    const eose = JSON.parse(messages2[messages2.length - 1]);
+    assertEquals(eose[0], "EOSE");
+
+    ws2.close();
+    await new Promise<void>((resolve) => {
+      ws2.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});

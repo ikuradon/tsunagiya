@@ -194,7 +194,7 @@ Deno.test("EventBuilder - metadata() creates kind:0 with JSON content", () => {
     name: "Alice",
     about: "Nostr user",
     picture: "https://example.com/avatar.png",
-  });
+  }).build();
 
   assertEquals(event.kind, 0);
   const profile = JSON.parse(event.content);
@@ -203,7 +203,7 @@ Deno.test("EventBuilder - metadata() creates kind:0 with JSON content", () => {
 });
 
 Deno.test("EventBuilder - contacts() creates kind:3 with p tags", () => {
-  const event = EventBuilder.contacts(["pub1", "pub2", "pub3"]);
+  const event = EventBuilder.contacts(["pub1", "pub2", "pub3"]).build();
   assertEquals(event.kind, 3);
   assertEquals(event.tags.length, 3);
   assertEquals(event.tags[0], ["p", "pub1"]);
@@ -233,7 +233,7 @@ Deno.test("EventBuilder - zapRequest() creates kind:9734", () => {
     lnurl: "lnurl1...",
     eventId: "target-event",
     recipientPubkey: "recipient-pub",
-  });
+  }).build();
 
   assertEquals(event.kind, 9734);
   assertEquals(
@@ -261,7 +261,7 @@ Deno.test("EventBuilder - zapRequest() creates kind:9734", () => {
 });
 
 Deno.test("EventBuilder - nip07Request() creates kind:24133", () => {
-  const event = EventBuilder.nip07Request();
+  const event = EventBuilder.nip07Request().build();
   assertEquals(event.kind, 24133);
 });
 

@@ -1,24 +1,9 @@
 # TODO — 繋ぎ屋 改良案
 
-## 優先度: 高
-
-- [ ] JSONパースエラーのログ記録追加 (`src/relay.ts`)
-  - 現在 `return` で無視しているが、ログまたはメトリクスに記録する
-- [ ] EventBuilder static メソッドの戻り値を統一
-      (`src/testing/event_builder.ts`)
-  - `NostrEvent` 直接返却 / `EventBuilder` 返却が混在している
-- [ ] 複数接続の同時管理テスト追加 (`tests/relay_test.ts`)
-  - 複数接続を開く → 一部切断 → 残りが正常動作するか
-- [ ] AUTH チャレンジ再発行テスト追加 (`tests/auth_test.ts`)
-  - 既存接続に `requireAuth()` を後から設定した場合の動作
-- [ ] `disconnectAfter()` 後のスナップショット復元テスト追加
-
 ## 優先度: 中
 
 ### NIP 対応
 
-- [x] NIP-11 (Relay Information Document) — `relay.setInfo()` / `getInfo()` +
-      fetch インターセプト
 - [ ] NIP-17 (Private Direct Messages) — NIP-04 deprecated に伴い
       `EventBuilder.privateDM()` テンプレート追加
 - [ ] NIP-40 (Expiration Timestamp) — `EventBuilder.withExpiration()`
