@@ -94,6 +94,7 @@ Deno.test("NIP-16 store - ephemeral event broadcasts to subscriptions", async ()
         // サブスクリプション登録後に ephemeral イベントをブロードキャスト
         const ephEvent = EventBuilder.kind(20000).content("live").build();
         relay.store(ephEvent);
+        relay.broadcast(ephEvent);
 
         setTimeout(() => {
           // EOSE + EVENT の2つ

@@ -13,6 +13,7 @@ import type {
   StreamHandle,
   StreamOptions,
 } from "../types.ts";
+import { classifyEvent } from "../event_kind.ts";
 
 /**
  * イベントを時間差で送信する
@@ -46,11 +47,9 @@ export function streamEvents(
     timer = setTimeout(() => {
       if (stopped || index >= events.length) return;
       const event = events[index++];
-      // store() は ephemeral イベントの場合、内部でブロードキャストする。
-      // regular/replaceable の場合のみ追加でブロードキャストする。
       const stored = relay.store(event);
-      if (stored) {
-        relay._broadcastEvent(event);
+      if (stored || classifyEvent(event.kind) === "ephemeral") {
+        relay.broadcast(event);
       }
       scheduleNext();
     }, effectiveDelay);
@@ -113,8 +112,8 @@ export function startStream(
 
       const event = options.eventGenerator();
       const stored = relay.store(event);
-      if (stored) {
-        relay._broadcastEvent(event);
+      if (stored || classifyEvent(event.kind) === "ephemeral") {
+        relay.broadcast(event);
       }
       count++;
 

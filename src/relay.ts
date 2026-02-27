@@ -102,8 +102,11 @@ export class MockRelay {
    * NIP-01/NIP-16 に基づき、イベント種別に応じた処理を行う:
    * - Regular: 通常通り追加
    * - Replaceable: 同一 kind+pubkey の古いイベントを削除し追加（古い場合は無視）
-   * - Ephemeral: ストアに追加せず、ブロードキャストのみ
+   * - Ephemeral: ストアに追加しない
    * - Parameterized Replaceable: 同一 kind+pubkey+d-tag の古いイベントを削除し追加
+   *
+   * ブロードキャストは行わない。サブスクリプションへの配信が必要な場合は
+   * {@link broadcast} を別途呼び出すこと。
    *
    * @returns ストアに追加された場合 true、無視された場合 false
    */
@@ -112,13 +115,9 @@ export class MockRelay {
     if (event.kind === 5) {
       this.#handleDeletion(event);
       this.#store.push(event);
-      this._broadcastEvent(event);
       return true;
     }
-    const { stored, ephemeral } = this.#classifyAndStore(event);
-    if (ephemeral) {
-      this._broadcastEvent(event);
-    }
+    const { stored } = this.#classifyAndStore(event);
     return stored;
   }
 
@@ -492,9 +491,10 @@ export class MockRelay {
    *
    * イベントを各サブスクリプションのフィルターと照合し、
    * マッチした場合にそのサブスクリプションへ送信する。
-   * @internal ストリーム機能から呼び出される
+   *
+   * ストアへの保存は行わない。保存が必要な場合は {@link store} を別途呼び出すこと。
    */
-  _broadcastEvent(event: NostrEvent): void {
+  broadcast(event: NostrEvent): void {
     for (const [ws, subscriptions] of this.#subscriptions) {
       for (const [subId, filters] of subscriptions) {
         if (matchFilters(event, filters)) {
@@ -666,15 +666,12 @@ export class MockRelay {
         // NIP-09: 削除リクエスト処理
         this.#handleDeletion(event);
         this.#store.push(event);
-        this._broadcastEvent(event);
+        this.broadcast(event);
         response = ["OK", event.id, true, ""];
       } else {
         const { stored, ephemeral } = this.#classifyAndStore(event);
-        if (ephemeral) {
-          this._broadcastEvent(event);
-          response = ["OK", event.id, true, ""];
-        } else if (stored) {
-          this._broadcastEvent(event);
+        if (stored || ephemeral) {
+          this.broadcast(event);
           response = ["OK", event.id, true, ""];
         } else {
           response = [
