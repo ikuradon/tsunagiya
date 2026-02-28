@@ -7,10 +7,10 @@ on:
       - "docs/**"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: {}
+
+env:
+  DENO_DIR: ~/.deno
 
 concurrency:
   group: pages
@@ -19,13 +19,22 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
         with:
           fetch-depth: 1
+      - name: Cache Deno dependencies
+        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
       - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
         with:
-          deno-version: v2.7.1
+          deno-version: v2.x
       - name: Install dependencies
         run: cd docs && deno install
       - name: Build with VitePress
@@ -40,6 +49,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

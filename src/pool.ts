@@ -235,4 +235,45 @@ export class MockPool {
   get installed(): boolean {
     return this.#installed;
   }
+
+  /**
+   * `using` 構文（Explicit Resource Management）でのリソース解放
+   *
+   * install済みの場合、`uninstall()` を呼び出す。
+   * 未インストール状態では何もしない。
+   *
+   * @example
+   * ```ts
+   * const pool = new MockPool();
+   * pool.install();
+   * using _ = pool;
+   * // ブロック終了時に自動的に uninstall() が呼ばれる
+   * ```
+   */
+  [Symbol.dispose](): void {
+    if (this.#installed) {
+      this.uninstall();
+    }
+  }
+
+  /**
+   * `await using` 構文（Explicit Resource Management）でのリソース解放
+   *
+   * install済みの場合、`uninstall()` を呼び出す。
+   * 未インストール状態では何もしない。
+   *
+   * @example
+   * ```ts
+   * const pool = new MockPool();
+   * pool.install();
+   * await using _ = pool;
+   * // ブロック終了時に自動的に uninstall() が呼ばれる
+   * ```
+   */
+  [Symbol.asyncDispose](): Promise<void> {
+    if (this.#installed) {
+      this.uninstall();
+    }
+    return Promise.resolve();
+  }
 }

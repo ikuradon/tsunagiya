@@ -105,7 +105,7 @@ break subsequent tests.
 
 ## Code Examples
 
-<!--@include: ../../_shared/snippets/best-practices.md-->
+<!--@include: ../../_shared/snippets/en/best-practices.md-->
 
 ---
 

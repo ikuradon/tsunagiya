@@ -3,18 +3,29 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
+permissions: {}
+
+env:
+  DENO_DIR: ~/.deno
 
 jobs:
   test-deno:
     name: Test on Deno
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         deno-version: [v2.x]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - name: Cache Deno dependencies
+        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
       - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
         with:
           deno-version: ${{ matrix.deno-version }}
@@ -22,9 +33,14 @@ jobs:
       - run: deno task test
       - name: Generate coverage
         run: deno task coverage
-      - name: Coverage report
-        run: deno task coverage:report
-      - name: Upload coverage
+      - name: Coverage report (LCOV)
+        run: deno coverage ./.cov --lcov --output=.cov/lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@015f24e6818733317a2da2edd6290ab26238649a # v5.0.7
+        with:
+          files: .cov/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@ea165f8d65b6db9a8b9c8e4d2b6ff2a4df6a5f88 # v4.6.2
         with:
           name: coverage-report
@@ -33,8 +49,17 @@ jobs:
   publish-check:
     name: Publish dry-run
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - name: Cache Deno dependencies
+        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
       - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
         with:
           deno-version: v2.x
@@ -43,20 +68,31 @@ jobs:
   e2e-libraries:
     name: E2E Library Test (${{ matrix.library }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - name: Cache Deno dependencies
+        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
       - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
         with:
-          deno-version: v2.7.1
+          deno-version: v2.x
       - name: Run E2E tests
         run: deno task example:${{ matrix.library }}
 
   e2e-node:
     name: E2E Library Test - Node.js (${{ matrix.library }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
@@ -79,6 +115,8 @@ jobs:
   e2e-bun:
     name: E2E Library Test - Bun (${{ matrix.library }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
@@ -95,3 +133,25 @@ jobs:
           if [ -f "${{ matrix.library }}/signing_test.ts" ]; then
             bun test ${{ matrix.library }}/signing_test.ts
           fi
+
+  docs-check:
+    name: Docs lint/format check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - name: Cache Deno dependencies
+        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+        with:
+          deno-version: v2.x
+      - name: Check docs format
+        run: deno fmt --check docs/.vitepress/
+      - name: Lint docs
+        run: deno lint docs/.vitepress/

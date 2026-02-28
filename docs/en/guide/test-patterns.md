@@ -21,7 +21,7 @@ Common test scenarios and implementation patterns for Nostr client development.
 
 ---
 
-<!--@include: ../../_shared/snippets/test-patterns.md-->
+<!--@include: ../../_shared/snippets/en/test-patterns.md-->
 
 ---
 

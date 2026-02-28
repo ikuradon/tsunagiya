@@ -69,7 +69,7 @@ limit: 10           → < 3ms (slice after sort)
 
 ## Code Examples
 
-<!--@include: ../../_shared/snippets/performance.md-->
+<!--@include: ../../_shared/snippets/en/performance.md-->
 
 ---
 

@@ -27,49 +27,49 @@ Full reference for all classes, functions, and types in tsunagiya v0.3.0.
 
 ## Main Module
 
-<!--@include: ../../_shared/snippets/api-main.md-->
+<!--@include: ../../_shared/snippets/en/api-main.md-->
 
 ---
 
 ### MockPool Method Reference
 
-<!--@include: ../../_shared/tables/api-mockpool.md-->
+<!--@include: ../../_shared/tables/en/api-mockpool.md-->
 
 ---
 
 ### MockRelay Property Reference
 
-<!--@include: ../../_shared/tables/api-mockrelay-props.md-->
+<!--@include: ../../_shared/tables/en/api-mockrelay-props.md-->
 
 ---
 
 ## Testing Module
 
-<!--@include: ../../_shared/snippets/api-testing.md-->
+<!--@include: ../../_shared/snippets/en/api-testing.md-->
 
 ---
 
 ### EventBuilder Factory Methods
 
-<!--@include: ../../_shared/tables/api-eventbuilder-factory.md-->
+<!--@include: ../../_shared/tables/en/api-eventbuilder-factory.md-->
 
 ---
 
 ### EventBuilder Builder Methods
 
-<!--@include: ../../_shared/tables/api-eventbuilder-methods.md-->
+<!--@include: ../../_shared/tables/en/api-eventbuilder-methods.md-->
 
 ---
 
 ### Logger
 
-<!--@include: ../../_shared/tables/api-logger.md-->
+<!--@include: ../../_shared/tables/en/api-logger.md-->
 
 ---
 
 ## Type Definitions
 
-<!--@include: ../../_shared/snippets/api-types.md-->
+<!--@include: ../../_shared/snippets/en/api-types.md-->
 
 ---
 

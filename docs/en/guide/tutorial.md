@@ -57,7 +57,7 @@ tsunagiya.
 
 ### MockRelayOptions Reference
 
-<!--@include: ../../_shared/tables/mockrelay-options.md-->
+<!--@include: ../../_shared/tables/en/mockrelay-options.md-->
 
 ---
 
@@ -75,7 +75,7 @@ Verify that the client under test sends the correct messages.
 
 ## Code Examples
 
-<!--@include: ../../_shared/snippets/tutorial-steps.md-->
+<!--@include: ../../_shared/snippets/en/tutorial-steps.md-->
 
 ---
 

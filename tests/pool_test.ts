@@ -117,6 +117,76 @@ Deno.test("MockPool - allows install after first instance uninstalls", () => {
   }
 });
 
+Deno.test("MockPool - Symbol.dispose uninstalls when installed", () => {
+  const pool = new MockPool();
+  const originalWS = globalThis.WebSocket;
+
+  pool.install();
+  assertEquals(pool.installed, true);
+
+  pool[Symbol.dispose]();
+
+  assertEquals(pool.installed, false);
+  assertEquals(globalThis.WebSocket, originalWS);
+});
+
+Deno.test("MockPool - Symbol.dispose is no-op when not installed", () => {
+  const pool = new MockPool();
+  // 未インストール状態でも throw しない
+  pool[Symbol.dispose]();
+  assertEquals(pool.installed, false);
+});
+
+Deno.test("MockPool - Symbol.asyncDispose uninstalls when installed", async () => {
+  const pool = new MockPool();
+  const originalWS = globalThis.WebSocket;
+
+  pool.install();
+  assertEquals(pool.installed, true);
+
+  await pool[Symbol.asyncDispose]();
+
+  assertEquals(pool.installed, false);
+  assertEquals(globalThis.WebSocket, originalWS);
+});
+
+Deno.test("MockPool - Symbol.asyncDispose is no-op when not installed", async () => {
+  const pool = new MockPool();
+  // 未インストール状態でも throw しない
+  await pool[Symbol.asyncDispose]();
+  assertEquals(pool.installed, false);
+});
+
+Deno.test("MockPool - using keyword auto-uninstalls on block exit", () => {
+  const pool = new MockPool();
+  const originalWS = globalThis.WebSocket;
+
+  pool.install();
+
+  {
+    using _disposable = pool;
+    assertEquals(_disposable.installed, true);
+  }
+
+  assertEquals(pool.installed, false);
+  assertEquals(globalThis.WebSocket, originalWS);
+});
+
+Deno.test("MockPool - await using keyword auto-uninstalls on block exit", async () => {
+  const pool = new MockPool();
+  const originalWS = globalThis.WebSocket;
+
+  pool.install();
+
+  {
+    await using _disposable = pool;
+    assertEquals(_disposable.installed, true);
+  }
+
+  assertEquals(pool.installed, false);
+  assertEquals(globalThis.WebSocket, originalWS);
+});
+
 Deno.test("MockPool - clears all relay state on reset", () => {
   const pool = new MockPool();
   const r1 = pool.relay("wss://relay1.example.com");

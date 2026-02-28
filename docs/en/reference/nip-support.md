@@ -10,13 +10,13 @@ NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.3.0.
 
 ## Supported NIPs (v0.3.0)
 
-<!--@include: ../../_shared/tables/nip-support.md-->
+<!--@include: ../../_shared/tables/en/nip-support.md-->
 
 ---
 
 ## Details and Examples for Each NIP
 
-<!--@include: ../../_shared/snippets/nip-support-examples.md-->
+<!--@include: ../../_shared/snippets/en/nip-support-examples.md-->
 
 ---
 

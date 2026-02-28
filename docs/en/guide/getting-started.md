@@ -13,7 +13,7 @@ you can test **existing Nostr client code without any modifications**.
 
 ## Basic Usage
 
-<!--@include: ../../_shared/snippets/basic-usage.md-->
+<!--@include: ../../_shared/snippets/en/basic-usage.md-->
 
 ## Features
 
@@ -40,9 +40,9 @@ you can test **existing Nostr client code without any modifications**.
 The main entry point for testing. Manages multiple `MockRelay` instances and
 replaces `globalThis.WebSocket`.
 
-<!--@include: ../../_shared/tables/api-mockpool.md-->
+<!--@include: ../../_shared/tables/en/api-mockpool.md-->
 
-<!--@include: ../../_shared/snippets/mockpool-usage.md-->
+<!--@include: ../../_shared/snippets/en/mockpool-usage.md-->
 
 > **Note:** Attempting to connect to a URL not registered with `pool.relay()`
 > will result in a connection failure (error event + close event code:1006).
@@ -54,21 +54,21 @@ A virtual relay that operates per URL.
 
 ### Properties
 
-<!--@include: ../../_shared/tables/api-mockrelay-props.md-->
+<!--@include: ../../_shared/tables/en/api-mockrelay-props.md-->
 
 ### Usage
 
-<!--@include: ../../_shared/snippets/mockrelay-usage.md-->
+<!--@include: ../../_shared/snippets/en/mockrelay-usage.md-->
 
 ## Test Helpers
 
 Import from `@ikuradon/tsunagiya/testing`.
 
-<!--@include: ../../_shared/snippets/testing-helpers.md-->
+<!--@include: ../../_shared/snippets/en/testing-helpers.md-->
 
 ## Supported NIPs
 
-<!--@include: ../../_shared/tables/nip-support.md-->
+<!--@include: ../../_shared/tables/en/nip-support.md-->
 
 ## E2E Testing Support
 
