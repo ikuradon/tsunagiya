@@ -4,27 +4,19 @@ outline: deep
 
 # Architecture
 
-## Overview
-
 Tsunagiya is a mock library that makes existing Nostr client code testable
 without modification by replacing `globalThis.WebSocket`.
 
+## Overview
+
 ```mermaid
 flowchart LR
-    TC["Test Code"]
-    GWS["globalThis.WebSocket"]
-    GF["globalThis.fetch"]
-    MWS["MockWebSocket"]
-    NIP11["NIP-11 Interceptor"]
-    MR1["MockRelay (wss://relay1)"]
-    MR2["MockRelay (wss://relay2)"]
-
-    TC -->|"pool.install()"| GWS
-    TC -->|"pool.install()"| GF
-    GWS --> MWS
-    GF --> NIP11
-    MWS --> MR1
-    MWS --> MR2
+    TC["Test Code"] -->|"pool.install()"| GWS["globalThis.WebSocket"]
+    TC -->|"pool.install()"| GF["globalThis.fetch"]
+    GWS -->|"replace"| MWS["MockWebSocket"]
+    GF -->|"replace"| NIP11["NIP-11 Interceptor"]
+    MWS -->|"routing"| MR["MockRelay (per URL)"]
+    NIP11 --> MR
 ```
 
 ---
@@ -41,6 +33,52 @@ src/
 ├── event_kind.ts                  — Event kind classification (Regular/Replaceable/Ephemeral etc.)
 ├── logger.ts                      — Logger
 └── types.ts                       — Type definitions
+```
+
+### Class Relationship Diagram
+
+```mermaid
+classDiagram
+    class MockPool {
+        +relay(url, options?) MockRelay
+        +install() void
+        +uninstall() void
+        +reset() void
+        -relays Map~string, MockRelay~
+        -originalWebSocket typeof WebSocket
+        -originalFetch typeof fetch
+    }
+    class MockRelay {
+        +store(event) void
+        +onREQ(handler) void
+        +hasEvent(id) boolean
+        +countREQs() number
+        +snapshot() RelaySnapshot
+        -store NostrEvent[]
+        -received ReceivedMessage[]
+        -connections Set~MockWebSocket~
+        -subscriptions Map
+        -authState AuthState
+    }
+    class MockWebSocket {
+        +send(data) void
+        +close() void
+        -relay MockRelay
+        -readyState number
+        +_receiveMessage(data) void
+        +_forceClose(code, reason) void
+    }
+    class AuthState {
+        +sendChallenge(ws) string
+        +handleAuthResponse(ws, event, url) boolean
+        -validator Function
+        -challenges Map
+        -authenticated Set
+    }
+
+    MockPool "1" --> "0..*" MockRelay : manages
+    MockRelay "1" --> "0..*" MockWebSocket : connection management
+    MockRelay "1" --> "1" AuthState : auth management
 ```
 
 ### MockPool (`src/pool.ts`)
@@ -89,6 +127,36 @@ WebSocket API.
 | `_receiveMessage(data)`     | Receive callback invoked by the relay             |
 | `_forceClose(code, reason)` | Forced disconnect invoked by the relay            |
 
+### WebSocket readyState Transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> CONNECTING : new WebSocket(url)
+    CONNECTING --> OPEN : queueMicrotask\n(scheduleOpen)
+    OPEN --> CLOSING : ws.close()
+    OPEN --> CLOSED : _forceClose()\n(forced disconnect by relay)
+    CLOSING --> CLOSED : close event fired
+    CONNECTING --> CLOSED : URL not registered\n(error)
+    CLOSED --> [*]
+
+    note right of CONNECTING
+        readyState = 0
+        Relay lookup in progress
+    end note
+    note right of OPEN
+        readyState = 1
+        Messages can be sent/received
+    end note
+    note right of CLOSING
+        readyState = 2
+        Close in progress
+    end note
+    note right of CLOSED
+        readyState = 3
+        Connection terminated
+    end note
+```
+
 ### filter.ts
 
 Pure functions for NIP-01 filter matching. No side effects.
@@ -111,47 +179,6 @@ Manages AUTH challenge/response per connection.
 | `sendChallenge(ws)`                  | Generates a random challenge and sends AUTH message |
 | `handleAuthResponse(ws, event, url)` | Validates kind:22242 AUTH response                  |
 
-### Class Relationship Diagram
-
-```mermaid
-classDiagram
-    class MockPool {
-        +Map~string, MockRelay~ relays
-        +relay(url, options?) MockRelay
-        +install() void
-        +uninstall() void
-        +reset() void
-    }
-
-    class MockRelay {
-        +NostrEvent[] store
-        +Set~MockWebSocket~ connections
-        +Map subscriptions
-        +AuthState authState
-        +_handleMessage(ws, data) void
-        +_injectEvent(event) void
-        +broadcast(event) void
-    }
-
-    class MockWebSocket {
-        +static _resolveRelay Function
-        +send(data) void
-        +_receiveMessage(data) void
-        +_forceClose(code, reason) void
-    }
-
-    class AuthState {
-        +sendChallenge(ws) void
-        +handleAuthResponse(ws, event, url) boolean
-        +isAuthenticated(ws) boolean
-    }
-
-    MockPool "1" --> "0..*" MockRelay : manages
-    MockRelay "1" --> "0..*" MockWebSocket : connected
-    MockRelay "1" --> "1" AuthState : owns
-    MockWebSocket ..> MockRelay : routes to
-```
-
 ---
 
 ## WebSocket Interception Mechanism
@@ -160,57 +187,25 @@ classDiagram
 sequenceDiagram
     participant TC as Test Code
     participant MP as MockPool
-    participant GWS as globalThis.WebSocket
     participant MWS as MockWebSocket
     participant MR as MockRelay
 
     TC->>MP: pool.install()
-    MP->>GWS: globalThis.WebSocket = MockWebSocket
-    Note over MP,GWS: MockWebSocket._resolveRelay = (url) => relays.get(url)<br>globalThis.fetch = NIP-11 interceptor
+    Note over MP: globalThis.WebSocket = MockWebSocket<br>MockWebSocket._resolveRelay = ...<br>globalThis.fetch = NIP-11 interceptor
 
     TC->>MWS: new WebSocket("wss://...")
-    MWS->>MR: _resolveRelay(url) → find MockRelay
+    MWS->>MR: _resolveRelay(url) lookup
+    MR-->>MWS: MockRelay instance
     MWS->>MR: relay._registerConnection(this)
-    Note over MWS: queueMicrotask → #scheduleOpen()
+    Note over MWS: queueMicrotask → scheduleOpen()
 
     MWS->>MWS: readyState = OPEN
-    MWS-->>TC: open event / onopen callback
+    MWS->>TC: open event / onopen fired
     MWS->>MR: relay._handleOpen(this)
-    Note over MR: If requiresAuth: setTimeout(0) → send AUTH challenge
+    Note over MR: If requiresAuth:<br>setTimeout(0) → send AUTH challenge
 
     TC->>MP: pool.uninstall()
-    MP->>GWS: globalThis.WebSocket = original WebSocket
-    Note over MP,GWS: globalThis.fetch = original fetch
-```
-
-### WebSocket readyState Transitions
-
-```mermaid
-stateDiagram-v2
-    [*] --> CONNECTING : new WebSocket(url)
-    CONNECTING --> OPEN : scheduleOpen() via queueMicrotask
-    CONNECTING --> CLOSED : _resolveRelay() returns null
-    OPEN --> CLOSING : ws.close() called
-    OPEN --> CLOSED : _forceClose() by relay
-    CLOSING --> CLOSED : close handshake complete
-    CLOSED --> [*]
-
-    note right of CONNECTING
-        readyState = 0
-        Relay lookup in progress
-    end note
-    note right of OPEN
-        readyState = 1
-        Messages can be sent/received
-    end note
-    note right of CLOSING
-        readyState = 2
-        Close in progress
-    end note
-    note right of CLOSED
-        readyState = 3
-        Connection terminated
-    end note
+    Note over MP: globalThis.WebSocket = original WebSocket<br>globalThis.fetch = original fetch
 ```
 
 ---
@@ -226,21 +221,41 @@ sequenceDiagram
     participant MR as MockRelay
 
     C->>MWS: ws.send('["REQ", "sub1", {...}]')
+    Note over MWS: DOMException if readyState is not OPEN
+    MWS->>MR: relay._handleMessage(this, data)
 
-    alt readyState is not OPEN
-        MWS-->>C: throw DOMException
-    else readyState is OPEN
-        MWS->>MR: relay._handleMessage(this, data)
-        Note over MR: 1. JSON.parse<br>2. Basic structure validation<br>3. Log to received[]<br>4. Check disconnectRate<br>5. Check errorRate<br>6. Check AUTH if requiresAuth
-        alt MESSAGE type
-            MR->>MR: "EVENT" → #handleEvent()
-            MR->>MR: "REQ" → #handleReq()
-            MR->>MR: "CLOSE" → #handleClose()
-            MR->>MR: "AUTH" → #handleAuth()
-            MR->>MR: "COUNT" → #handleCount()
-        end
-        MR->>MWS: #sendWithLatency(ws, response)
+    Note over MR: 1. JSON.parse<br>2. Basic structure validation<br>3. Log to received[]<br>4. Random disconnect check (disconnectRate)<br>5. Error rate check (errorRate)<br>6. AUTH unauthenticated check (requiresAuth)<br>7. Route by message type
+
+    alt EVENT
+        MR->>MR: #handleEvent()
+    else REQ
+        MR->>MR: #handleReq()
+    else CLOSE
+        MR->>MR: #handleClose()
+    else AUTH
+        MR->>MR: #handleAuth()
+    else COUNT
+        MR->>MR: #handleCount()
     end
+
+    MR->>MWS: #sendWithLatency(ws, response)
+```
+
+### Error Simulation Decision Flow
+
+```mermaid
+flowchart TD
+    Start["Message received"] --> DC{"disconnectRate\ncheck"}
+    DC -->|"random < disconnectRate"| FClose["Forced disconnect\n_forceClose()"]
+    DC -->|"pass"| EC{"errorRate\ncheck"}
+    EC -->|"random < errorRate"| NErr["Send NOTICE error"]
+    EC -->|"pass"| Auth{"requiresAuth\nand unauthenticated?"}
+    Auth -->|"Yes"| AuthErr["restricted: auth required\nerror response"]
+    Auth -->|"No / authenticated"| Route["Route by message type\nEVENT / REQ / CLOSE / AUTH / COUNT"]
+    FClose --> End["End processing"]
+    NErr --> End
+    AuthErr --> End
+    Route --> End
 ```
 
 ### Relay → Client (receive)
@@ -252,37 +267,12 @@ sequenceDiagram
     participant C as Client
 
     MR->>MR: #sendWithLatency(ws, message)
-    alt latency == 0
-        Note over MR: queueMicrotask → immediate delivery
-    else latency > 0
-        Note over MR: setTimeout(latency) → delayed delivery
-    end
+    Note over MR: latency == 0: immediate delivery via queueMicrotask<br>latency  > 0: delayed delivery via setTimeout(latency)
 
     MR->>MWS: _receiveMessage(data)
-    alt readyState is not OPEN
-        Note over MWS: silently ignored
-    else readyState is OPEN
-        MWS->>MWS: create MessageEvent
-        MWS-->>C: onmessage / "message" event
-    end
-```
-
-### Error Simulation Decision Flow
-
-```mermaid
-flowchart TD
-    MSG["Incoming Message"] --> DISC{"disconnectRate\ncheck"}
-    DISC -->|"random hit"| FORCE["_forceClose()\nDisconnect client"]
-    DISC -->|"no hit"| ERR{"errorRate\ncheck"}
-    ERR -->|"random hit"| NOTICE["Send NOTICE error\n(continue connection)"]
-    ERR -->|"no hit"| AUTH{"requiresAuth &&\nnot authenticated?"}
-    AUTH -->|"yes"| AUTHNOTICE["Send NOTICE\nauthentication required"]
-    AUTH -->|"no"| ROUTE["Route to handler\n(handleEvent / handleReq / ...)"]
-    FORCE --> END["End processing"]
-    NOTICE --> END
-    AUTHNOTICE --> END
-    ROUTE --> RESP["Send response\n#sendWithLatency()"]
-    RESP --> END
+    Note over MWS: Ignored if readyState is not OPEN
+    MWS->>MWS: Create MessageEvent
+    MWS->>C: onmessage / "message" event fired
 ```
 
 ---
@@ -293,32 +283,28 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    STORE["store(event)"] --> K5{"kind:5\n(Deletion)?"}
-    K5 -->|yes| DEL["#handleDeletion()\nDelete referenced events\n+ add to store"]
-    K5 -->|no| REG{"Regular Event?\n(not special kind)"}
-    REG -->|yes| ADD["Add to store"]
-    REG -->|no| REPL{"Replaceable?\n(kind 0, 3,\n10000–19999)"}
-    REPL -->|yes| REPLACE["Replace old event\nwith same kind+pubkey"]
-    REPL -->|no| ADDR{"Addressable?\n(kind 30000–39999)"}
-    ADDR -->|yes| ADDRREPLACE["Replace old event\nwith same kind+pubkey+d-tag"]
-    ADDR -->|no| EPH{"Ephemeral?\n(kind 20000–29999)"}
-    EPH -->|yes| SKIP["Do not add to store"]
-    EPH -->|no| ADD
+    Store["store(event)"] --> K5{"kind:5\n(Deletion)?"}
+    K5 -->|"Yes"| Del["#handleDeletion()\n+ add to store"]
+    K5 -->|"No"| KClass{"Event kind classification"}
+    KClass --> Regular["Regular\n→ add to store"]
+    KClass --> Repl["Replaceable\n→ replace old with same kind+pubkey"]
+    KClass --> ParamRepl["Addressable\n→ replace old with same kind+pubkey+d-tag"]
+    KClass --> Ephem["Ephemeral\n→ do not add to store"]
 ```
 
 ### Event Kind Classification Flow
 
 ```mermaid
 flowchart TD
-    EV["NostrEvent (kind: N)"] --> K5CHECK{"kind === 5?"}
-    K5CHECK -->|yes| DELETION["Deletion Event\nTriggers #handleDeletion()"]
-    K5CHECK -->|no| REPL_CHECK{"kind === 0, 3\nor 10000–19999?"}
-    REPL_CHECK -->|yes| REPLACEABLE["Replaceable Event\nReplace same kind+pubkey"]
-    REPL_CHECK -->|no| ADDR_CHECK{"kind 30000–39999?"}
-    ADDR_CHECK -->|yes| ADDRESSABLE["Addressable Event\nReplace same kind+pubkey+d-tag"]
-    ADDR_CHECK -->|no| EPH_CHECK{"kind 20000–29999?"}
-    EPH_CHECK -->|yes| EPHEMERAL["Ephemeral Event\nBroadcast only, not stored"]
-    EPH_CHECK -->|no| REGULAR["Regular Event\nAdded to store as-is\n(kind 1–4999 / 5001–9999 etc.)"]
+    Start["kind number"] --> R1{"kind == 0, 3\nor\n10000-19999?"}
+    R1 -->|"Yes"| Replaceable["Replaceable\n(can be replaced)"]
+    R1 -->|"No"| R2{"kind == 20000-29999?"}
+    R2 -->|"Yes"| Ephemeral["Ephemeral\n(non-persistent)"]
+    R2 -->|"No"| R3{"kind == 30000-39999?"}
+    R3 -->|"Yes"| Addressable["Addressable\n(identified by d-tag)"]
+    R3 -->|"No"| R4{"kind == 1000-9999\nor\n4000-4999?"}
+    R4 -->|"Yes"| Regular["Regular\n(standard)"]
+    R4 -->|"No"| Unknown["Unknown\n(treated as Regular)"]
 ```
 
 ### REQ Processing and Subscription Management
@@ -327,24 +313,22 @@ flowchart TD
 sequenceDiagram
     participant C as Client
     participant MR as MockRelay
-    participant S as Event Store
-    participant H as Custom reqHandler
+    participant Store as Event Store
 
-    C->>MR: send(["REQ", "sub1", filter1, filter2])
-    MR->>MR: subscriptions[ws]["sub1"] = [filter1, filter2]
+    C->>MR: REQ sent (subId, filters)
+    MR->>MR: subscriptions[ws][subId] = filters registered
 
     alt custom reqHandler set
-        MR->>H: reqHandler(subId, filters)
-        H-->>MR: matching events
-    else default behavior
-        MR->>S: filterEvents(store, filters)
-        S-->>MR: matching events
+        MR->>MR: call reqHandler(subId, filters)
+    else none
+        MR->>Store: filterEvents() to get matching events
+        Store-->>MR: list of matching events
     end
 
     loop for each matching event
-        MR->>C: send(["EVENT", "sub1", event])
+        MR->>C: send EVENT message
     end
-    MR->>C: send(["EOSE", "sub1"])
+    MR->>C: send EOSE message
 
     Note over MR,C: Subsequent store() + broadcast()<br>delivers new events to active subscriptions
 ```
@@ -367,78 +351,66 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant TC as Test Code
-    participant MP as MockPool
+    participant C as Client
     participant MR as MockRelay
     participant AS as AuthState
-    participant C as Client
 
-    TC->>MR: requireAuth(validator) or requiresAuth: true
-    TC->>MP: pool.install()
-    C->>MR: new WebSocket(url) → connection established
-    MR->>AS: sendChallenge(ws) via setTimeout(0)
-    AS-->>C: send(["AUTH", challenge])
+    Note over MR: requiresAuth: true / requireAuth(validator) configured
 
-    C->>MR: send(["AUTH", kind22242Event])
+    C->>MR: connect (new WebSocket)
+    MR->>MR: _handleOpen(ws)
+    Note over MR: setTimeout(0) → send AUTH challenge
+    MR->>AS: sendChallenge(ws)
+    AS-->>C: ["AUTH", challenge]
+
+    C->>MR: send AUTH event (kind:22242)
     MR->>AS: handleAuthResponse(ws, authEvent, url)
-    AS->>AS: 1. Verify challenge tag matches
-    AS->>AS: 2. Check kind:22242
-    AS->>AS: 3. Run validator(authEvent) or verify relay tag
-    alt authentication succeeded
-        AS->>AS: authenticated.add(ws)
-        MR-->>C: send(["OK", eventId, true, ""])
-    else authentication failed
-        MR-->>C: send(["OK", eventId, false, "auth-required: ..."])
-    end
+    Note over AS: 1. Verify challenge tag matches<br>2. Check kind:22242<br>3. Run validator(authEvent) or verify relay tag<br>4. On success → authenticated.add(ws)
+    AS-->>MR: authentication result
+    MR-->>C: ["OK", eventId, true/false, message]
 ```
 
-### NIP-09 Deletion Processing
+### NIP-09 Deletion Processing Flow
 
 ```mermaid
 flowchart TD
-    CLIENT["Client sends kind:5 event"] --> HE["MockRelay#handleEvent()"]
+    Start["Client sends kind:5 event"] --> HE["MockRelay#handleEvent()"]
     HE --> HD["#handleDeletion(event)"]
-    HD --> ETAG{"e tags present?"}
-    ETAG -->|yes| DELID["Delete events by ID from store\nRecord in deletedIds"]
-    ETAG -->|no| ATAG{"a tags present?"}
-    DELID --> ATAG
-    ATAG -->|yes| DELADR["Delete Replaceable/Addressable\nevents from store"]
-    ATAG -->|no| ADDST["Add kind:5 event to store"]
-    DELADR --> ADDST
-    ADDST --> OK["Send OK response to client"]
-    OK --> BLOCK["Future re-publish of deleted IDs\nreturns: blocked: event was deleted"]
+    HD --> ETag["Delete events referenced by e tags from store"]
+    HD --> ATag["Also delete Replaceable / Addressable\nevents referenced by a tags"]
+    HD --> Record["Record deleted IDs in deletedIds"]
+    ETag --> Block["Re-publishing deleted IDs is rejected with\n'blocked: event was deleted'"]
+    ATag --> Block
+    Record --> Block
 ```
 
 ### NIP-11 Relay Information Flow
 
 ```mermaid
 sequenceDiagram
-    participant TC as Test Code
-    participant MR as MockRelay
-    participant MP as MockPool
     participant C as Client
+    participant MP as MockPool
+    participant MR as MockRelay
 
-    TC->>MR: relay.setInfo({ name: "...", description: "..." })
-    C->>MP: fetch("https://relay.example.com", { headers: { Accept: "application/nostr+json" } })
-    MP->>MP: isNip11Request() → true
-    MP->>MP: Convert HTTP/HTTPS URL to WS/WSS
-    MP->>MR: relay lookup by WS URL
-    MR-->>MP: relay.getInfo()
-    MP-->>C: Response(JSON.stringify(info), { "Content-Type": "application/nostr+json" })
+    Note over MR: relay.setInfo({ name: "...", description: "..." })
+
+    C->>MP: fetch(url, { headers: { Accept: "application/nostr+json" } })
+    Note over MP: isNip11Request() check<br>Convert HTTP/HTTPS URL to WS/WSS for relay lookup
+    MP->>MR: relay.getInfo()
+    MR-->>MP: relay info object
+    MP-->>C: Response(JSON.stringify(info),\n{ "Content-Type": "application/nostr+json" })
 ```
 
 ### Event Injection and Real-time Stream
 
 ```mermaid
 flowchart TD
-    INJECT["relay.store(event) + relay.broadcast(event)\nUsed by streamEvents etc. in testing/"]
-    INJECT --> CLASSIFY["store(event)\nSave to store"]
-    CLASSIFY --> BROADCAST["broadcast(event)"]
-    BROADCAST --> MATCH["Match against all active\nsubscription filters"]
-    MATCH --> SEND{"Matched?"}
-    SEND -->|yes| EVMSG["Send EVENT message\nto matched connections/subscriptions"]
-    SEND -->|no| SKIP["Skip"]
-    EVMSG --> RECEIVE["MockWebSocket#_receiveMessage()\n→ client onmessage"]
+    Inject["relay.store(event) + relay.broadcast(event)\n(used by streamEvents etc. in testing/)"]
+    Inject --> Classify["store(event)\nsave to store"]
+    Inject --> Broadcast["broadcast(event)"]
+    Broadcast --> Filter["Match against all active\nsubscription filters"]
+    Filter --> Match["Send EVENT message to\nmatched connections/subscriptions"]
+    Match --> Recv["MockWebSocket#_receiveMessage()\n→ client onmessage"]
 ```
 
 ---
@@ -480,23 +452,19 @@ try {
 
 ```mermaid
 flowchart LR
-    subgraph TESTING ["@ikuradon/tsunagiya/testing"]
-        EB["EventBuilder\nCreate test events\n(NIP templates, bulk, timeline)"]
-        FB["FilterBuilder\nCommon filter patterns\n(NIP-17/18/23/25/51/52/65)"]
-        AS["Assertion Helpers\nassertReceivedREQ\nassertEventPublished etc."]
-        ST["Stream Functions\nstreamEvents / startStream\nReal-time simulation"]
-        SN["Snapshot\nrelay.snapshot()\nrelay.restore()"]
+    subgraph testing ["@ikuradon/tsunagiya/testing"]
+        EB["EventBuilder\nCreate test events\n(NIP templates)"]
+        FB["FilterBuilder\nFilter pattern generation\n(NIP templates)"]
+        Assert["Assertions\nassertReceivedREQ\nassertEventPublished etc."]
+        Stream["Stream\nstreamEvents\nstartStream"]
+        Snap["Snapshot\nrelay.snapshot()\nrelay.restore()"]
     end
 
-    subgraph CORE ["@ikuradon/tsunagiya (core)"]
-        MR["MockRelay"]
-    end
-
-    EB -->|"build events for"| MR
-    FB -->|"build filters for"| MR
-    AS -->|"assert against"| MR
-    ST -->|"_injectEvent() into"| MR
-    SN -->|"capture/restore state of"| MR
+    EB -->|"inject generated events"| MR["MockRelay"]
+    FB -->|"generate filters"| MR
+    MR -->|"state verification"| Assert
+    Stream -->|"real-time delivery"| MR
+    MR -->|"save/restore state"| Snap
 ```
 
 ---

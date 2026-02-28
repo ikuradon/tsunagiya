@@ -133,10 +133,28 @@ AUTH を提供する。
 stateDiagram-v2
     [*] --> CONNECTING : new WebSocket(url)
     CONNECTING --> OPEN : queueMicrotask\n(scheduleOpen)
-    OPEN --> CLOSING : ws.close() / _forceClose()
+    OPEN --> CLOSING : ws.close()
+    OPEN --> CLOSED : _forceClose()\n（リレーから強制切断）
     CLOSING --> CLOSED : close イベント発火
     CONNECTING --> CLOSED : URL 未登録\n(エラー)
     CLOSED --> [*]
+
+    note right of CONNECTING
+        readyState = 0
+        リレー検索中
+    end note
+    note right of OPEN
+        readyState = 1
+        メッセージ送受信可能
+    end note
+    note right of CLOSING
+        readyState = 2
+        クローズ処理中
+    end note
+    note right of CLOSED
+        readyState = 3
+        接続終了
+    end note
 ```
 
 ### filter.ts
@@ -313,6 +331,16 @@ sequenceDiagram
     MR->>C: EOSE メッセージ送信
 
     Note over MR,C: 以降、store() + broadcast() で<br>新着イベントをアクティブなサブスクリプションへ配信
+```
+
+### サブスクリプションデータ構造
+
+```
+#subscriptions: Map<MockWebSocket, Map<string, NostrFilter[]>>
+
+  ConnectionA ──→ { "sub1": [filter1, filter2],
+                    "sub2": [filter3] }
+  ConnectionB ──→ { "sub1": [filter4] }
 ```
 
 ---
