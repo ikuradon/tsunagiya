@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### New Features
+
+- **EventSigner / EventVerifier インターフェース注入**
+  - `UnsignedEvent` 型: 署名前のイベント（id / sig を含まない）
+  - `EventSigner` インターフェース: `getPublicKey()` / `signEvent()` で外部署名
+    ロジックを注入可能
+  - `EventVerifier` インターフェース: `verifyEvent()` でリレー側の署名検証を注入
+    可能
+  - `EventBuilder.buildWith(signer)`: signer を使って正規署名付きイベントを生成
+  - `MockRelay.setVerifier(verifier)`: イベント受信時に署名検証を実行
+  - `MockRelayOptions.verifier`: コンストラクタ経由でも設定可能
+  - 暗号ライブラリを同梱せず、開発者が自前の実装を注入する設計
+
+### Tests
+
+- テストカバレッジを 87.7% → 94.0% に改善（+45 テスト）
+  - relay エラーハンドリング、websocket protocol/timeout、auth エッジケース、
+    logger console 出力、stream jitter/auto-stop、assertions フィルターマッチ、
+    event builder テンプレート、NIP-11 fetch インターセプトの各パスを網羅
+- E2E 署名テスト追加（nostr-tools / NDK / rx-nostr 各ライブラリ向け）
+
+### Bug Fixes
+
+- README・ドキュメント・ソース・テスト内のリレーアドレスを RFC 2606 準拠の
+  `.test` TLD に統一（実在ドメインへの意図しない DNS ルックアップを防止）
+- カバレッジ出力先を `coverage/` → `.cov/` に変更
+
+### CI
+
+- CI マトリクスから Deno v1.x を削除（deno.lock v5 形式が非対応のため）
+
 ## v0.3.0 (2026-02-28)
 
 ### Test Helpers
