@@ -292,6 +292,113 @@ function collectRawMessages(ws: WebSocket): string[] {
   return messages;
 }
 
+// ===== streamEvents with jitter =====
+
+Deno.test("streamEvents - with jitter option completes successfully", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay2.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay2.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const events = EventBuilder.bulk(3, { kind: 1 });
+    const handle = streamEvents(relay, events, { interval: 20, jitter: 10 });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+    handle.stop();
+    assertEquals(handle.stopped, true);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 3);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== startStream with count auto-stop =====
+
+Deno.test("startStream - count: 3 auto-stops after 3 events", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay3.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay3.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const handle = startStream(relay, {
+      eventGenerator: () => EventBuilder.random({ kind: 1 }),
+      interval: 20,
+      count: 3,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+    assertEquals(handle.stopped, true);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 3);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== startStream with jitter =====
+
+Deno.test("startStream - with jitter option operates normally", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay4.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay4.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    const handle = startStream(relay, {
+      eventGenerator: () => EventBuilder.random({ kind: 1 }),
+      interval: 20,
+      jitter: 5,
+      count: 3,
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+
+    handle.stop();
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length >= 1, true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("streamEvents - delivers kind:5 EVENT only once", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");

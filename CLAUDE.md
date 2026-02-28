@@ -33,8 +33,9 @@ deno task docs:dev          # ドキュメント開発サーバー
 1. `deno task fmt` — コード自動整形（**必ず最初に実行**、formatエラー防止）
 2. `deno task test` — テスト実行
 3. `deno task check` — 品質確認（型チェック + lint + format確認）
-4. エラーがあれば修正し、再度 `deno task fmt` から実行
-5. 全チェックパス後に commit
+4. `deno task coverage` — カバレッジ確認（実装毎に必ず実行、出力先: `.cov/`）
+5. エラーがあれば修正し、再度 `deno task fmt` から実行
+6. 全チェックパス後に commit
 
 ## コーディング規約
 

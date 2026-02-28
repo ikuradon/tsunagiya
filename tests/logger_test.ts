@@ -204,3 +204,50 @@ Deno.test("createLogger - returns Logger with handler", () => {
   );
   assertEquals(collected.length, 1);
 });
+
+// ===== Logger.level getter =====
+
+Deno.test("Logger.level getter - returns current log level", () => {
+  const logger = new Logger("info", () => {});
+  assertEquals(logger.level, "info");
+
+  logger.setLevel("debug");
+  assertEquals(logger.level, "debug");
+});
+
+// ===== console output path (no handler) =====
+
+Deno.test("createLogger(true) - no handler uses console.log path without error", () => {
+  const logger = createLogger(true);
+  // handler なしの場合は console.log パスに到達する
+  // エラーにならないことを確認する
+  logger!.log(
+    {
+      timestamp: 1000,
+      relay: "wss://relay.example.com",
+      direction: "send",
+      data: "console-output-test",
+    },
+    "info",
+  );
+  // エントリが蓄積されていることを確認
+  assertEquals(logger!.entries.length, 1);
+});
+
+// ===== console output direction recv =====
+
+Deno.test("Logger - direction: receive outputs without error", () => {
+  const logger = createLogger(true);
+  // direction "receive" のエントリでもコンソール出力パスがエラーにならないことを確認
+  logger!.log(
+    {
+      timestamp: 2000,
+      relay: "wss://relay.example.com",
+      direction: "receive",
+      data: ["EVENT", "sub1", {}],
+    },
+    "info",
+  );
+  assertEquals(logger!.entries.length, 1);
+  assertEquals(logger!.entries[0].direction, "receive");
+});

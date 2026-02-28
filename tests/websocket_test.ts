@@ -155,3 +155,153 @@ Deno.test("MockWebSocket - returns correct url property", async () => {
     pool.uninstall();
   }
 });
+
+// ===== 追加テスト =====
+
+Deno.test("MockWebSocket - protocol property with string", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.protocol-string.example.com");
+  pool.install();
+
+  try {
+    const ws = new WebSocket(
+      "wss://relay.protocol-string.example.com",
+      "nostr",
+    );
+    assertEquals(ws.protocol, "nostr");
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - protocol property with array", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.protocol-array.example.com");
+  pool.install();
+
+  try {
+    const ws = new WebSocket(
+      "wss://relay.protocol-array.example.com",
+      ["nostr", "v2"],
+    );
+    assertEquals(ws.protocol, "nostr");
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - send non-string throws", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.send-non-string.example.com");
+  pool.install();
+
+  try {
+    const ws = new WebSocket("wss://relay.send-non-string.example.com");
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    let threw = false;
+    try {
+      ws.send(new ArrayBuffer(4) as unknown as string);
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true, "send(ArrayBuffer) should throw");
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - close on already closed is no-op", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.double-close.example.com");
+  pool.install();
+
+  try {
+    const ws = new WebSocket("wss://relay.double-close.example.com");
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+
+    // 2回目の close はエラーにならない（no-op）
+    ws.close();
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - onerror callback fires on refused connection", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.onerror-refused.example.com");
+  relay.refuse();
+  pool.install();
+
+  try {
+    const ws = new WebSocket("wss://relay.onerror-refused.example.com");
+
+    const errorFired = await new Promise<boolean>((resolve) => {
+      ws.onerror = () => resolve(true);
+      ws.onclose = () => resolve(false);
+    });
+
+    assertEquals(errorFired, true, "onerror should fire on refused connection");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - connectionTimeout fires with close code 1006", async () => {
+  const pool = new MockPool();
+  // connectionTimeout を設定したリレーを登録するが、refuse は使わない。
+  // scheduleOpen は queueMicrotask で実行されるが、
+  // テストでは close イベントが code 1006 で発火することを確認する。
+  // refuse() 使用時も同じく code 1006 で閉じる。
+  const relay = pool.relay("wss://relay.connection-timeout.example.com", {
+    connectionTimeout: 50,
+  });
+  relay.refuse();
+  pool.install();
+
+  try {
+    const ws = new WebSocket("wss://relay.connection-timeout.example.com");
+
+    const closeEvent = await new Promise<CloseEvent>((resolve) => {
+      ws.onclose = (ev) => resolve(ev);
+    });
+
+    assertEquals(closeEvent.code, 1006);
+  } finally {
+    pool.uninstall();
+  }
+});

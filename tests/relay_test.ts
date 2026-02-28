@@ -739,3 +739,444 @@ Deno.test("MockRelay - verifier via MockRelayOptions", async () => {
     pool.uninstall();
   }
 });
+
+// ===== 追加テスト =====
+
+Deno.test("MockRelay - logger getter returns non-null when logging is true", () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.logger-test.example.com", {
+    logging: true,
+  });
+
+  assert(relay.logger !== null, "logger should be non-null when logging: true");
+});
+
+Deno.test("MockRelay - snapshot/restore with REQ/COUNT restores received", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.snapshot-test.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.snapshot-test.example.com");
+    collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "snap-sub1", { kinds: [1] }]));
+    ws.send(JSON.stringify(["COUNT", "snap-count1", { kinds: [1] }]));
+
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assertEquals(relay.received.length, 2);
+    assertEquals(relay.hasREQ("snap-sub1"), true);
+    assertEquals(relay.hasCOUNT("snap-count1"), true);
+
+    const snap = relay.snapshot();
+
+    // リセットしてから復元
+    relay.reset();
+    assertEquals(relay.received.length, 0);
+
+    relay.restore(snap);
+
+    assertEquals(relay.received.length, 2);
+    assertEquals(relay.hasREQ("snap-sub1"), true);
+    assertEquals(relay.hasCOUNT("snap-count1"), true);
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - reset clears pendingTimers without error", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.pending-timers.example.com", {
+    latency: 100,
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.pending-timers.example.com");
+    collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "timer-sub", { kinds: [1] }]));
+    // タイマーが積まれた直後にリセット
+    relay.reset();
+
+    // エラーが起きないことを確認（タイマーのclearが正常に行われる）
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - malformed AUTH message returns NOTICE", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.auth-malformed.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.auth-malformed.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["AUTH", "not_an_object"]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive NOTICE for malformed AUTH");
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+    assert(
+      (notice[1] as string).includes("malformed"),
+      "NOTICE should mention malformed",
+    );
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - invalid JSON returns error NOTICE", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.invalid-json.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.invalid-json.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send("{invalid json");
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive NOTICE for invalid JSON");
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+    assert(
+      (notice[1] as string).includes("invalid JSON"),
+      "NOTICE should mention invalid JSON",
+    );
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - errorRate: 1.0 returns error NOTICE for REQ", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.error-rate.example.com", { errorRate: 1.0 });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.error-rate.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "err-sub", { kinds: [1] }]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive NOTICE when errorRate is 1.0");
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - disconnectRate: 1.0 disconnects on REQ", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.disconnect-rate.example.com", {
+    disconnectRate: 1.0,
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.disconnect-rate.example.com");
+    collectMessages(ws);
+
+    const closed = await new Promise<CloseEvent>((resolve) => {
+      ws.onclose = (ev) => resolve(ev);
+      ws.send(JSON.stringify(["REQ", "dc-sub", { kinds: [1] }]));
+    });
+
+    // 接続が切断されることを確認
+    assertEquals(closed.code, 1006);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - unsupported message type returns NOTICE", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.unsupported-msg.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.unsupported-msg.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["UNKNOWN"]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive NOTICE for unsupported type");
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+    assert(
+      (notice[1] as string).includes("unsupported message type"),
+      "NOTICE should mention unsupported message type",
+    );
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - deleted event re-post is rejected with blocked", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.deleted-repost.example.com");
+
+  const author = "author-pub-delete-test";
+  const target = makeEvent({
+    id: "target-to-delete",
+    pubkey: author,
+    kind: 1,
+  });
+  relay.store(target);
+
+  // kind:5 削除イベントを store
+  relay.store(
+    makeEvent({
+      id: "deletion-event-repost",
+      pubkey: author,
+      kind: 5,
+      tags: [["e", "target-to-delete"]],
+    }),
+  );
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.deleted-repost.example.com");
+    const messages = collectMessages(ws);
+
+    // 削除済みイベントを再投稿
+    ws.send(JSON.stringify(["EVENT", target]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive OK for re-posted event");
+    const ok = JSON.parse(messages[0]);
+    assertEquals(ok[0], "OK");
+    assertEquals(ok[1], "target-to-delete");
+    assertEquals(ok[2], false);
+    assert(
+      (ok[3] as string).includes("blocked"),
+      "OK message should include blocked",
+    );
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - onREQ handler throws returns CLOSED", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.req-throws.example.com");
+
+  relay.onREQ(() => {
+    throw new Error("REQ handler error");
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.req-throws.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "throwing-sub", { kinds: [1] }]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive CLOSED when onREQ throws");
+    const closed = JSON.parse(messages[0]);
+    assertEquals(closed[0], "CLOSED");
+    assertEquals(closed[1], "throwing-sub");
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - onEVENT handler throws returns OK false", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.event-throws.example.com");
+
+  relay.onEVENT(() => {
+    throw new Error("EVENT handler error");
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.event-throws.example.com");
+    const messages = collectMessages(ws);
+
+    const event = makeEvent({ id: "throw-event" });
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive OK false when onEVENT throws");
+    const ok = JSON.parse(messages[0]);
+    assertEquals(ok[0], "OK");
+    assertEquals(ok[1], "throw-event");
+    assertEquals(ok[2], false);
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - onCOUNT handler throws returns NOTICE", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.count-throws.example.com");
+
+  relay.onCOUNT(() => {
+    throw new Error("COUNT handler error");
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.count-throws.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["COUNT", "throw-count-sub", { kinds: [1] }]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    assert(messages.length >= 1, "should receive NOTICE when onCOUNT throws");
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - replaceable event with same timestamp and larger id is skipped", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.replaceable-same-ts.example.com");
+
+  const pubkey = "pub-replaceable-test";
+  // kind:0 は replaceable
+  const existing = makeEvent({
+    id: "aaaa",
+    pubkey,
+    kind: 0,
+    created_at: 1700000000,
+  });
+  relay.store(existing);
+
+  // 同じ created_at で id が大きい (id >= existing.id)
+  const newer = makeEvent({
+    id: "zzzz",
+    pubkey,
+    kind: 0,
+    created_at: 1700000000,
+  });
+  const stored = relay.store(newer);
+  assertEquals(
+    stored,
+    false,
+    "replaceable event with same timestamp and larger id should not be stored",
+  );
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.replaceable-same-ts.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "rep-sub", { kinds: [0] }]));
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    const eventMsgs = messages
+      .map((m) => JSON.parse(m))
+      .filter((m: unknown[]) => m[0] === "EVENT");
+
+    // 元のイベント (id: aaaa) のみが存在する
+    assertEquals(eventMsgs.length, 1);
+    assertEquals((eventMsgs[0] as unknown[])[2] as { id: string }, {
+      ...existing,
+    });
+
+    ws.close();
+    await new Promise<void>((r) => {
+      ws.onclose = () => r();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - parameterized replaceable event with same timestamp and larger id is skipped", () => {
+  const pool = new MockPool();
+  const relay = pool.relay(
+    "wss://relay.param-replaceable-same-ts.example.com",
+  );
+
+  const pubkey = "pub-param-replaceable-test";
+  // kind:30000 は parameterized replaceable
+  const existing = makeEvent({
+    id: "aaaa-param",
+    pubkey,
+    kind: 30000,
+    created_at: 1700000000,
+    tags: [["d", "same-dtag"]],
+  });
+  relay.store(existing);
+
+  // 同じ created_at と d-tag で id が大きい
+  const newer = makeEvent({
+    id: "zzzz-param",
+    pubkey,
+    kind: 30000,
+    created_at: 1700000000,
+    tags: [["d", "same-dtag"]],
+  });
+  const stored = relay.store(newer);
+  assertEquals(
+    stored,
+    false,
+    "parameterized replaceable event with same timestamp and larger id should not be stored",
+  );
+});

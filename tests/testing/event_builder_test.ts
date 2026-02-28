@@ -956,3 +956,102 @@ Deno.test("EventBuilder.buildWith() - overrides manually set pubkey", async () =
     .buildWith(signer);
   assertEquals(event.pubkey, "signer-pubkey");
 });
+
+// ===== corrupt created_at =====
+
+Deno.test("EventBuilder.corrupt() - created_at: true sets created_at to -1", () => {
+  const event = EventBuilder.kind1().corrupt({ created_at: true }).build();
+  assertEquals(event.created_at, -1);
+});
+
+// ===== timeline with pubkey and kind =====
+
+Deno.test("EventBuilder.timeline() - with pubkey and kind options", () => {
+  const events = EventBuilder.timeline(3, { pubkey: "abc", kind: 7 });
+  assertEquals(events.length, 3);
+  for (const event of events) {
+    assertEquals(event.pubkey, "abc");
+    assertEquals(event.kind, 7);
+  }
+});
+
+// ===== matchFilter with ids =====
+
+Deno.test("EventBuilder.matchFilter() - ids prefix match", () => {
+  const event = EventBuilder.matchFilter({ ids: ["abc123"] });
+  assertEquals(event.id.startsWith("abc123"), true);
+});
+
+// ===== matchFilter with tag filters =====
+
+Deno.test("EventBuilder.matchFilter() - tag filter #e contains eventid1", () => {
+  const event = EventBuilder.matchFilter({ "#e": ["eventid1"] });
+  const hasTag = event.tags.some((t) => t[0] === "e" && t[1] === "eventid1");
+  assertEquals(hasTag, true);
+});
+
+// ===== matchFilter with search =====
+
+Deno.test("EventBuilder.matchFilter() - search keyword in content", () => {
+  const event = EventBuilder.matchFilter({ search: "keyword" });
+  assertEquals(event.content.includes("keyword"), true);
+});
+
+// ===== repost with relayUrl =====
+
+Deno.test("EventBuilder.repost() - relayUrl in e tag third element", () => {
+  const target = EventBuilder.kind1().build();
+  const event = EventBuilder.repost(target, "wss://relay.example.com").build();
+  const eTag = event.tags.find((t) => t[0] === "e" && t[1] === target.id);
+  assertNotEquals(eTag, undefined);
+  assertEquals(eTag![2], "wss://relay.example.com");
+});
+
+// ===== longFormDraft with all options =====
+
+Deno.test("EventBuilder.longFormDraft() - with all options sets all tags", () => {
+  const event = EventBuilder.longFormDraft({
+    identifier: "id",
+    title: "t",
+    content: "c",
+    summary: "s",
+    image: "i",
+    publishedAt: 123,
+    hashtags: ["nostr"],
+  }).build();
+
+  assertEquals(event.kind, 30024);
+  assertEquals(event.tags.some((t) => t[0] === "d" && t[1] === "id"), true);
+  assertEquals(event.tags.some((t) => t[0] === "title" && t[1] === "t"), true);
+  assertEquals(
+    event.tags.some((t) => t[0] === "summary" && t[1] === "s"),
+    true,
+  );
+  assertEquals(event.tags.some((t) => t[0] === "image" && t[1] === "i"), true);
+  assertEquals(
+    event.tags.some((t) => t[0] === "published_at" && t[1] === "123"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "t" && t[1] === "nostr"),
+    true,
+  );
+});
+
+// ===== bookmarks with addresses and words =====
+
+Deno.test("EventBuilder.bookmarks() - addresses and words tags included", () => {
+  const event = EventBuilder.bookmarks({
+    addresses: ["30023:pk:d"],
+    words: ["bitcoin"],
+  }).build();
+
+  assertEquals(
+    event.tags.some((t) => t[0] === "a" && t[1] === "30023:pk:d"),
+    true,
+  );
+  assertEquals(
+    event.tags.some((t) => t[0] === "word" && t[1] === "bitcoin"),
+    true,
+  );
+});

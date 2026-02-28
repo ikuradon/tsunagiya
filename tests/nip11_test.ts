@@ -361,3 +361,92 @@ Deno.test("NIP-11 - fetch with Headers object", async () => {
     pool.uninstall();
   }
 });
+
+Deno.test("NIP-11 fetch with Request object - Request itself carries Accept header", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://req-object.example.com");
+  relay.setInfo({
+    name: "Request Object Relay",
+    supported_nips: [1, 11],
+  });
+
+  pool.install();
+  try {
+    const request = new Request("https://req-object.example.com", {
+      headers: { "Accept": "application/nostr+json" },
+    });
+    const response = await fetch(request);
+
+    assertEquals(response.status, 200);
+    assertEquals(
+      response.headers.get("Content-Type"),
+      "application/nostr+json",
+    );
+
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Request Object Relay");
+    assertEquals(info.supported_nips, [1, 11]);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 fetch with URL object - URL as first argument", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://url-object.example.com");
+  relay.setInfo({
+    name: "URL Object Relay",
+    supported_nips: [1, 11, 42],
+  });
+
+  pool.install();
+  try {
+    const url = new URL("https://url-object.example.com");
+    const response = await fetch(url, {
+      headers: { "Accept": "application/nostr+json" },
+    });
+
+    assertEquals(response.status, 200);
+    assertEquals(
+      response.headers.get("Content-Type"),
+      "application/nostr+json",
+    );
+
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "URL Object Relay");
+    assertEquals(info.supported_nips, [1, 11, 42]);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 fetch with Record format headers", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://record-headers.example.com");
+  relay.setInfo({
+    name: "Record Headers Relay",
+    supported_nips: [1, 11],
+    software: "https://example.com/relay",
+    version: "2.0.0",
+  });
+
+  pool.install();
+  try {
+    const response = await fetch("https://record-headers.example.com", {
+      headers: { "Accept": "application/nostr+json" },
+    });
+
+    assertEquals(response.status, 200);
+    assertEquals(
+      response.headers.get("Content-Type"),
+      "application/nostr+json",
+    );
+
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Record Headers Relay");
+    assertEquals(info.software, "https://example.com/relay");
+    assertEquals(info.version, "2.0.0");
+  } finally {
+    pool.uninstall();
+  }
+});

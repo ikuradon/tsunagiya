@@ -440,3 +440,110 @@ Deno.test("assertReceivedREQ - matches tag filters", async () => {
     pool.uninstall();
   }
 });
+
+// ===== assertReceivedREQ with various filter fields =====
+
+Deno.test("assertReceivedREQ - matches authors filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay2.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay2.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { authors: ["pk1"] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertReceivedREQ(relay, { authors: ["pk1"] });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - matches ids filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay3.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay3.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { ids: ["eventid1"] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertReceivedREQ(relay, { ids: ["eventid1"] });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - matches since filter field", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay4.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay4.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { since: 1700000000 }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertReceivedREQ(relay, { since: 1700000000 });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - matches limit filter field", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay5.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay5.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { limit: 10 }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertReceivedREQ(relay, { limit: 10 });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("assertReceivedREQ - matches #e tag filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay6.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay6.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { "#e": ["eventref1"] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertReceivedREQ(relay, { "#e": ["eventref1"] });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});

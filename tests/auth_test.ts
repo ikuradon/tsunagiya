@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
+import { AuthState } from "../src/auth.ts";
 import type { AuthContext, NostrEvent } from "../src/types.ts";
 
 function makeAuthEvent(
@@ -650,6 +651,57 @@ Deno.test("NIP-42 AUTH - sends challenge to existing connection on requireAuth",
     await new Promise<void>((resolve) => {
       ws.onclose = () => resolve();
     });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== AuthState - handleAuthResponse without challenge =====
+
+Deno.test("AuthState - handleAuthResponse without challenge returns auth-required error", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://authstate.relay.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://authstate.relay.com");
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    // AuthState を直接インスタンス化してテスト
+    // sendChallenge を呼ばずに handleAuthResponse を呼ぶ
+    const authState = new AuthState();
+    const mockWs = new WebSocket("wss://authstate.relay.com");
+    await new Promise<void>((resolve) => {
+      mockWs.onopen = () => resolve();
+    });
+
+    const dummyEvent: NostrEvent = {
+      id: "test-id",
+      pubkey: "pub1",
+      kind: 22242,
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["relay", "wss://authstate.relay.com"],
+        ["challenge", "dummy-challenge"],
+      ],
+      sig: "sig1",
+    };
+
+    // sendChallenge を呼ばずに handleAuthResponse を直接呼ぶ
+    // MockWebSocket 型が必要なため、AuthState を単体でテストするため型キャストを行う
+    const result = await authState.handleAuthResponse(
+      mockWs as unknown as Parameters<typeof authState.handleAuthResponse>[0],
+      dummyEvent,
+      "wss://authstate.relay.com",
+    );
+
+    assertEquals(result[0], false);
+    assertEquals(result[1], "auth-required: no challenge issued");
+
+    ws.close();
+    mockWs.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
   } finally {
     pool.uninstall();
   }

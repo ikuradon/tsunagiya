@@ -184,3 +184,35 @@ Deno.test("FilterBuilder - combine", async (t) => {
     assertEquals(filter.limit, 50);
   });
 });
+
+// ===== combine merges tag filters =====
+
+Deno.test("FilterBuilder.combine() - merges tag filters from multiple filters", () => {
+  const filter = FilterBuilder.combine(
+    { kinds: [1], "#e": ["id1"] },
+    { kinds: [1], "#e": ["id2"], "#p": ["pk1"] },
+  );
+
+  const eValues = filter["#e"]!;
+  assertEquals(eValues.includes("id1"), true);
+  assertEquals(eValues.includes("id2"), true);
+  // 重複なし
+  assertEquals(eValues.filter((v) => v === "id1").length, 1);
+  assertEquals(eValues.filter((v) => v === "id2").length, 1);
+
+  const pValues = filter["#p"]!;
+  assertEquals(pValues, ["pk1"]);
+});
+
+Deno.test("FilterBuilder.combine() - deduplicates tag values", () => {
+  const filter = FilterBuilder.combine(
+    { "#e": ["id1", "id2"] },
+    { "#e": ["id2", "id3"] },
+  );
+
+  const eValues = filter["#e"]!;
+  // 重複するid2が1件のみ
+  assertEquals(eValues.filter((v) => v === "id2").length, 1);
+  assertEquals(eValues.includes("id1"), true);
+  assertEquals(eValues.includes("id3"), true);
+});
