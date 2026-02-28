@@ -39,6 +39,7 @@ export class MockWebSocket extends EventTarget {
   #readyState: number = WebSocketReadyState.CONNECTING;
   #relay: MockRelay | undefined;
   #connectionTimer: ReturnType<typeof setTimeout> | undefined;
+  #openTimer: ReturnType<typeof setTimeout> | undefined;
 
   onopen: ((ev: Event) => void) | null = null;
   onclose: ((ev: CloseEvent) => void) | null = null;
@@ -84,6 +85,8 @@ export class MockWebSocket extends EventTarget {
       this.#connectionTimer = setTimeout(() => {
         this.#connectionTimer = undefined;
         if (this.#readyState === WebSocketReadyState.CONNECTING) {
+          clearTimeout(this.#openTimer);
+          this.#openTimer = undefined;
           this.#relay?._unregisterConnection(this);
           this.#fireError();
           this.#fireClose(1006, "Connection timeout");
@@ -96,7 +99,9 @@ export class MockWebSocket extends EventTarget {
   }
 
   #scheduleOpen(): void {
-    queueMicrotask(() => {
+    const delay = this.#relay?.options.connectionDelay ?? 0;
+    const doOpen = () => {
+      this.#openTimer = undefined;
       if (this.#readyState !== WebSocketReadyState.CONNECTING) return;
       this.#readyState = WebSocketReadyState.OPEN;
 
@@ -112,7 +117,12 @@ export class MockWebSocket extends EventTarget {
 
       // リレーの接続後処理
       this.#relay?._handleOpen(this);
-    });
+    };
+    if (delay > 0) {
+      this.#openTimer = setTimeout(doOpen, delay);
+    } else {
+      queueMicrotask(doOpen);
+    }
   }
 
   get readyState(): number {

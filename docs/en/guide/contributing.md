@@ -13,7 +13,7 @@ for contributing to tsunagiya.
 
 ### Requirements
 
-- **Deno v1.40 or higher**
+- **Deno v2.x**
 
 Check your installed version:
 
@@ -129,12 +129,12 @@ flowchart TD
 ### Deno
 
 ```bash
-deno task test    # Run all tests (uses the -A flag for full permissions)
+deno task test      # Run unit tests (excludes examples/)
+deno task test:all  # Run all tests (unit + E2E)
 ```
 
-The `test` task in `deno.json` passes `-A` (all permissions) to Deno. If you
-need stricter permission control, specify flags such as
-`--allow-net --allow-read` explicitly.
+`deno task test` runs unit tests under `tests/`. `deno task test:all` runs all
+tests including E2E tests under `examples/`.
 
 ### Node.js Compatibility
 

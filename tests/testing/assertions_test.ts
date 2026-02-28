@@ -527,6 +527,104 @@ Deno.test("assertReceivedREQ - matches limit filter field", async () => {
   }
 });
 
+// ===== failure path: no REQs at all =====
+
+Deno.test("assertReceivedREQ - throws when no REQs received at all", () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  assertThrows(
+    () => assertReceivedREQ(relay, { kinds: [1] }),
+    Error,
+    "Received 0 REQ(s)",
+  );
+});
+
+// ===== failure path: assertEventPublished with other events present =====
+
+Deno.test("assertEventPublished - throws when other events exist but not the target", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const event = EventBuilder.kind1().id("other-event").build();
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertThrows(
+      () => assertEventPublished(relay, "missing-event"),
+      Error,
+      "Expected EVENT",
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== failure path: assertClosed with wrong subscription ID =====
+
+Deno.test("assertClosed - throws when different subscription closed", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["CLOSE", "sub1"]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertThrows(
+      () => assertClosed(relay, "sub2"),
+      Error,
+      'Expected CLOSE for subscription "sub2"',
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+// ===== failure path: assertReceived with messages present but predicate fails =====
+
+Deno.test("assertReceived - throws when predicate fails with messages present", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    assertThrows(
+      () =>
+        assertReceived(relay, (messages) => {
+          return messages.some((m) => m[0] === "EVENT");
+        }),
+      Error,
+      "Custom assertion failed",
+    );
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("assertReceivedREQ - matches #e tag filter", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay6.example.com");

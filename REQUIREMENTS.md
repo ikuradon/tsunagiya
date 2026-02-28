@@ -88,7 +88,6 @@ relay.requireAuth((authEvent) => {
 relay.disconnect(); // 即座に切断
 relay.disconnectAfter(3000); // 3秒後に切断
 relay.refuse(); // 接続拒否モード
-relay.sendError("error message"); // NOTICEを送信
 
 // 検証
 relay.received; // 全受信メッセージ（生データ）
@@ -113,10 +112,12 @@ interface MockRelayOptions {
   disconnectRate?: number;
   /** 接続タイムアウト (ms)。設定するとタイムアウトをシミュレート */
   connectionTimeout?: number;
-  /** 再接続遅延 (ms) */
-  reconnectDelay?: number;
+  /** 接続遅延 (ms)。設定すると接続完了を遅延させる */
+  connectionDelay?: number;
   /** 接続時にAUTH要求するか */
   requiresAuth?: boolean;
+  /** イベント署名検証 */
+  verifier?: EventVerifier;
   /** ログ出力 */
   logging?: boolean | LogHandler;
 }

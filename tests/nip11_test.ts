@@ -450,3 +450,41 @@ Deno.test("NIP-11 fetch with Record format headers", async () => {
     pool.uninstall();
   }
 });
+
+// ===== NIP-11 Accept ヘッダー case-insensitive =====
+
+Deno.test("NIP-11 fetch - intercepts with uppercase Accept header", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Case Test Relay" });
+
+  pool.install();
+  try {
+    const response = await fetch("https://relay.example.com", {
+      headers: { "Accept": "APPLICATION/NOSTR+JSON" },
+    });
+
+    assertEquals(response.status, 200);
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Case Test Relay");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-11 fetch - intercepts with mixed-case Accept header", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com").setInfo({ name: "Mixed Case Relay" });
+
+  pool.install();
+  try {
+    const response = await fetch("https://relay.example.com", {
+      headers: { "Accept": "Application/Nostr+Json" },
+    });
+
+    assertEquals(response.status, 200);
+    const info: RelayInformation = await response.json();
+    assertEquals(info.name, "Mixed Case Relay");
+  } finally {
+    pool.uninstall();
+  }
+});

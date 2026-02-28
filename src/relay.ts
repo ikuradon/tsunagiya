@@ -285,7 +285,7 @@ export class MockRelay {
     for (const subscriptions of this.#subscriptions.values()) {
       for (const [subId, filters] of subscriptions) {
         if (!result.has(subId)) {
-          result.set(subId, filters);
+          result.set(subId, [...filters]);
         }
       }
     }
@@ -634,9 +634,16 @@ export class MockRelay {
       }
       const type = raw[0];
       if (type === "EVENT") {
+        const ev = raw[1] as Record<string, unknown>;
         if (
           raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null ||
-          typeof (raw[1] as Record<string, unknown>).id !== "string"
+          typeof ev.id !== "string" ||
+          typeof ev.pubkey !== "string" ||
+          typeof ev.created_at !== "number" ||
+          typeof ev.kind !== "number" ||
+          !Array.isArray(ev.tags) ||
+          typeof ev.content !== "string" ||
+          typeof ev.sig !== "string"
         ) {
           this.#errors.push("error: malformed EVENT message");
           const notice: RelayMessage = [
@@ -655,6 +662,31 @@ export class MockRelay {
           ];
           this.#sendWithLatency(ws, notice);
           return;
+        }
+        if (raw.length < 3) {
+          this.#errors.push(`error: ${type} requires at least one filter`);
+          const notice: RelayMessage = [
+            "NOTICE",
+            `error: ${type} requires at least one filter`,
+          ];
+          this.#sendWithLatency(ws, notice);
+          return;
+        }
+        for (let i = 2; i < raw.length; i++) {
+          if (
+            typeof raw[i] !== "object" || raw[i] === null ||
+            Array.isArray(raw[i])
+          ) {
+            this.#errors.push(
+              `error: ${type} filter[${i - 2}] must be an object`,
+            );
+            const notice: RelayMessage = [
+              "NOTICE",
+              `error: ${type} filter[${i - 2}] must be an object`,
+            ];
+            this.#sendWithLatency(ws, notice);
+            return;
+          }
         }
       } else if (type === "CLOSE") {
         if (raw.length < 2 || typeof raw[1] !== "string") {

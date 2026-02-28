@@ -1,8 +1,8 @@
 name: Publish
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   publish:
@@ -11,12 +11,12 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: denoland/setup-deno@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
         with:
           deno-version: v2.7.1
       - run: deno task check
-      - run: deno task test
+      - run: deno task test:all
       - name: Check not a dev version
         run: |
           VERSION=$(deno eval "import denoJson from './deno.json' with { type: 'json' }; console.log(denoJson.version)")

@@ -62,11 +62,11 @@ function isNip11Request(
   // init.headers があればそちらを優先（fetch の仕様: init が request をオーバーライド）
   if (init?.headers) {
     const accept = getHeaderValue(init.headers, "accept") ?? "";
-    return accept.includes("application/nostr+json");
+    return accept.toLowerCase().includes("application/nostr+json");
   }
   if (request instanceof Request) {
     const accept = request.headers.get("Accept") ?? "";
-    return accept.includes("application/nostr+json");
+    return accept.toLowerCase().includes("application/nostr+json");
   }
   return false;
 }

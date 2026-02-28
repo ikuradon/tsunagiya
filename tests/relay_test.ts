@@ -412,6 +412,162 @@ Deno.test("MockRelay - handles malformed REQ and CLOSE messages without crash", 
   }
 });
 
+Deno.test("MockRelay - rejects REQ and COUNT with invalid filter types", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const invalidMessages: unknown[] = [
+      // フィルターが数値
+      ["REQ", "s", 1],
+      // フィルターが null
+      ["REQ", "s", null],
+      // フィルターが配列
+      ["REQ", "s", [1]],
+      // フィルター0件
+      ["REQ", "s"],
+      // COUNT でも同様
+      ["COUNT", "s", 1],
+      ["COUNT", "s", null],
+      ["COUNT", "s", [1]],
+      ["COUNT", "s"],
+    ];
+
+    for (const msg of invalidMessages) {
+      const ws = await openWs("wss://relay.example.com");
+      const messages = collectMessages(ws);
+
+      ws.send(JSON.stringify(msg));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+      assertEquals(
+        ws.readyState,
+        WebSocket.OPEN,
+        `connection should stay open for: ${JSON.stringify(msg)}`,
+      );
+      assert(
+        messages.length >= 1,
+        `should receive NOTICE for: ${JSON.stringify(msg)}`,
+      );
+      const notice = JSON.parse(messages[0]);
+      assertEquals(notice[0], "NOTICE");
+
+      ws.close();
+      await new Promise<void>((resolve) => {
+        ws.onclose = () => resolve();
+      });
+    }
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects EVENT with missing or invalid fields", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const invalidEvents: unknown[] = [
+      // pubkey欠落
+      ["EVENT", {
+        id: "abc",
+        created_at: 0,
+        kind: 1,
+        tags: [],
+        content: "",
+        sig: "sig",
+      }],
+      // created_at非number
+      [
+        "EVENT",
+        {
+          id: "abc",
+          pubkey: "pk",
+          created_at: "not-a-number",
+          kind: 1,
+          tags: [],
+          content: "",
+          sig: "sig",
+        },
+      ],
+      // kind非number
+      [
+        "EVENT",
+        {
+          id: "abc",
+          pubkey: "pk",
+          created_at: 0,
+          kind: "1",
+          tags: [],
+          content: "",
+          sig: "sig",
+        },
+      ],
+      // tags非配列
+      [
+        "EVENT",
+        {
+          id: "abc",
+          pubkey: "pk",
+          created_at: 0,
+          kind: 1,
+          tags: "not-array",
+          content: "",
+          sig: "sig",
+        },
+      ],
+      // content欠落
+      ["EVENT", {
+        id: "abc",
+        pubkey: "pk",
+        created_at: 0,
+        kind: 1,
+        tags: [],
+        sig: "sig",
+      }],
+      // sig欠落
+      ["EVENT", {
+        id: "abc",
+        pubkey: "pk",
+        created_at: 0,
+        kind: 1,
+        tags: [],
+        content: "",
+      }],
+    ];
+
+    for (const msg of invalidEvents) {
+      const ws = await openWs("wss://relay.example.com");
+      const messages = collectMessages(ws);
+
+      ws.send(JSON.stringify(msg));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+      assertEquals(
+        ws.readyState,
+        WebSocket.OPEN,
+        `connection should stay open for: ${JSON.stringify(msg)}`,
+      );
+      assert(
+        messages.length >= 1,
+        `should receive NOTICE for: ${JSON.stringify(msg)}`,
+      );
+      const notice = JSON.parse(messages[0]);
+      assertEquals(notice[0], "NOTICE");
+      assertEquals(notice[1], "error: malformed EVENT message");
+
+      ws.close();
+      await new Promise<void>((resolve) => {
+        ws.onclose = () => resolve();
+      });
+    }
+  } finally {
+    pool.uninstall();
+  }
+});
+
 // ===== 回帰テスト: Issue 3 - store(kind:5) で削除処理が走る =====
 
 Deno.test("MockRelay - manages multiple connections and handles partial disconnect", async () => {

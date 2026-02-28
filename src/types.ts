@@ -125,6 +125,8 @@ export interface MockRelayOptions {
   disconnectRate?: number;
   /** 接続タイムアウト (ms) */
   connectionTimeout?: number;
+  /** 接続遅延 (ms) */
+  connectionDelay?: number;
   /** 接続時にAUTH要求するか */
   requiresAuth?: boolean;
   /** ログ出力 */

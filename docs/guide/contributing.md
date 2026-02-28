@@ -10,10 +10,10 @@ outline: deep
 
 ## 開発環境セットアップ
 
-**Deno v1.40 以上**が必要です。
+**Deno v2.x**が必要です。
 
 ```bash
-deno --version  # v1.40 以上であることを確認
+deno --version  # v2.x であることを確認
 ```
 
 セットアップ後、動作確認を行います。
@@ -122,12 +122,13 @@ flowchart TD
 ### Deno
 
 ```bash
-deno task test  # 全テスト実行（-A フラグで全パーミッション付与）
+deno task test      # ユニットテスト実行（examples/ を除外）
+deno task test:all  # 全テスト実行（ユニット + E2E）
 ```
 
-Deno テストは `deno.json` の `test` タスク定義で
-`-A`（全パーミッション）フラグを使用しています。個別パーミッションを指定する場合は
-`--allow-net --allow-read` 等を明示してください。
+`deno task test` は `tests/` 配下のユニットテストを実行します。
+`deno task test:all` は `examples/` 配下の E2E
+テストも含めた全テストを実行します。
 
 ### Node.js 互換モード
 

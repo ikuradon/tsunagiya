@@ -208,6 +208,31 @@ Deno.test("MockWebSocket - protocol property with array", async () => {
   }
 });
 
+Deno.test("MockWebSocket - protocol property with empty array", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.protocol-empty.example.com");
+  pool.install();
+
+  try {
+    const ws = new WebSocket(
+      "wss://relay.protocol-empty.example.com",
+      [],
+    );
+    assertEquals(ws.protocol, "");
+
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("MockWebSocket - send non-string throws", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.send-non-string.example.com");
@@ -283,14 +308,11 @@ Deno.test("MockWebSocket - onerror callback fires on refused connection", async 
 
 Deno.test("MockWebSocket - connectionTimeout fires with close code 1006", async () => {
   const pool = new MockPool();
-  // connectionTimeout を設定したリレーを登録するが、refuse は使わない。
-  // scheduleOpen は queueMicrotask で実行されるが、
-  // テストでは close イベントが code 1006 で発火することを確認する。
-  // refuse() 使用時も同じく code 1006 で閉じる。
-  const relay = pool.relay("wss://relay.connection-timeout.example.com", {
+  // connectionDelay > connectionTimeout なので timeout が先に発火する
+  pool.relay("wss://relay.connection-timeout.example.com", {
+    connectionDelay: 200,
     connectionTimeout: 50,
   });
-  relay.refuse();
   pool.install();
 
   try {
@@ -301,6 +323,35 @@ Deno.test("MockWebSocket - connectionTimeout fires with close code 1006", async 
     });
 
     assertEquals(closeEvent.code, 1006);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockWebSocket - connectionDelay within timeout opens successfully", async () => {
+  const pool = new MockPool();
+  // connectionDelay < connectionTimeout なので open が先に発火する
+  pool.relay("wss://relay.connection-delay.example.com", {
+    connectionDelay: 10,
+    connectionTimeout: 200,
+  });
+  pool.install();
+
+  try {
+    const ws = new WebSocket("wss://relay.connection-delay.example.com");
+
+    const opened = await new Promise<boolean>((resolve) => {
+      ws.onopen = () => resolve(true);
+      ws.onerror = () => resolve(false);
+    });
+
+    assertEquals(opened, true);
+    assertEquals(ws.readyState, WebSocketReadyState.OPEN);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
   } finally {
     pool.uninstall();
   }

@@ -59,8 +59,10 @@ interface MockRelayOptions {
   errorRate?: number; // 0.0 - 1.0
   disconnectRate?: number; // 0.0 - 1.0
   connectionTimeout?: number; // ms
+  connectionDelay?: number; // ms（接続遅延シミュレート）
   requiresAuth?: boolean;
   logging?: boolean | LogHandler;
+  verifier?: EventVerifier; // イベント署名検証
 }
 ```
 
@@ -115,4 +117,35 @@ LogLevel:
 
 ```typescript
 type LogLevel = "silent" | "error" | "info" | "debug" | "trace";
+```
+
+UnsignedEvent:
+
+```typescript
+interface UnsignedEvent {
+  pubkey: string; // 公開鍵 (64文字hex)
+  created_at: number; // UNIXタイムスタンプ (秒)
+  kind: number; // イベント種別
+  tags: string[][]; // タグ配列
+  content: string; // コンテンツ文字列
+}
+```
+
+EventSigner:
+
+```typescript
+interface EventSigner {
+  getPublicKey(): string | Promise<string>;
+  signEvent(
+    event: UnsignedEvent,
+  ): { id: string; sig: string } | Promise<{ id: string; sig: string }>;
+}
+```
+
+EventVerifier:
+
+```typescript
+interface EventVerifier {
+  verifyEvent(event: NostrEvent): boolean | Promise<boolean>;
+}
 ```

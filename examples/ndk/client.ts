@@ -14,6 +14,7 @@
  */
 
 import { generateSecretKey, getPublicKey } from "nostr-tools/pure";
+import type { NDKFilter } from "@nostr-dev-kit/ndk";
 
 // NDK のトップレベル dynamic import
 // テスト時は bootstrap パターンにより MockWebSocket が使われる
@@ -247,8 +248,11 @@ export async function search(
       timeout,
     );
     // NIP-50: search フィルターを直接構築
-    // deno-lint-ignore no-explicit-any
-    const sub = ndk.subscribe({ kinds: [1], search: keyword } as any);
+    const sub = ndk.subscribe(
+      { kinds: [1], search: keyword } as unknown as NDKFilter & {
+        search: string;
+      },
+    );
     sub.on("event", (ev: NDKEvent) => received.push(ev));
     sub.on("eose", () => {
       clearTimeout(timer);

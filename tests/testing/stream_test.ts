@@ -399,6 +399,62 @@ Deno.test("startStream - with jitter option operates normally", async () => {
   }
 });
 
+Deno.test("streamEvents - ephemeral events are broadcast but not stored", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    // ephemeral event (kind 20000-29999) にマッチするサブスクリプション
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [20000] }]));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+    const messages = collectMessages(ws);
+
+    // ephemeral event をストリーム
+    const ephemeralEvents: NostrEvent[] = [
+      {
+        id: "eph1",
+        pubkey: "pub1",
+        kind: 20000,
+        content: "ephemeral 1",
+        created_at: 1700000000,
+        tags: [],
+        sig: "sig1",
+      },
+      {
+        id: "eph2",
+        pubkey: "pub1",
+        kind: 20000,
+        content: "ephemeral 2",
+        created_at: 1700000001,
+        tags: [],
+        sig: "sig2",
+      },
+    ];
+    const handle = streamEvents(relay, ephemeralEvents, { interval: 30 });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    handle.stop();
+
+    // ブロードキャストされている（EVENT メッセージを受信）
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 2);
+
+    // ストアには保存されていない（ephemeral はストアに残らない）
+    assertEquals(relay.hasEvent("eph1"), false);
+    assertEquals(relay.hasEvent("eph2"), false);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("streamEvents - delivers kind:5 EVENT only once", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
