@@ -650,3 +650,92 @@ Deno.test("MockRelay - clearOlderThan", async (t) => {
     assertEquals(deleted, 0);
   });
 });
+
+// ===== setVerifier =====
+
+Deno.test("MockRelay - setVerifier accepts valid events", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.verifier-accept.test");
+  relay.setVerifier({
+    verifyEvent: () => true,
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.verifier-accept.test");
+    const messages = collectMessages(ws);
+
+    const event = makeEvent({ id: "verified-ok" });
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const ok = messages.find((m) => {
+      const parsed = JSON.parse(m);
+      return parsed[0] === "OK" && parsed[1] === "verified-ok";
+    });
+    assert(ok);
+    const parsed = JSON.parse(ok);
+    assertEquals(parsed[2], true);
+    ws.close();
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - setVerifier rejects invalid events", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.verifier-reject.test");
+  relay.setVerifier({
+    verifyEvent: () => false,
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.verifier-reject.test");
+    const messages = collectMessages(ws);
+
+    const event = makeEvent({ id: "bad-sig" });
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const ok = messages.find((m) => {
+      const parsed = JSON.parse(m);
+      return parsed[0] === "OK" && parsed[1] === "bad-sig";
+    });
+    assert(ok);
+    const parsed = JSON.parse(ok);
+    assertEquals(parsed[2], false);
+    assert(parsed[3].includes("invalid"));
+    ws.close();
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - verifier via MockRelayOptions", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.verifier-opts.test", {
+    verifier: { verifyEvent: () => false },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.verifier-opts.test");
+    const messages = collectMessages(ws);
+
+    const event = makeEvent({ id: "opts-bad-sig" });
+    ws.send(JSON.stringify(["EVENT", event]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    const ok = messages.find((m) => {
+      const parsed = JSON.parse(m);
+      return parsed[0] === "OK" && parsed[1] === "opts-bad-sig";
+    });
+    assert(ok);
+    const parsed = JSON.parse(ok);
+    assertEquals(parsed[2], false);
+    ws.close();
+  } finally {
+    pool.uninstall();
+  }
+});

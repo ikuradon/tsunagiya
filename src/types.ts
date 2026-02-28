@@ -85,6 +85,36 @@ export interface LogEntry {
 /** ログハンドラー関数 */
 export type LogHandler = (entry: LogEntry) => void;
 
+/** 署名前のイベント（id / sig を含まない） */
+export interface UnsignedEvent {
+  /** 公開鍵 (64文字hex) */
+  pubkey: string;
+  /** UNIX タイムスタンプ (秒) */
+  created_at: number;
+  /** イベント種別 */
+  kind: number;
+  /** タグ配列 */
+  tags: string[][];
+  /** コンテンツ文字列 */
+  content: string;
+}
+
+/** イベント署名インターフェース */
+export interface EventSigner {
+  /** 公開鍵を返す */
+  getPublicKey(): string | Promise<string>;
+  /** イベントに署名し、id と sig を返す */
+  signEvent(
+    event: UnsignedEvent,
+  ): { id: string; sig: string } | Promise<{ id: string; sig: string }>;
+}
+
+/** イベント検証インターフェース */
+export interface EventVerifier {
+  /** イベントの署名を検証する */
+  verifyEvent(event: NostrEvent): boolean | Promise<boolean>;
+}
+
 /** MockRelayオプション */
 export interface MockRelayOptions {
   /** レイテンシ (ms) */
@@ -99,6 +129,8 @@ export interface MockRelayOptions {
   requiresAuth?: boolean;
   /** ログ出力 */
   logging?: boolean | LogHandler;
+  /** イベント署名検証 */
+  verifier?: EventVerifier;
 }
 
 /** WebSocket readyState 定数 */

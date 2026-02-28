@@ -8,7 +8,12 @@
  * @module
  */
 
-import type { NostrEvent, NostrFilter } from "../types.ts";
+import type {
+  EventSigner,
+  NostrEvent,
+  NostrFilter,
+  UnsignedEvent,
+} from "../types.ts";
 
 /** ランダムhex文字列を生成する */
 function randomHex(bytes: number): string {
@@ -342,6 +347,30 @@ export class EventBuilder {
       content: this.#content,
       sig: this.#sig,
     };
+  }
+
+  /**
+   * EventSigner を使用してイベントを署名し、NostrEvent を構築して返す
+   *
+   * @param signer イベント署名インターフェース
+   * @example
+   * ```ts
+   * const event = await EventBuilder.kind1()
+   *   .content("hello")
+   *   .buildWith(signer);
+   * ```
+   */
+  async buildWith(signer: EventSigner): Promise<NostrEvent> {
+    const pubkey = await signer.getPublicKey();
+    const unsigned: UnsignedEvent = {
+      pubkey,
+      created_at: this.#created_at,
+      kind: this.#kind,
+      tags: [...this.#tags.map((t) => [...t])],
+      content: this.#content,
+    };
+    const { id, sig } = await signer.signEvent(unsigned);
+    return { ...unsigned, id, sig };
   }
 
   // ===== スタティック ヘルパー =====

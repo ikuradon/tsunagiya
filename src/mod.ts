@@ -43,6 +43,8 @@ export type {
   ClientMessage,
   COUNTHandler,
   EVENTHandler,
+  EventSigner,
+  EventVerifier,
   LogEntry,
   LogHandler,
   LogLevel,
@@ -57,4 +59,5 @@ export type {
   StartStreamOptions,
   StreamHandle,
   StreamOptions,
+  UnsignedEvent,
 } from "./types.ts";

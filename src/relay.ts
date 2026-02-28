@@ -12,6 +12,7 @@ import type {
   ClientMessage,
   COUNTHandler,
   EVENTHandler,
+  EventVerifier,
   LogLevel,
   MockRelayOptions,
   NostrEvent,
@@ -68,11 +69,15 @@ export class MockRelay {
   #authResults: Array<{ eventId: string; accepted: boolean; message: string }> =
     [];
   #deletedIds: Set<string> = new Set();
+  #verifier: EventVerifier | null = null;
 
   constructor(url: string, options: MockRelayOptions = {}) {
     this.url = url;
     this.options = options;
     this.#logger = createLogger(options.logging);
+    if (options.verifier) {
+      this.#verifier = options.verifier;
+    }
   }
 
   // ===== NIP-11 リレー情報 =====
@@ -246,6 +251,16 @@ export class MockRelay {
       const msg = this.#authState.sendChallenge(ws);
       ws._receiveMessage(JSON.stringify(msg));
     }
+  }
+
+  /**
+   * イベント署名検証器を設定する
+   *
+   * 設定すると、クライアントから受信した EVENT メッセージの署名を検証する。
+   * 検証に失敗した場合は OK false を返し、ストアへの保存とブロードキャストはスキップされる。
+   */
+  setVerifier(verifier: EventVerifier): void {
+    this.#verifier = verifier;
   }
 
   // ===== 検証ヘルパー =====
@@ -519,6 +534,7 @@ export class MockRelay {
     this.#authResults = [];
     this.#deletedIds.clear();
     this.#info = {};
+    this.#verifier = null;
     for (const timer of this.#pendingTimers) {
       clearTimeout(timer);
     }
@@ -765,6 +781,18 @@ export class MockRelay {
 
   async #handleEvent(ws: MockWebSocket, event: NostrEvent): Promise<void> {
     let response: ["OK", string, boolean, string];
+
+    // verifier が設定されている場合、署名検証を行う
+    if (this.#verifier) {
+      const valid = await this.#verifier.verifyEvent(event);
+      if (!valid) {
+        const msg = "invalid: bad signature";
+        this.#errors.push(msg);
+        const ok: RelayMessage = ["OK", event.id, false, msg];
+        this.#sendWithLatency(ws, ok);
+        return;
+      }
+    }
 
     try {
       if (this.#eventHandler) {

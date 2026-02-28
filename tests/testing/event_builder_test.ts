@@ -6,6 +6,7 @@ import {
 } from "@std/assert";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { matchFilter } from "../../src/filter.ts";
+import type { EventSigner } from "../../src/types.ts";
 
 // ===== 基本ビルダー =====
 
@@ -910,4 +911,48 @@ Deno.test("EventBuilder - bulk シードオプション", async (t) => {
     assertEquals(events[0].pubkey, pubkey);
     assertEquals(events[1].pubkey, pubkey);
   });
+});
+
+// ===== buildWith =====
+
+Deno.test("EventBuilder.buildWith() - signs event with sync signer", async () => {
+  const signer: EventSigner = {
+    getPublicKey: () => "aabbcc",
+    signEvent: (event) => ({
+      id: "signed-id-" + event.kind,
+      sig: "signed-sig-" + event.kind,
+    }),
+  };
+  const event = await EventBuilder.kind1().content("signed").buildWith(signer);
+  assertEquals(event.pubkey, "aabbcc");
+  assertEquals(event.id, "signed-id-1");
+  assertEquals(event.sig, "signed-sig-1");
+  assertEquals(event.content, "signed");
+  assertEquals(event.kind, 1);
+});
+
+Deno.test("EventBuilder.buildWith() - signs event with async signer", async () => {
+  const signer: EventSigner = {
+    getPublicKey: () => Promise.resolve("async-pk"),
+    signEvent: (event) =>
+      Promise.resolve({
+        id: "async-id-" + event.content,
+        sig: "async-sig",
+      }),
+  };
+  const event = await EventBuilder.kind1().content("hello").buildWith(signer);
+  assertEquals(event.pubkey, "async-pk");
+  assertEquals(event.id, "async-id-hello");
+  assertEquals(event.sig, "async-sig");
+});
+
+Deno.test("EventBuilder.buildWith() - overrides manually set pubkey", async () => {
+  const signer: EventSigner = {
+    getPublicKey: () => "signer-pubkey",
+    signEvent: () => ({ id: "id1", sig: "sig1" }),
+  };
+  const event = await EventBuilder.kind1()
+    .pubkey("manual-pubkey")
+    .buildWith(signer);
+  assertEquals(event.pubkey, "signer-pubkey");
 });
