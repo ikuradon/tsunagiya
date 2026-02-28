@@ -4,8 +4,7 @@ outline: deep
 
 # NIP Support Status
 
-NIP (Nostr Implementation Possibilities) support status for tsunagiya
-v0.3.0-dev.
+NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.3.0.
 
 ---
 

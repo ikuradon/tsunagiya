@@ -72,8 +72,10 @@
 
 リレー側処理の拡充：
 
-1. **NIP-40** - Expiration Timestamp（リレー側処理：期限切れイベントの配信除外・受信拒否。EventBuilderは実装済み）
-2. **NIP-57** - Zaps フロー処理（リレー側の Zap Request → Receipt 連鎖。EventBuilderは実装済み）
+1. **NIP-40** - Expiration
+   Timestamp（リレー側処理：期限切れイベントの配信除外・受信拒否。EventBuilderは実装済み）
+2. **NIP-57** - Zaps フロー処理（リレー側の Zap Request → Receipt
+   連鎖。EventBuilderは実装済み）
 3. **NIP-28** - Public Chat（kind:40/41/42/43/44 チャンネルメッセージ）
 4. **NIP-70** - Protected Events（`-` タグによる保護イベントの再配信制限）
 5. **NIP-13** - PoW（Proof of Work：`min_pow` フィルターチェック）
@@ -97,7 +99,8 @@
 高度な同期・セキュリティ機能：
 
 7. **NIP-77** - Negentropy（同期プロトコル）
-8. **NIP-59** - Gift Wrap（リレー側処理：内部イベント非参照。EventBuilderは実装済み）
+8. **NIP-59** - Gift
+   Wrap（リレー側処理：内部イベント非参照。EventBuilderは実装済み）
 
 ---
 
