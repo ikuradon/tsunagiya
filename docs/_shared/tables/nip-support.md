@@ -11,6 +11,7 @@
 | NIP-25 | Reactions                             | EventBuilder withReactions / externalReaction                              |
 | NIP-29 | Relay-based Groups                    | EventBuilder テンプレート                                                  |
 | NIP-30 | Custom Emoji                          | EventBuilder emoji タグ                                                    |
+| NIP-40 | Expiration Timestamp                  | EventBuilder `withExpiration()`                                            |
 | NIP-42 | AUTH                                  | チャレンジ/レスポンス                                                      |
 | NIP-45 | COUNT                                 | COUNT メッセージ対応                                                       |
 | NIP-50 | Search                                | content 部分一致検索                                                       |

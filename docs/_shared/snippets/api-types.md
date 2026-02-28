@@ -83,6 +83,12 @@ interface RelaySnapshot {
   store: NostrEvent[]; // ストア内のイベント
   received: ClientMessage[]; // 受信メッセージログ
   deletedIds?: string[]; // 削除済みイベントID (NIP-09)
+  info?: RelayInformation; // リレー情報 (NIP-11)
+  metadata?: {
+    subscriptionCount: number; // サブスクリプション数
+    connectionCount: number; // 接続数
+    eventCount: number; // イベント数
+  };
 }
 ```
 
@@ -108,5 +114,5 @@ type COUNTHandler = (
 LogLevel:
 
 ```typescript
-type LogLevel = "silent" | "error" | "info" | "debug";
+type LogLevel = "silent" | "error" | "info" | "debug" | "trace";
 ```

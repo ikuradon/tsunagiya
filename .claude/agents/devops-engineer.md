@@ -35,13 +35,13 @@ permissionMode: bypassPermissions
 - `.github/workflows/ci.yml` — CI パイプライン（test, e2e, マルチランタイム）
 - `.github/workflows/publish.yml` — JSR 公開パイプライン
 - `.github/workflows/deploy-docs.yml` — VitePress ドキュメントデプロイ
-- `tests/e2e/e2e_client_test.ts` — クロスランタイム E2E
-  テスト（Deno/Node.js/Bun）
-- `tests/e2e/e2e_nostr_tools_test.ts` — nostr-tools 互換性テスト
-- `tests/e2e/e2e_ndk_test.ts` — NDK 互換性テスト
-- `tests/e2e/e2e_rx_nostr_test.ts` — rx-nostr 互換性テスト
 - `deno.json` — プロジェクト設定（tasks, imports, exports, publish）
-- `examples/client/` — サンプルクライアント（E2E テストで使用）
+- `examples/basic/` — raw WebSocket E2E テスト
+- `examples/nostr-tools/` — nostr-tools 互換性テスト
+- `examples/ndk/` — NDK 互換性テスト
+- `examples/rx-nostr/` — rx-nostr 互換性テスト
+- `examples/nostr-fetch/` — nostr-fetch 互換性テスト
+- `examples/_compat/` — クロスランタイム互換レイヤー
 
 ## コマンド
 
@@ -57,11 +57,13 @@ permissionMode: bypassPermissions
 
 ## CI/CD 構成
 
-- **test-deno**: Deno でのユニットテスト + lint + format
-- **test-node**: Node.js (20.x, 22.x) でのインポートテスト
+- **test-deno**: Deno (v1.x/v2.x) でのユニットテスト + lint + format +
+  カバレッジ
+- **test-node**: Node.js (18.x/20.x/22.x) でのインポートテスト
 - **test-bun**: Bun でのインポートテスト
-- **e2e**: Deno / Node.js / Bun でのクロスランタイム E2E テスト
-- **e2e-libraries**: nostr-tools / NDK / rx-nostr との互換性テスト
+- **e2e-libraries**: nostr-tools / NDK / rx-nostr / nostr-fetch の Deno E2E
+- **e2e-node**: Node.js での E2E ライブラリテスト
+- **e2e-bun**: Bun での E2E ライブラリテスト
 - **publish**: main ブランチへの push で JSR に自動公開
 
 ## 完了条件

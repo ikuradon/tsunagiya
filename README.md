@@ -52,10 +52,11 @@ Deno.test("fetch events from relay", async () => {
 - NIP-09 Event Deletion Request
 - NIP-11 リレー情報ドキュメント（setInfo/getInfo + fetch インターセプト）
 - NIP-17 Private Direct Messages（EventBuilder
-  chatMessage/seal/giftWrap/dmRelayList）
+  chatMessage/seal/giftWrap/dmRelayList/privateDM）
 - NIP-18 Reposts（EventBuilder repost/genericRepost）
 - NIP-23 Long-form Content（EventBuilder longFormContent/longFormDraft）
 - NIP-25 Reactions（EventBuilder withReactions/externalReaction）
+- NIP-40 Expiration Timestamp（EventBuilder `withExpiration()`）
 - NIP-51 Lists（EventBuilder
   muteList/pinList/bookmarks/followSet/relaySet/emojiSet）
 - NIP-65 Relay List Metadata（EventBuilder relayList）
@@ -427,6 +428,7 @@ deno task test:all            # ユニットテスト + E2E テスト
 | NIP-25 | Reactions                             | EventBuilder withReactions / externalReaction                              |
 | NIP-29 | Relay-based Groups                    | EventBuilder テンプレート                                                  |
 | NIP-30 | Custom Emoji                          | EventBuilder emoji タグ                                                    |
+| NIP-40 | Expiration Timestamp                  | EventBuilder `withExpiration()`                                            |
 | NIP-42 | AUTH                                  | チャレンジ/レスポンス                                                      |
 | NIP-45 | COUNT                                 | COUNT メッセージ対応                                                       |
 | NIP-50 | Search                                | content 部分一致検索                                                       |

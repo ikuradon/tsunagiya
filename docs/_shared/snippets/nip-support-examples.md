@@ -135,6 +135,13 @@ const dmList = EventBuilder.dmRelayList([
   "wss://dm.relay2.com",
 ]).build();
 
+// NIP-17: privateDM（chatMessage → seal → giftWrap を一括生成）
+const dm = EventBuilder.privateDM({
+  recipientPubkey: "recipient-pubkey",
+  content: "secret message",
+});
+// dm.kind === 1059 (Gift Wrap)
+
 // フィルター
 FilterBuilder.giftWraps("recipient-pubkey"); // { kinds: [1059], "#p": [...] }
 FilterBuilder.dmRelayList("pubkey"); // { kinds: [10050], authors: [...] }
@@ -414,4 +421,14 @@ const zap = EventBuilder.zapRequest({
   recipientPubkey: "recipient-pub",
 });
 // → kind: 9734
+```
+
+NIP-40 Expiration Timestamp:
+
+```typescript
+// NIP-40: Expiration Timestamp
+const event = EventBuilder.kind1()
+  .content("temporary message")
+  .withExpiration(Math.floor(Date.now() / 1000) + 3600) // 1時間後に期限切れ
+  .build();
 ```

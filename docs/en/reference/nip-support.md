@@ -54,10 +54,9 @@ v0.3.0-dev.
 
 ## Planned NIPs (v0.3.0 and later)
 
-| NIP    | Description          | Target Version | Overview                               |
-| ------ | -------------------- | -------------- | -------------------------------------- |
-| NIP-40 | Expiration Timestamp | v0.3.0         | `EventBuilder.withExpiration()` method |
-| NIP-94 | File Metadata        | v0.3.0         | Template for kind:1063                 |
+| NIP    | Description   | Target Version | Overview               |
+| ------ | ------------- | -------------- | ---------------------- |
+| NIP-94 | File Metadata | v0.3.0         | Template for kind:1063 |
 
 ---
 

@@ -12,8 +12,8 @@ permissionMode: bypassPermissions
 ## あなたの役割
 
 - 実装の変更に合わせてドキュメントを更新する
-- 公開APIの変更を API_REFERENCE.md に反映する
-- NIP対応の変更を NIP_SUPPORT.md に反映する
+- 公開APIの変更を `docs/reference/api.md` に反映する
+- NIP対応の変更を `docs/reference/nip-support.md` に反映する
 - README.md の使用例やセットアップ手順を最新に保つ
 
 ## チームメンバー

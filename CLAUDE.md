@@ -15,12 +15,15 @@ Nostrリレーのモックライブラリ。`globalThis.WebSocket`を差し替�
 ## コマンド
 
 ```bash
-deno task test          # テスト実行
-deno task check         # 型チェック + lint + format確認
-deno task fmt           # フォーマット
-deno publish --dry-run  # JSR公開プレビュー
-deno task docs:build    # VitePress ドキュメントビルド
-deno task docs:dev      # ドキュメント開発サーバー
+deno task test              # ユニットテスト実行
+deno task test:all          # 全テスト実行（ユニット + E2E）
+deno task check             # 型チェック + lint + format確認
+deno task fmt               # フォーマット
+deno task coverage          # テストカバレッジ測定
+deno task coverage:report   # カバレッジレポート (LCOV)
+deno publish --dry-run      # JSR公開プレビュー
+deno task docs:build        # VitePress ドキュメントビルド
+deno task docs:dev          # ドキュメント開発サーバー
 ```
 
 ## 開発ワークフロー
@@ -74,16 +77,30 @@ src/
 tests/
 ├── pool_test.ts
 ├── relay_test.ts
+├── relay_error_test.ts
 ├── websocket_test.ts
 ├── filter_test.ts
 ├── auth_test.ts
+├── event_kind_test.ts
+├── logger_test.ts
+├── nip09_test.ts
+├── nip11_test.ts
+├── nip16_test.ts
+├── nip33_test.ts
+├── nip45_test.ts
+├── nip50_test.ts
+├── nip_combined_integration_test.ts
 ├── integration_test.ts
+├── stream_snapshot_integration_test.ts
+├── performance_test.ts
 └── testing/
     ├── event_builder_test.ts
     ├── filter_builder_test.ts
     ├── assertions_test.ts
     ├── stream_test.ts
-    └── snapshot_test.ts
+    ├── snapshot_test.ts
+    ├── nip17_test.ts
+    └── nip51_test.ts
 
 examples/                  # E2E テスト兼ユーザー向け使用例
 ├── _compat/               # クロスランタイム互換レイヤー
@@ -115,7 +132,7 @@ examples/                  # E2E テスト兼ユーザー向け使用例
 - **NIP-11**: Relay Information Document（setInfo/getInfo + fetch
   インターセプト）
 - **NIP-17**: Private Direct Messages（EventBuilder
-  chatMessage/seal/giftWrap/dmRelayList）
+  chatMessage/seal/giftWrap/dmRelayList/privateDM）
 - **NIP-18**: Reposts（EventBuilder repost/genericRepost）
 - **NIP-23**: Long-form Content（EventBuilder longFormContent/longFormDraft）
 - **NIP-25**: Reactions（EventBuilder withReactions[options] +
@@ -129,6 +146,7 @@ examples/                  # E2E テスト兼ユーザー向け使用例
   muteList/pinList/bookmarks/followSet/relaySet/emojiSet）
 - **NIP-52**: Calendar Events（EventBuilder テンプレート — 全4種対応:
   Date/Time/Collection/RSVP）
+- **NIP-40**: Expiration Timestamp（EventBuilder withExpiration）
 - **NIP-57**: Lightning Zaps（EventBuilderテンプレート）
 - **NIP-65**: Relay List Metadata（EventBuilder relayList / FilterBuilder
   relayList）
@@ -137,13 +155,15 @@ examples/                  # E2E テスト兼ユーザー向け使用例
 
 - **EventBuilder**: テスト用イベント生成
   - 正常/壊れた/署名エラーのイベント
-  - バルク生成（bulk, timeline）
+  - バルク生成（bulk, timeline）、シード指定で決定論的生成
+  - クローン＋修正（from）、フィルターマッチ自動生成（matchFilter）
   - リレーションシップ（thread, withReactions）
-  - Common tags（geohash, e/p, emoji）
+  - Common tags（geohash, e/p, emoji, expiration）
   - NIP別テンプレート（metadata, contacts, DM, zap, repost, longForm, lists,
-    chatMessage等）
+    chatMessage, privateDM 等）
 - **FilterBuilder**:
-  よくあるフィルターパターン生成（NIP-17/18/23/25/51/52/65対応）
+  よくあるフィルターパターン生成（NIP-17/18/23/25/51/52/65対応）+
+  汎用メソッド（author, kind, since, tagged, combine）
 - **リアルタイムシミュレート**: streamEvents, startStream
 - **スナップショット**: relay.snapshot() / restore()
 - **アサーションヘルパー**: assertReceivedREQ, assertEventPublished等
@@ -164,25 +184,6 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
   `deno install` で `node_modules` 生成）
 - **デプロイ**: `.github/workflows/deploy-docs.yml` で `docs/**`
   変更時に自動デプロイ
-
-## 実装の優先順位
-
-1. **Phase 1: コア機能**
-   - MockPool, MockRelay, MockWebSocket
-   - NIP-01フィルターマッチング
-   - 基本的な検証ヘルパー
-2. **Phase 2: エラーシミュレート**
-   - 不安定性（レイテンシ揺れ、切断、エラー率）
-   - WebSocket 1006対応
-   - AUTH (NIP-42)
-3. **Phase 3: テスト支援ヘルパー**
-   - EventBuilder（基本機能）
-   - FilterBuilder
-   - アサーションヘルパー
-4. **Phase 4: 高度な機能**
-   - リアルタイムシミュレート
-   - スナップショット
-   - NIP別テンプレート拡充
 
 ## E2E テスト
 
@@ -211,7 +212,7 @@ VitePress による日英バイリンガルドキュメント。GitHub Pages で
 
 機能開発は以下の5ロールで分担する。director
 が設計判断と全体統括を担い、各ロールのチームメイトにタスクを割り当てる。エージェント定義は
-`.claude/agents/` に配置。tmux モードで各エージェントが分割ペインで動作する。
+`.claude/agents/` に配置。
 
 ### ロール定義
 
@@ -234,11 +235,15 @@ director（設計判断・統括）
   └─ 3. qa-engineer     → ドキュメント整合性検証
 ```
 
-### 並列実行可能な組み合わせ
+### 並列実行時の注意
 
-- `engineer` + `qa-engineer`（src/ と tests/ で分担）
-- `engineer` + `tech-writer`（ファイル競合しない場合）
+- `engineer` + `qa-engineer`（src/ と tests/ で分担）— ファイル競合なし
+- `engineer` + `tech-writer`（ファイル競合しない場合のみ）
 - `tech-writer` + `devops-engineer`（ファイル競合しない）
+- **`team_name` と `isolation: "worktree"` を同時に使わない** — `teammateMode`
+  が worktree isolation を上書きする場合がある。
+  チーム内エージェントはファイル分担で競合を防ぎ、worktree 隔離が必要な場合は
+  `team_name` なしの独立 Task で起動する
 
 ### 各ロールの完了条件
 

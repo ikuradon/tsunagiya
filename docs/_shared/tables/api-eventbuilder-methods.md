@@ -11,4 +11,5 @@
 | `corrupt(options: CorruptOptions)`      | フィールドを不正な値に置換           |
 | `geohash(hash: string)`                 | geohash タグ追加 (NIP-52)            |
 | `emoji(name: string, url: string)`      | emoji タグ追加 (NIP-30)              |
+| `withExpiration(timestamp: number)`     | NIP-40 有効期限タグを追加            |
 | `build()`                               | `NostrEvent` を構築して返す          |

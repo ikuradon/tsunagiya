@@ -32,6 +32,33 @@ const thread = EventBuilder.thread(5);
 const [post, reactions] = EventBuilder.withReactions(5);
 ```
 
+EventBuilder 拡張ヘルパー:
+
+```ts
+// 既存イベントの複製・修正
+const original = EventBuilder.kind1().content("hello").build();
+const modified = EventBuilder.from(original).content("world").build();
+
+// フィルターにマッチするイベントを自動生成
+const filter = { kinds: [1], authors: ["abc123"] };
+const event = EventBuilder.matchFilter(filter);
+
+// NIP-17 プライベートDM一括生成
+const dm = EventBuilder.privateDM({
+  recipientPubkey: "recipient-pubkey",
+  content: "secret message",
+});
+
+// NIP-40 有効期限付きイベント
+const expiring = EventBuilder.kind1()
+  .content("temporary")
+  .withExpiration(Math.floor(Date.now() / 1000) + 3600)
+  .build();
+
+// シード指定で決定論的バルク生成
+const events = EventBuilder.bulk(5, { seed: "test-seed" });
+```
+
 NIP-09 削除リクエスト:
 
 ```typescript
@@ -85,6 +112,19 @@ const broken = EventBuilder.kind1()
 FilterBuilder:
 
 ```typescript
+// 汎用フィルター
+const authorFilter = FilterBuilder.author("pubkey123");
+const kindFilter = FilterBuilder.kind(7);
+const sinceFilter = FilterBuilder.since(1700000000);
+const tagFilter = FilterBuilder.tagged("e", ["event1"]);
+
+// フィルターの結合
+const combined = FilterBuilder.combine(
+  { kinds: [1], since: 100 },
+  { kinds: [7], since: 200 },
+);
+// → { kinds: [1, 7], since: 200 }
+
 FilterBuilder.timeline({ limit: 20 });
 // → { kinds: [1], limit: 20 }
 
