@@ -25,16 +25,20 @@ v0.3.0-dev.
 
 ### Supported Messages
 
-| Message  | Direction      | Support                           |
-| -------- | -------------- | --------------------------------- |
-| `EVENT`  | client → relay | ✅ Receive, store, OK response    |
-| `REQ`    | client → relay | ✅ Filtering, EVENT/EOSE response |
-| `CLOSE`  | client → relay | ✅ Subscription cancellation      |
-| `EVENT`  | relay → client | ✅ Subscription delivery          |
-| `OK`     | relay → client | ✅ EVENT accept/reject            |
-| `EOSE`   | relay → client | ✅ End of stored events           |
-| `NOTICE` | relay → client | ✅ `sendNotice()`                 |
-| `AUTH`   | relay → client | ✅ NIP-42 challenge               |
+| Message  | Direction      | NIP    | Support                           |
+| -------- | -------------- | ------ | --------------------------------- |
+| `EVENT`  | client → relay | NIP-01 | ✅ Receive, store, OK response    |
+| `REQ`    | client → relay | NIP-01 | ✅ Filtering, EVENT/EOSE response |
+| `CLOSE`  | client → relay | NIP-01 | ✅ Subscription cancellation      |
+| `AUTH`   | client → relay | NIP-42 | ✅ AUTH response                  |
+| `COUNT`  | client → relay | NIP-45 | ✅ Count query                    |
+| `EVENT`  | relay → client | NIP-01 | ✅ Subscription delivery          |
+| `OK`     | relay → client | NIP-01 | ✅ EVENT accept/reject            |
+| `EOSE`   | relay → client | NIP-01 | ✅ End of stored events           |
+| `CLOSED` | relay → client | NIP-01 | ✅ Subscription terminated        |
+| `NOTICE` | relay → client | NIP-01 | ✅ `sendNotice()`                 |
+| `AUTH`   | relay → client | NIP-42 | ✅ Challenge                      |
+| `COUNT`  | relay → client | NIP-45 | ✅ Count result response          |
 
 ---
 
@@ -43,12 +47,15 @@ v0.3.0-dev.
 > NIP-16 (Event Treatment) and NIP-33 (Parameterized Replaceable Events →
 > Addressable Events) have been merged into NIP-01.
 
-| Type                                             | kind Range                             | Store Behavior                                                   |
-| ------------------------------------------------ | -------------------------------------- | ---------------------------------------------------------------- |
-| Regular                                          | 1-2, 4-9999, 40000+ (except kind 0, 3) | Added normally                                                   |
-| Replaceable                                      | 0, 3, 10000-19999                      | Old events with same kind+pubkey are deleted before adding       |
-| Ephemeral                                        | 20000-29999                            | Not stored                                                       |
-| Addressable (formerly Parameterized Replaceable) | 30000-39999                            | Old events with same kind+pubkey+d-tag are deleted before adding |
+| Type                                             | NIP-01 Defined kind Range | Store Behavior                                                   |
+| ------------------------------------------------ | ------------------------- | ---------------------------------------------------------------- |
+| Regular                                          | 1, 2, 4-44, 1000-9999     | Added normally                                                   |
+| Replaceable                                      | 0, 3, 10000-19999         | Old events with same kind+pubkey are deleted before adding       |
+| Ephemeral                                        | 20000-29999               | Not stored                                                       |
+| Addressable (formerly Parameterized Replaceable) | 30000-39999               | Old events with same kind+pubkey+d-tag are deleted before adding |
+
+> **Note:** Kinds not classified by NIP-01 (45-999, 40000+, etc.) are treated as
+> Regular by this library and stored normally.
 
 ---
 

@@ -120,8 +120,8 @@ examples/                  # E2E テスト兼ユーザー向け使用例
 
 ## NIP対応
 
-- **NIP-01**: 完全実装（EVENT, REQ, CLOSE, EOSE, OK, NOTICE + Event Treatment +
-  Addressable Events）
+- **NIP-01**: 完全実装（EVENT, REQ, CLOSE, EOSE, OK, CLOSED, NOTICE + Event
+  Treatment + Addressable Events）
   - 旧 NIP-16 (Event Treatment: Regular/Replaceable/Ephemeral) は NIP-01
     に統合済み
   - 旧 NIP-33 (Parameterized Replaceable → Addressable Events) は NIP-01

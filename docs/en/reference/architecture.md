@@ -302,9 +302,7 @@ flowchart TD
     R2 -->|"Yes"| Ephemeral["Ephemeral\n(non-persistent)"]
     R2 -->|"No"| R3{"kind == 30000-39999?"}
     R3 -->|"Yes"| Addressable["Addressable\n(identified by d-tag)"]
-    R3 -->|"No"| R4{"kind == 1000-9999\nor\n4000-4999?"}
-    R4 -->|"Yes"| Regular["Regular\n(standard)"]
-    R4 -->|"No"| Unknown["Unknown\n(treated as Regular)"]
+    R3 -->|"No"| Regular["Regular\n(standard)\nNIP-01 defined: 1, 2, 4-44, 1000-9999\n* Unclassified kinds also treated as Regular"]
 ```
 
 ### REQ Processing and Subscription Management

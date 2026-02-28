@@ -1,8 +1,10 @@
 /**
- * NIP-16 イベント種別判定
+ * NIP-01 イベント種別判定
  *
  * イベントの `kind` 値から種別を判定するユーティリティ関数群。
- * NIP-16 (Regular/Replaceable/Ephemeral) および NIP-33 (Parameterized Replaceable) に対応。
+ * NIP-01 で定義される Regular/Replaceable/Ephemeral/Addressable に対応。
+ *
+ * （旧 NIP-16 Event Treatment および旧 NIP-33 Parameterized Replaceable は NIP-01 に統合済み）
  *
  * @module
  */
@@ -19,11 +21,13 @@ export type EventKind =
 /**
  * イベント種別を判定する
  *
- * kind 値に基づいて以下の種別を返す:
- * - `regular`: 上記以外（kind 1, 2, 4-9999, 40000+ 等）
- * - `replaceable`: kind 0, 3, 10000-19999（NIP-01 特殊 kind 含む）
+ * NIP-01 の定義に基づいて以下の種別を返す:
+ * - `replaceable`: kind 0, 3, 10000-19999
  * - `ephemeral`: kind 20000-29999
  * - `parameterized_replaceable`: kind 30000-39999
+ * - `regular`: 上記以外（NIP-01 では 1, 2, 4-44, 1000-9999 と定義。
+ *   本ライブラリでは未分類の kind（45-999, 40000+ 等）も
+ *   regular として扱い、ストアに保存する）
  *
  * @param kind イベントのkind値
  * @returns イベント種別

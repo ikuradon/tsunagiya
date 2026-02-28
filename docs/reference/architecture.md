@@ -302,9 +302,7 @@ flowchart TD
     R2 -->|"Yes"| Ephemeral["Ephemeral\n（非永続）"]
     R2 -->|"No"| R3{"kind == 30000-39999?"}
     R3 -->|"Yes"| Addressable["Addressable\n（d-tag で識別）"]
-    R3 -->|"No"| R4{"kind == 1000-9999\nまたは\n4000-4999?"}
-    R4 -->|"Yes"| Regular["Regular\n（通常）"]
-    R4 -->|"No"| Unknown["Unknown\n（Regular として扱う）"]
+    R3 -->|"No"| Regular["Regular\n（通常）\nNIP-01 定義: 1, 2, 4-44, 1000-9999\n※ 未分類 kind も Regular として扱う"]
 ```
 
 ### REQ 処理とサブスクリプション管理

@@ -24,16 +24,20 @@ outline: deep
 
 ### 対応メッセージ
 
-| メッセージ | 方向           | 対応                               |
-| ---------- | -------------- | ---------------------------------- |
-| `EVENT`    | client → relay | ✅ 受信・ストア追加・OK 応答       |
-| `REQ`      | client → relay | ✅ フィルタリング・EVENT/EOSE 応答 |
-| `CLOSE`    | client → relay | ✅ サブスクリプション解除          |
-| `EVENT`    | relay → client | ✅ サブスクリプション配信          |
-| `OK`       | relay → client | ✅ EVENT 受理/拒否                 |
-| `EOSE`     | relay → client | ✅ ストアイベント送信完了          |
-| `NOTICE`   | relay → client | ✅ `sendNotice()`                  |
-| `AUTH`     | relay → client | ✅ NIP-42 チャレンジ               |
+| メッセージ | 方向           | NIP    | 対応                               |
+| ---------- | -------------- | ------ | ---------------------------------- |
+| `EVENT`    | client → relay | NIP-01 | ✅ 受信・ストア追加・OK 応答       |
+| `REQ`      | client → relay | NIP-01 | ✅ フィルタリング・EVENT/EOSE 応答 |
+| `CLOSE`    | client → relay | NIP-01 | ✅ サブスクリプション解除          |
+| `AUTH`     | client → relay | NIP-42 | ✅ AUTH レスポンス送信             |
+| `COUNT`    | client → relay | NIP-45 | ✅ カウントクエリ                  |
+| `EVENT`    | relay → client | NIP-01 | ✅ サブスクリプション配信          |
+| `OK`       | relay → client | NIP-01 | ✅ EVENT 受理/拒否                 |
+| `EOSE`     | relay → client | NIP-01 | ✅ ストアイベント送信完了          |
+| `CLOSED`   | relay → client | NIP-01 | ✅ サブスクリプション終了          |
+| `NOTICE`   | relay → client | NIP-01 | ✅ `sendNotice()`                  |
+| `AUTH`     | relay → client | NIP-42 | ✅ チャレンジ送信                  |
+| `COUNT`    | relay → client | NIP-45 | ✅ カウント結果応答                |
 
 ---
 
@@ -42,12 +46,15 @@ outline: deep
 > 旧 NIP-16 (Event Treatment) および旧 NIP-33 (Parameterized Replaceable Events
 > → Addressable Events) は現在 NIP-01 に統合されています。
 
-| 種別                                       | kind 範囲                               | ストア挙動                                        |
-| ------------------------------------------ | --------------------------------------- | ------------------------------------------------- |
-| Regular                                    | 1-2, 4-9999, 40000+（kind 0, 3 を除く） | 通常通り追加                                      |
-| Replaceable                                | 0, 3, 10000-19999                       | 同一 kind+pubkey の古いイベントを削除し追加       |
-| Ephemeral                                  | 20000-29999                             | ストアに追加しない                                |
-| Addressable (旧 Parameterized Replaceable) | 30000-39999                             | 同一 kind+pubkey+d-tag の古いイベントを削除し追加 |
+| 種別                                       | NIP-01 定義の kind 範囲 | ストア挙動                                        |
+| ------------------------------------------ | ----------------------- | ------------------------------------------------- |
+| Regular                                    | 1, 2, 4-44, 1000-9999   | 通常通り追加                                      |
+| Replaceable                                | 0, 3, 10000-19999       | 同一 kind+pubkey の古いイベントを削除し追加       |
+| Ephemeral                                  | 20000-29999             | ストアに追加しない                                |
+| Addressable (旧 Parameterized Replaceable) | 30000-39999             | 同一 kind+pubkey+d-tag の古いイベントを削除し追加 |
+
+> **Note:** NIP-01 で未分類の kind（45-999, 40000+ 等）は、本ライブラリでは
+> Regular として扱いストアに保存します。
 
 ---
 
