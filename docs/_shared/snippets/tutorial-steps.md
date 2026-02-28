@@ -121,14 +121,14 @@ Deno.test("遅延のあるリレー", async () => {
   const pool = new MockPool();
 
   // 100ms〜500msのランダムな遅延
-  pool.relay("wss://slow.relay.com", {
+  pool.relay("wss://slow.relay.test", {
     latency: { min: 100, max: 500 },
   });
 
   pool.install();
   try {
     const start = Date.now();
-    const ws = new WebSocket("wss://slow.relay.com");
+    const ws = new WebSocket("wss://slow.relay.test");
 
     await new Promise<void>((resolve) => {
       ws.onopen = () => {
@@ -151,14 +151,14 @@ Deno.test("遅延のあるリレー", async () => {
 
 Deno.test("一定時間後に切断されるリレー", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://unstable.relay.com");
+  const relay = pool.relay("wss://unstable.relay.test");
 
   // 1秒後に切断
   relay.disconnectAfter(1000);
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://unstable.relay.com");
+    const ws = new WebSocket("wss://unstable.relay.test");
 
     const closeCode = await new Promise<number>((resolve) => {
       ws.onclose = (e) => resolve(e.code);
@@ -172,12 +172,12 @@ Deno.test("一定時間後に切断されるリレー", async () => {
 
 Deno.test("接続拒否するリレー", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://down.relay.com");
+  const relay = pool.relay("wss://down.relay.test");
   relay.refuse();
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://down.relay.com");
+    const ws = new WebSocket("wss://down.relay.test");
 
     const closeCode = await new Promise<number>((resolve) => {
       ws.onerror = () => {}; // エラーは無視

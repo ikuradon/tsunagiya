@@ -41,11 +41,11 @@ function collectMessages(ws: WebSocket): string[] {
 
 Deno.test("NIP-42 AUTH - sends challenge on connect with requiresAuth option", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://auth.relay.com");
+    const ws = new WebSocket("wss://auth.relay.test");
     const messages: string[] = [];
 
     ws.onmessage = (ev: MessageEvent) => {
@@ -76,17 +76,17 @@ Deno.test("NIP-42 AUTH - sends challenge on connect with requiresAuth option", a
 
 Deno.test("NIP-42 AUTH - validates auth response via requireAuth()", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   relay.requireAuth((authEvent) => {
     return authEvent.tags.some(
-      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.test",
     );
   });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     // チャレンジ受信を待つ
@@ -98,7 +98,7 @@ Deno.test("NIP-42 AUTH - validates auth response via requireAuth()", async () =>
     const challenge = authMsg[1] as string;
 
     // AUTH応答を送信
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -120,14 +120,14 @@ Deno.test("NIP-42 AUTH - validates auth response via requireAuth()", async () =>
 
 Deno.test("NIP-42 AUTH - returns OK false on validation failure", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   // 常に拒否するバリデーター
   relay.requireAuth(() => false);
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -136,7 +136,7 @@ Deno.test("NIP-42 AUTH - returns OK false on validation failure", async () => {
     const challenge = authMsg[1] as string;
 
     // AUTH応答を送信
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -160,13 +160,13 @@ Deno.test("NIP-42 AUTH - returns OK false on validation failure", async () => {
 
 Deno.test("NIP-42 AUTH - rejects wrong challenge", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   relay.requireAuth(() => true);
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -174,7 +174,7 @@ Deno.test("NIP-42 AUTH - rejects wrong challenge", async () => {
     // 間違ったチャレンジで応答
     const authEvent = makeAuthEvent(
       "wrong-challenge",
-      "wss://auth.relay.com",
+      "wss://auth.relay.test",
     );
     ws.send(JSON.stringify(["AUTH", authEvent]));
 
@@ -199,13 +199,13 @@ Deno.test("NIP-42 AUTH - rejects wrong challenge", async () => {
 
 Deno.test("NIP-42 AUTH - rejects wrong event kind", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   relay.requireAuth(() => true);
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -214,7 +214,7 @@ Deno.test("NIP-42 AUTH - rejects wrong event kind", async () => {
     const challenge = authMsg[1] as string;
 
     // 間違ったkindで応答
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com", {
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test", {
       kind: 1, // should be 22242
     });
     ws.send(JSON.stringify(["AUTH", authEvent]));
@@ -240,11 +240,11 @@ Deno.test("NIP-42 AUTH - rejects wrong event kind", async () => {
 
 Deno.test("NIP-42 AUTH - rejects REQ from unauthenticated connection", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     // AUTHチャレンジを受信するのを待つ
@@ -275,11 +275,11 @@ Deno.test("NIP-42 AUTH - rejects REQ from unauthenticated connection", async () 
 
 Deno.test("NIP-42 AUTH - rejects EVENT from unauthenticated connection", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -319,11 +319,11 @@ Deno.test("NIP-42 AUTH - rejects EVENT from unauthenticated connection", async (
 
 Deno.test("NIP-42 AUTH - allows REQ after successful authentication", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  const relay = pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   relay.requireAuth((authEvent) => {
     return authEvent.tags.some(
-      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+      (t) => t[0] === "relay" && t[1] === "wss://auth.relay.test",
     );
   });
 
@@ -340,7 +340,7 @@ Deno.test("NIP-42 AUTH - allows REQ after successful authentication", async () =
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     // チャレンジ受信
@@ -349,7 +349,7 @@ Deno.test("NIP-42 AUTH - allows REQ after successful authentication", async () =
     const challenge = authMsg[1] as string;
 
     // 認証
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -380,11 +380,11 @@ Deno.test("NIP-42 AUTH - allows REQ after successful authentication", async () =
 
 Deno.test("NIP-42 AUTH - accepts matching relay URL", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -393,7 +393,7 @@ Deno.test("NIP-42 AUTH - accepts matching relay URL", async () => {
     const challenge = authMsg[1] as string;
 
     // 正しいリレーURLで認証
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -412,11 +412,11 @@ Deno.test("NIP-42 AUTH - accepts matching relay URL", async () => {
 
 Deno.test("NIP-42 AUTH - rejects mismatched relay URL", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -425,7 +425,7 @@ Deno.test("NIP-42 AUTH - rejects mismatched relay URL", async () => {
     const challenge = authMsg[1] as string;
 
     // 間違ったリレーURLで認証
-    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -448,14 +448,14 @@ Deno.test("NIP-42 AUTH - rejects mismatched relay URL", async () => {
 
 Deno.test("NIP-42 AUTH - overrides relay URL check with custom validator", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   // relay URLチェックを行わないカスタムバリデーター
   relay.requireAuth((_authEvent, _context) => true);
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -464,7 +464,7 @@ Deno.test("NIP-42 AUTH - overrides relay URL check with custom validator", async
     const challenge = authMsg[1] as string;
 
     // 間違ったリレーURLでも、カスタムバリデーターが許可すれば通る
-    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://wrong.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -483,7 +483,7 @@ Deno.test("NIP-42 AUTH - overrides relay URL check with custom validator", async
 
 Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   let receivedContext: AuthContext | null = null;
   relay.requireAuth((_authEvent, context) => {
@@ -493,7 +493,7 @@ Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -501,13 +501,13 @@ Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
     const authMsg = JSON.parse(messages[0]);
     const challenge = authMsg[1] as string;
 
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
     // context が正しく渡されているか検証
     assertEquals(receivedContext !== null, true);
-    assertEquals(receivedContext!.relayUrl, "wss://auth.relay.com");
+    assertEquals(receivedContext!.relayUrl, "wss://auth.relay.test");
     assertEquals(receivedContext!.challenge, challenge);
 
     ws.close();
@@ -521,12 +521,12 @@ Deno.test("NIP-42 AUTH - passes AuthContext to custom validator", async () => {
 
 Deno.test("NIP-42 AUTH - re-issues challenge when requireAuth is called on existing connection", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   pool.install();
   try {
     // 先に接続を開く（AUTH なし）
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     // REQ が通ることを確認（認証不要）
@@ -539,7 +539,7 @@ Deno.test("NIP-42 AUTH - re-issues challenge when requireAuth is called on exist
     // 後から requireAuth を設定
     relay.requireAuth((authEvent) => {
       return authEvent.tags.some(
-        (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+        (t) => t[0] === "relay" && t[1] === "wss://auth.relay.test",
       );
     });
 
@@ -565,7 +565,7 @@ Deno.test("NIP-42 AUTH - re-issues challenge when requireAuth is called on exist
     );
 
     // AUTH応答を送信して認証
-    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.com");
+    const authEvent = makeAuthEvent(challenge, "wss://auth.relay.test");
     ws.send(JSON.stringify(["AUTH", authEvent]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
@@ -602,14 +602,14 @@ Deno.test("NIP-42 AUTH - re-issues challenge when requireAuth is called on exist
 
 Deno.test("NIP-42 AUTH - new connection after requireAuth also gets challenge", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   // 先に requireAuth を設定
   relay.requireAuth(() => true);
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -630,11 +630,11 @@ Deno.test("NIP-42 AUTH - new connection after requireAuth also gets challenge", 
 
 Deno.test("NIP-42 AUTH - sends challenge to existing connection on requireAuth", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com");
+  const relay = pool.relay("wss://auth.relay.test");
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     const messages = collectMessages(ws);
 
     // 接続後にrequireAuthを設定
@@ -660,17 +660,17 @@ Deno.test("NIP-42 AUTH - sends challenge to existing connection on requireAuth",
 
 Deno.test("AuthState - handleAuthResponse without challenge returns auth-required error", async () => {
   const pool = new MockPool();
-  pool.relay("wss://authstate.relay.com");
+  pool.relay("wss://authstate.relay.test");
 
   pool.install();
   try {
-    const ws = await openWs("wss://authstate.relay.com");
+    const ws = await openWs("wss://authstate.relay.test");
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
     // AuthState を直接インスタンス化してテスト
     // sendChallenge を呼ばずに handleAuthResponse を呼ぶ
     const authState = new AuthState();
-    const mockWs = new WebSocket("wss://authstate.relay.com");
+    const mockWs = new WebSocket("wss://authstate.relay.test");
     await new Promise<void>((resolve) => {
       mockWs.onopen = () => resolve();
     });
@@ -682,7 +682,7 @@ Deno.test("AuthState - handleAuthResponse without challenge returns auth-require
       content: "",
       created_at: Math.floor(Date.now() / 1000),
       tags: [
-        ["relay", "wss://authstate.relay.com"],
+        ["relay", "wss://authstate.relay.test"],
         ["challenge", "dummy-challenge"],
       ],
       sig: "sig1",
@@ -693,7 +693,7 @@ Deno.test("AuthState - handleAuthResponse without challenge returns auth-require
     const result = await authState.handleAuthResponse(
       mockWs as unknown as Parameters<typeof authState.handleAuthResponse>[0],
       dummyEvent,
-      "wss://authstate.relay.com",
+      "wss://authstate.relay.test",
     );
 
     assertEquals(result[0], false);

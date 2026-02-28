@@ -164,7 +164,7 @@ onREQが設定されている場合、自動マッチングはスキップされ
 
 ```typescript
 // 接続拒否
-const relay = pool.relay("wss://dead.relay.com");
+const relay = pool.relay("wss://dead.relay.test");
 relay.refuse();
 
 // 接続後に突然切断
@@ -187,7 +187,7 @@ relay.sendNotice("rate-limited");
 ### 4.5 NIP-42 AUTH
 
 ```typescript
-const relay = pool.relay("wss://auth.relay.com", {
+const relay = pool.relay("wss://auth.relay.test", {
   requiresAuth: true,
 });
 
@@ -198,7 +198,7 @@ const relay = pool.relay("wss://auth.relay.com", {
 relay.requireAuth((authEvent) => {
   // authEvent: kind:22242のイベント
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.test",
   );
 });
 ```
@@ -240,7 +240,7 @@ Deno.test("fetch events from relay", async () => {
 ```typescript
 Deno.test("handle unstable relay", async () => {
   const pool = new MockPool();
-  pool.relay("wss://unstable.relay.com", {
+  pool.relay("wss://unstable.relay.test", {
     latency: { min: 100, max: 2000 },
     errorRate: 0.3,
     disconnectRate: 0.1,
@@ -260,8 +260,8 @@ Deno.test("handle unstable relay", async () => {
 ```typescript
 Deno.test("multi-relay", async () => {
   const pool = new MockPool();
-  const fast = pool.relay("wss://fast.relay.com");
-  const slow = pool.relay("wss://slow.relay.com", { latency: 500 });
+  const fast = pool.relay("wss://fast.relay.test");
+  const slow = pool.relay("wss://slow.relay.test", { latency: 500 });
 
   fast.store(event1);
   slow.store(event2);

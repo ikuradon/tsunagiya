@@ -32,12 +32,12 @@ Deno.test("EventBuilder.kind() - builds event with arbitrary kind", () => {
 
 Deno.test("EventBuilder.tag() - adds tags to event", () => {
   const event = EventBuilder.kind1()
-    .tag("e", "event123", "wss://relay.com", "reply")
+    .tag("e", "event123", "wss://relay.test", "reply")
     .tag("p", "pubkey456")
     .build();
 
   assertEquals(event.tags.length, 2);
-  assertEquals(event.tags[0], ["e", "event123", "wss://relay.com", "reply"]);
+  assertEquals(event.tags[0], ["e", "event123", "wss://relay.test", "reply"]);
   assertEquals(event.tags[1], ["p", "pubkey456"]);
 });
 

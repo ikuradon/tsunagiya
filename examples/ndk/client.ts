@@ -390,7 +390,7 @@ export function parseArgs(args: string[]): {
   }
 
   if (relays.length === 0) {
-    relays.push("wss://relay.damus.io");
+    relays.push("wss://relay.damus.test");
   }
 
   return {

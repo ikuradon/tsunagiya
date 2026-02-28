@@ -194,7 +194,7 @@ export async function stream(
 
 /** CLI引数をパースして実行する */
 export async function main(args: string[]): Promise<void> {
-  let relayUrl = "wss://relay.damus.io";
+  let relayUrl = "wss://relay.damus.test";
   let verbose = false;
   const positional: string[] = [];
 

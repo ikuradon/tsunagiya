@@ -373,7 +373,7 @@ export async function puru(rxNostr: RxNostr): Promise<void> {
 function parseArgs(
   args: string[],
 ): { command: string; rest: string[]; relay: string; verbose: boolean } {
-  let relay = "wss://relay.damus.io";
+  let relay = "wss://relay.damus.test";
   let verbose = false;
   const rest: string[] = [];
 

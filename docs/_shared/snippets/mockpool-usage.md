@@ -24,8 +24,8 @@ relay2.store(event2);
 relay3.store(event3);
 
 // 各リレーに異なる設定も可能
-const fastRelay = pool.relay("wss://fast.relay.com", { latency: 10 });
-const slowRelay = pool.relay("wss://slow.relay.com", { latency: 500 });
+const fastRelay = pool.relay("wss://fast.relay.test", { latency: 10 });
+const slowRelay = pool.relay("wss://slow.relay.test", { latency: 500 });
 
 pool.install();
 try {

@@ -162,18 +162,18 @@ Deno.test("assertNoErrors - throws when EVENT rejected", async () => {
 
 Deno.test("assertNoErrors - throws on auth-required rejection", async () => {
   const pool = new MockPool();
-  pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   pool.install();
   try {
-    const ws = await openWs("wss://auth.relay.com");
+    const ws = await openWs("wss://auth.relay.test");
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
     // 認証せずにREQを送信
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
-    const relay = pool.relay("wss://auth.relay.com");
+    const relay = pool.relay("wss://auth.relay.test");
     assertThrows(
       () => assertNoErrors(relay),
       Error,

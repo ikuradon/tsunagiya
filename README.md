@@ -102,8 +102,8 @@ relay2.store(event2);
 relay3.store(event3);
 
 // 各リレーに異なる設定も可能
-const fastRelay = pool.relay("wss://fast.relay.com", { latency: 10 });
-const slowRelay = pool.relay("wss://slow.relay.com", { latency: 500 });
+const fastRelay = pool.relay("wss://fast.relay.test", { latency: 10 });
+const slowRelay = pool.relay("wss://slow.relay.test", { latency: 500 });
 
 pool.install();
 try {
@@ -148,7 +148,7 @@ relay.onEVENT((event) => {
 ### 不安定リレーのシミュレート
 
 ```typescript
-pool.relay("wss://unstable.relay.com", {
+pool.relay("wss://unstable.relay.test", {
   latency: { min: 100, max: 2000 },
   errorRate: 0.3,
   disconnectRate: 0.1,
@@ -170,13 +170,13 @@ relay.sendNotice("rate-limited"); // NOTICE送信
 ### NIP-42 AUTH
 
 ```typescript
-const relay = pool.relay("wss://auth.relay.com", {
+const relay = pool.relay("wss://auth.relay.test", {
   requiresAuth: true,
 });
 
 relay.requireAuth((authEvent) => {
   return authEvent.tags.some(
-    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.com",
+    (t) => t[0] === "relay" && t[1] === "wss://auth.relay.test",
   );
 });
 ```
@@ -316,7 +316,7 @@ EventBuilder.dm("recipient", "secret message");
 EventBuilder.groupMessage("group-id").content("hello");
 EventBuilder.zapRequest({
   amount: 1000,
-  relays: ["wss://r.com"],
+  relays: ["wss://r.test"],
   lnurl: "...",
 });
 ```

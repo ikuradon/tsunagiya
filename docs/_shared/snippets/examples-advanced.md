@@ -41,11 +41,11 @@ Deno.test("カスタム REQ ハンドラーで動的にイベントを返す", a
 ```typescript
 Deno.test("未登録URLへの接続は失敗する", async () => {
   const pool = new MockPool();
-  pool.relay("wss://known.relay.com"); // 別のURLだけ登録
+  pool.relay("wss://known.relay.test"); // 別のURLだけ登録
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://unknown.relay.com");
+    const ws = new WebSocket("wss://unknown.relay.test");
     let errorFired = false;
 
     const code = await new Promise<number>((resolve) => {
@@ -128,7 +128,7 @@ NIP-42 AUTH 処理のテスト:
 ```typescript
 Deno.test("AUTH チャレンジ/レスポンス", async () => {
   const pool = new MockPool();
-  const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
+  const relay = pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
   relay.requireAuth((authEvent, context) => {
     return authEvent.tags.some(
@@ -138,7 +138,7 @@ Deno.test("AUTH チャレンジ/レスポンス", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://auth.relay.com");
+    const ws = new WebSocket("wss://auth.relay.test");
     let authResult = false;
 
     await new Promise<void>((resolve) => {
@@ -147,7 +147,7 @@ Deno.test("AUTH チャレンジ/レスポンス", async () => {
         if (msg[0] === "AUTH") {
           const challenge = msg[1];
           const authEvent = EventBuilder.kind(22242)
-            .tag("relay", "wss://auth.relay.com")
+            .tag("relay", "wss://auth.relay.test")
             .tag("challenge", challenge)
             .build();
           ws.send(JSON.stringify(["AUTH", authEvent]));

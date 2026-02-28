@@ -131,8 +131,8 @@ const wrapped = EventBuilder.giftWrap({
 
 // DM Relay List (kind:10050)
 const dmList = EventBuilder.dmRelayList([
-  "wss://dm.relay1.com",
-  "wss://dm.relay2.com",
+  "wss://dm.relay1.test",
+  "wss://dm.relay2.test",
 ]).build();
 
 // NIP-17: privateDM（chatMessage → seal → giftWrap を一括生成）
@@ -240,7 +240,7 @@ const event = EventBuilder.kind1()
 NIP-42 AUTH:
 
 ```typescript
-const relay = pool.relay("wss://auth.relay.com", { requiresAuth: true });
+const relay = pool.relay("wss://auth.relay.test", { requiresAuth: true });
 
 // 標準検証（バリデーター未設定）: kind:22242 + challenge + relay URL 一致
 // カスタムバリデーター: context から relayUrl / challenge を参照可能

@@ -20,7 +20,7 @@ relay.onEVENT((event) => {
 不安定リレーのシミュレート:
 
 ```typescript
-pool.relay("wss://unstable.relay.com", {
+pool.relay("wss://unstable.relay.test", {
   latency: { min: 100, max: 2000 },
   errorRate: 0.3,
   disconnectRate: 0.1,
@@ -42,7 +42,7 @@ relay.sendNotice("rate-limited"); // NOTICE送信
 NIP-42 AUTH:
 
 ```typescript
-const relay = pool.relay("wss://auth.relay.com", {
+const relay = pool.relay("wss://auth.relay.test", {
   requiresAuth: true,
 });
 

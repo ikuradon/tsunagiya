@@ -1,8 +1,8 @@
 未登録 URL への接続:
 
 ```typescript
-pool.relay("wss://known.relay.com"); // これだけ登録
-const ws = new WebSocket("wss://unknown.relay.com"); // → エラー + close(1006)
+pool.relay("wss://known.relay.test"); // これだけ登録
+const ws = new WebSocket("wss://unknown.relay.test"); // → エラー + close(1006)
 ```
 
 複数リレーの追加:

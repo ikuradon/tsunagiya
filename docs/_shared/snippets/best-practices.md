@@ -107,14 +107,14 @@ Deno.test("テストスイート", async (t) => {
 ```typescript
 Deno.test("並行テスト", async () => {
   const pool = new MockPool();
-  const relay1 = pool.relay("wss://test1.relay.com");
-  const relay2 = pool.relay("wss://test2.relay.com");
+  const relay1 = pool.relay("wss://test1.relay.test");
+  const relay2 = pool.relay("wss://test2.relay.test");
 
   pool.install();
   try {
     await Promise.all([
-      testScenario1("wss://test1.relay.com"),
-      testScenario2("wss://test2.relay.com"),
+      testScenario1("wss://test1.relay.test"),
+      testScenario2("wss://test2.relay.test"),
     ]);
   } finally {
     pool.uninstall();

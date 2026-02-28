@@ -43,10 +43,10 @@ Deno.test("切断後に再接続する", async () => {
 Deno.test("一部リレーがダウンしても動作する", async () => {
   const pool = new MockPool();
 
-  const goodRelay = pool.relay("wss://good.relay.com");
+  const goodRelay = pool.relay("wss://good.relay.test");
   goodRelay.store(EventBuilder.kind1().content("available").build());
 
-  const badRelay = pool.relay("wss://bad.relay.com");
+  const badRelay = pool.relay("wss://bad.relay.test");
   badRelay.refuse();
 
   pool.install();
@@ -56,7 +56,7 @@ Deno.test("一部リレーがダウンしても動作する", async () => {
     let done = 0;
 
     await new Promise<void>((resolve) => {
-      for (const url of ["wss://good.relay.com", "wss://bad.relay.com"]) {
+      for (const url of ["wss://good.relay.test", "wss://bad.relay.test"]) {
         const ws = new WebSocket(url);
         ws.onopen = () => ws.send(JSON.stringify(["REQ", "s", { kinds: [1] }]));
         ws.onmessage = (e) => {
@@ -72,7 +72,7 @@ Deno.test("一部リレーがダウンしても動作する", async () => {
     });
 
     assertEquals(events, ["available"]);
-    assertEquals(errors, ["wss://bad.relay.com"]);
+    assertEquals(errors, ["wss://bad.relay.test"]);
   } finally {
     pool.uninstall();
   }
@@ -84,13 +84,13 @@ Deno.test("一部リレーがダウンしても動作する", async () => {
 ```typescript
 Deno.test("接続タイムアウト", async () => {
   const pool = new MockPool();
-  pool.relay("wss://slow.relay.com", {
+  pool.relay("wss://slow.relay.test", {
     connectionTimeout: 100,
   });
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://slow.relay.com");
+    const ws = new WebSocket("wss://slow.relay.test");
     let errorFired = false;
 
     const code = await new Promise<number>((resolve) => {

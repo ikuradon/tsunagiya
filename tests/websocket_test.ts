@@ -35,7 +35,7 @@ Deno.test("MockWebSocket - closes with code 1006 when no relay registered", asyn
   pool.install();
 
   try {
-    const ws = new WebSocket("wss://unknown.relay.com");
+    const ws = new WebSocket("wss://unknown.relay.test");
 
     const event = await new Promise<CloseEvent>((resolve) => {
       ws.onclose = (ev) => resolve(ev);

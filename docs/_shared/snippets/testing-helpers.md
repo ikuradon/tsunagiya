@@ -49,7 +49,7 @@ EventBuilder.dm("recipient", "secret message");
 EventBuilder.groupMessage("group-id").content("hello");
 EventBuilder.zapRequest({
   amount: 1000,
-  relays: ["wss://r.com"],
+  relays: ["wss://r.test"],
   lnurl: "...",
 });
 ```

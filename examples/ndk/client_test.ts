@@ -331,7 +331,7 @@ test("ndk client: parseArgs", () => {
   // デフォルトリレー
   const result1 = client.parseArgs(["timeline"]);
   assertEquals(result1.command, "timeline");
-  assertEquals(result1.relays, ["wss://relay.damus.io"]);
+  assertEquals(result1.relays, ["wss://relay.damus.test"]);
   assertEquals(result1.verbose, false);
 
   // カスタムリレー + verbose
