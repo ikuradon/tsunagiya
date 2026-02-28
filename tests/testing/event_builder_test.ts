@@ -1,5 +1,11 @@
-import { assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertNotStrictEquals,
+} from "@std/assert";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
+import { matchFilter } from "../../src/filter.ts";
 
 // ===== 基本ビルダー =====
 
@@ -668,4 +674,240 @@ Deno.test("EventBuilder - build() returns independent objects", () => {
   // タグを変更しても影響しない
   event1.tags[0][1] = "modified";
   assertEquals(event2.tags[0][1], "id1");
+});
+
+// ===== withExpiration (NIP-40) =====
+
+Deno.test("EventBuilder - withExpiration", async (t) => {
+  await t.step("expiration タグが正しく設定される", () => {
+    const timestamp = 1700000000;
+    const event = EventBuilder.kind1()
+      .content("expiring message")
+      .withExpiration(timestamp)
+      .build();
+
+    assertEquals(
+      event.tags.some((t) =>
+        t[0] === "expiration" && t[1] === String(timestamp)
+      ),
+      true,
+    );
+  });
+
+  await t.step("他のメソッドとチェーンで組み合わせて使える", () => {
+    const timestamp = 1800000000;
+    const event = EventBuilder.kind1()
+      .content("chained message")
+      .tag("p", "somepubkey")
+      .withExpiration(timestamp)
+      .pubkey("mypub")
+      .build();
+
+    assertEquals(event.kind, 1);
+    assertEquals(event.content, "chained message");
+    assertEquals(event.pubkey, "mypub");
+    assertEquals(
+      event.tags.some((t) => t[0] === "p" && t[1] === "somepubkey"),
+      true,
+    );
+    assertEquals(
+      event.tags.some((t) =>
+        t[0] === "expiration" && t[1] === String(timestamp)
+      ),
+      true,
+    );
+  });
+});
+
+// ===== privateDM (NIP-17) =====
+
+Deno.test("EventBuilder - privateDM", async (t) => {
+  await t.step(
+    "kind:1059 のイベントを返し、p タグに recipientPubkey が含まれる",
+    () => {
+      const event = EventBuilder.privateDM({
+        recipientPubkey: "recipient-pub-123",
+        content: "Hello, private!",
+      });
+
+      assertEquals(event.kind, 1059);
+      assertEquals(
+        event.tags.some((t) => t[0] === "p" && t[1] === "recipient-pub-123"),
+        true,
+      );
+    },
+  );
+
+  await t.step(
+    "content にメッセージ内容が含まれる（mock-giftwrapped 経由）",
+    () => {
+      const event = EventBuilder.privateDM({
+        recipientPubkey: "recipient-pub",
+        content: "secret message",
+      });
+
+      assert(event.content.includes("mock-giftwrapped:"));
+      assert(event.content.includes("secret message"));
+    },
+  );
+});
+
+// ===== from =====
+
+Deno.test("EventBuilder - from", async (t) => {
+  await t.step("全フィールドが正しくコピーされる", () => {
+    const original = EventBuilder.kind1()
+      .content("original content")
+      .pubkey("original-pubkey")
+      .id("original-id")
+      .createdAt(1700000000)
+      .tag("e", "event123")
+      .tag("p", "pubkey456")
+      .build();
+
+    const copied = EventBuilder.from(original).build();
+
+    assertEquals(copied.id, original.id);
+    assertEquals(copied.pubkey, original.pubkey);
+    assertEquals(copied.kind, original.kind);
+    assertEquals(copied.content, original.content);
+    assertEquals(copied.created_at, original.created_at);
+    assertEquals(copied.tags, original.tags);
+    assertEquals(copied.sig, original.sig);
+  });
+
+  await t.step("content を変更しても元イベントに影響しない", () => {
+    const original = EventBuilder.kind1()
+      .content("original")
+      .build();
+
+    const modified = EventBuilder.from(original)
+      .content("modified")
+      .build();
+
+    assertEquals(modified.content, "modified");
+    assertEquals(original.content, "original");
+  });
+
+  await t.step(
+    "タグがディープコピーされ、復元後のタグ変更が元に影響しない",
+    () => {
+      const original = EventBuilder.kind1()
+        .tag("e", "event123")
+        .tag("p", "pubkey456")
+        .build();
+
+      const copied = EventBuilder.from(original).build();
+
+      // 参照が異なることを確認
+      assertNotStrictEquals(copied.tags, original.tags);
+
+      // コピーのタグを変更しても元に影響しない
+      copied.tags[0][1] = "modified";
+      assertEquals(original.tags[0][1], "event123");
+    },
+  );
+});
+
+// ===== matchFilter =====
+
+Deno.test("EventBuilder - matchFilter", async (t) => {
+  await t.step("kinds 指定でマッチするイベント生成", () => {
+    const event = EventBuilder.matchFilter({ kinds: [3] });
+    assertEquals(event.kind, 3);
+    assertEquals(matchFilter(event, { kinds: [3] }), true);
+  });
+
+  await t.step("authors 指定でマッチするイベント生成", () => {
+    const event = EventBuilder.matchFilter({ authors: ["abc123"] });
+    assertEquals(event.pubkey, "abc123");
+    assertEquals(matchFilter(event, { authors: ["abc123"] }), true);
+  });
+
+  await t.step("since/until 条件でマッチするイベント生成", () => {
+    const event = EventBuilder.matchFilter({
+      since: 1700000000,
+      until: 1700001000,
+    });
+    assertEquals(event.created_at >= 1700000000, true);
+    assertEquals(event.created_at <= 1700001000, true);
+    assertEquals(
+      matchFilter(event, { since: 1700000000, until: 1700001000 }),
+      true,
+    );
+  });
+
+  await t.step("#e, #p タグフィルターでマッチするイベント生成", () => {
+    const eventE = EventBuilder.matchFilter({ "#e": ["target-event-id"] });
+    assertEquals(
+      eventE.tags.some((t) => t[0] === "e" && t[1] === "target-event-id"),
+      true,
+    );
+    assertEquals(
+      matchFilter(eventE, { "#e": ["target-event-id"] }),
+      true,
+    );
+
+    const eventP = EventBuilder.matchFilter({ "#p": ["target-pubkey"] });
+    assertEquals(
+      eventP.tags.some((t) => t[0] === "p" && t[1] === "target-pubkey"),
+      true,
+    );
+    assertEquals(
+      matchFilter(eventP, { "#p": ["target-pubkey"] }),
+      true,
+    );
+  });
+
+  await t.step("search キーワードが content に含まれるイベント生成", () => {
+    const event = EventBuilder.matchFilter({ search: "nostr protocol" });
+    assertEquals(event.content.includes("nostr protocol"), true);
+    assertEquals(matchFilter(event, { search: "nostr protocol" }), true);
+  });
+
+  await t.step("複合条件でマッチするイベント生成", () => {
+    const filter = {
+      kinds: [1],
+      authors: ["author-pub"],
+      since: 1700000000,
+      until: 1700001000,
+      "#p": ["mentioned-pub"],
+    };
+    const event = EventBuilder.matchFilter(filter);
+    assertEquals(event.kind, 1);
+    assertEquals(event.pubkey, "author-pub");
+    assertEquals(event.created_at >= 1700000000, true);
+    assertEquals(event.created_at <= 1700001000, true);
+    assertEquals(
+      event.tags.some((t) => t[0] === "p" && t[1] === "mentioned-pub"),
+      true,
+    );
+    assertEquals(matchFilter(event, filter), true);
+  });
+});
+
+// ===== bulk シードオプション =====
+
+Deno.test("EventBuilder - bulk シードオプション", async (t) => {
+  await t.step("seed 指定で決定論的な ID/pubkey を生成する", () => {
+    const events1 = EventBuilder.bulk(3, { seed: "test-seed" });
+    const events2 = EventBuilder.bulk(3, { seed: "test-seed" });
+    // 同じシードなら同じ ID/pubkey
+    assertEquals(events1[0].id, events2[0].id);
+    assertEquals(events1[0].pubkey, events2[0].pubkey);
+    assertEquals(events1[1].id, events2[1].id);
+  });
+
+  await t.step("異なるシードなら異なる ID を生成する", () => {
+    const events1 = EventBuilder.bulk(2, { seed: "seed-a" });
+    const events2 = EventBuilder.bulk(2, { seed: "seed-b" });
+    assertNotEquals(events1[0].id, events2[0].id);
+  });
+
+  await t.step("seed + pubkey 指定時は pubkey が優先される", () => {
+    const pubkey = "fixed-pubkey-value";
+    const events = EventBuilder.bulk(2, { seed: "test", pubkey });
+    assertEquals(events[0].pubkey, pubkey);
+    assertEquals(events[1].pubkey, pubkey);
+  });
 });

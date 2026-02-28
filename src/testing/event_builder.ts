@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { NostrEvent } from "../types.ts";
+import type { NostrEvent, NostrFilter } from "../types.ts";
 
 /** ランダムhex文字列を生成する */
 function randomHex(bytes: number): string {
@@ -35,6 +35,8 @@ export interface BulkOptions {
   kind?: number;
   /** 公開鍵 */
   pubkey?: string;
+  /** シード値（指定時は決定論的な ID/pubkey を生成） */
+  seed?: string;
 }
 
 /** timeline 生成オプション */
@@ -181,7 +183,14 @@ export class EventBuilder {
     return new EventBuilder(0);
   }
 
-  /** kind:1 (Short Text Note) ビルダーを作成する */
+  /**
+   * kind:1 (Short Text Note) ビルダーを作成する
+   *
+   * @example
+   * ```ts
+   * const event = EventBuilder.kind1().content("hello").build();
+   * ```
+   */
   static kind1(): EventBuilder {
     return new EventBuilder(1);
   }
@@ -208,13 +217,36 @@ export class EventBuilder {
 
   // ===== ビルダーメソッド =====
 
-  /** コンテンツを設定する */
+  /**
+   * コンテンツを設定する
+   *
+   * @param text イベントの content フィールドに設定する文字列
+   * @example
+   * ```ts
+   * const event = EventBuilder.kind1().content("hello world").build();
+   * assertEquals(event.content, "hello world");
+   * ```
+   */
   content(text: string): EventBuilder {
     this.#content = text;
     return this;
   }
 
-  /** タグを追加する */
+  /**
+   * タグを追加する
+   *
+   * 任意のタグを追加できる。同じキーのタグを複数追加可能。
+   *
+   * @param key タグ名 (e.g. "e", "p", "t")
+   * @param values タグ値
+   * @example
+   * ```ts
+   * const event = EventBuilder.kind1()
+   *   .tag("e", "eventid123", "", "reply")
+   *   .tag("p", "pubkey123")
+   *   .build();
+   * ```
+   */
   tag(key: string, ...values: string[]): EventBuilder {
     this.#tags.push([key, ...values]);
     return this;
@@ -280,6 +312,23 @@ export class EventBuilder {
     return this;
   }
 
+  /**
+   * Expiration タグを追加する (NIP-40)
+   *
+   * @param unixTimestamp 有効期限 (UNIXタイムスタンプ秒)
+   * @example
+   * ```ts
+   * const event = EventBuilder.kind1()
+   *   .content("temporary message")
+   *   .withExpiration(Math.floor(Date.now() / 1000) + 3600)
+   *   .build();
+   * ```
+   */
+  withExpiration(unixTimestamp: number): EventBuilder {
+    this.#tags.push(["expiration", String(unixTimestamp)]);
+    return this;
+  }
+
   // ===== ビルド =====
 
   /** NostrEvent を構築して返す */
@@ -311,12 +360,40 @@ export class EventBuilder {
 
   /**
    * 複数のイベントを一括生成する
+   *
+   * @param count 生成するイベント数
+   * @param options 生成オプション (kind, pubkey, seed)
+   * @example
+   * ```ts
+   * // 10件のkind:1イベント
+   * const events = EventBuilder.bulk(10);
+   *
+   * // シード指定で決定論的に生成
+   * const events = EventBuilder.bulk(5, { seed: "test" });
+   * ```
    */
   static bulk(count: number, options: BulkOptions = {}): NostrEvent[] {
     const events: NostrEvent[] = [];
     for (let i = 0; i < count; i++) {
       const builder = new EventBuilder(options.kind ?? 1);
       if (options.pubkey) builder.pubkey(options.pubkey);
+      if (options.seed !== undefined) {
+        // シードベースの決定論的ID/pubkey生成
+        const seedStr = `${options.seed}-${i}`;
+        const encoded = new TextEncoder().encode(seedStr);
+        const hex = Array.from(encoded, (b) => b.toString(16).padStart(2, "0"))
+          .join("")
+          .padEnd(64, "0")
+          .slice(0, 64);
+        builder.id(hex);
+        if (!options.pubkey) {
+          const pubHex = Array.from(
+            new TextEncoder().encode(`pub-${seedStr}`),
+            (b) => b.toString(16).padStart(2, "0"),
+          ).join("").padEnd(64, "0").slice(0, 64);
+          builder.pubkey(pubHex);
+        }
+      }
       builder.content(`bulk event ${i}`);
       events.push(builder.build());
     }
@@ -347,6 +424,12 @@ export class EventBuilder {
    *
    * @param depth チェーンの深さ
    * @returns [root, reply1, reply2, ...] のイベント配列
+   * @example
+   * ```ts
+   * const [root, reply1, reply2] = EventBuilder.thread(3);
+   * // reply1 は root への返信
+   * // reply2 は reply1 への返信
+   * ```
    */
   static thread(depth: number): NostrEvent[] {
     const events: NostrEvent[] = [];
@@ -400,6 +483,84 @@ export class EventBuilder {
       reactions.push(reaction.build());
     }
     return [post, reactions];
+  }
+
+  /**
+   * 既存イベントからビルダーを復元する
+   *
+   * 全フィールドをコピーし、チェーンで上書き可能にする。
+   * タグはディープコピーされるため、元のイベントには影響しない。
+   *
+   * @param event コピー元のイベント
+   * @example
+   * ```ts
+   * const original = EventBuilder.kind1().content("hello").build();
+   * const modified = EventBuilder.from(original)
+   *   .content("world")
+   *   .build();
+   * // original.content は "hello" のまま
+   * ```
+   */
+  static from(event: NostrEvent): EventBuilder {
+    const builder = EventBuilder.kind(event.kind);
+    builder.#id = event.id;
+    builder.#pubkey = event.pubkey;
+    builder.#content = event.content;
+    builder.#created_at = event.created_at;
+    builder.#sig = event.sig;
+    builder.#tags = event.tags.map((t) => [...t]);
+    return builder;
+  }
+
+  /**
+   * フィルターにマッチするイベントを自動生成する
+   *
+   * 指定されたフィルター条件を満たすイベントを生成する。
+   * テストデータ作成時に便利。
+   *
+   * @param filter マッチさせるフィルター条件
+   * @example
+   * ```ts
+   * const filter = { kinds: [1], authors: ["abc123"] };
+   * const event = EventBuilder.matchFilter(filter);
+   * // event.kind === 1, event.pubkey === "abc123"
+   * ```
+   */
+  static matchFilter(filter: NostrFilter): NostrEvent {
+    const kind = filter.kinds?.[0] ?? 1;
+    const builder = EventBuilder.kind(kind);
+
+    if (filter.authors?.[0]) {
+      builder.pubkey(filter.authors[0]);
+    }
+
+    if (filter.since !== undefined) {
+      builder.createdAt(filter.since);
+    } else if (filter.until !== undefined) {
+      builder.createdAt(filter.until);
+    }
+
+    if (filter.ids?.[0]) {
+      const prefix = filter.ids[0];
+      const remaining = randomHex(32);
+      builder.id((prefix + remaining).slice(0, 64));
+    }
+
+    for (const key of Object.keys(filter)) {
+      if (key.startsWith("#")) {
+        const tagName = key.slice(1);
+        const values = filter[key as `#${string}`];
+        if (values && values.length > 0) {
+          builder.tag(tagName, values[0]);
+        }
+      }
+    }
+
+    if (filter.search) {
+      builder.content(filter.search);
+    }
+
+    return builder.build();
   }
 
   // ===== NIP-09 削除リクエスト =====
@@ -852,5 +1013,21 @@ export class EventBuilder {
     const builder = new EventBuilder(10050);
     for (const url of relayUrls) builder.tag("relay", url);
     return builder;
+  }
+
+  /**
+   * Private DM (NIP-17) を一括で生成するコンビニエンスメソッド
+   *
+   * chatMessage → seal → giftWrap の3段階をまとめて実行する。
+   *
+   * @param options チャットメッセージオプション
+   */
+  static privateDM(options: ChatMessageOptions): NostrEvent {
+    const chatEvent = EventBuilder.chatMessage(options).build();
+    const sealedEvent = EventBuilder.seal(chatEvent).build();
+    return EventBuilder.giftWrap({
+      recipientPubkey: options.recipientPubkey,
+      innerEvent: sealedEvent,
+    }).build();
   }
 }

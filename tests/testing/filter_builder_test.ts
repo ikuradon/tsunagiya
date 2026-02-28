@@ -112,3 +112,75 @@ Deno.test("FilterBuilder.reactionsTo() - creates kind:7 filter with #a tag", () 
   const filter = FilterBuilder.reactionsTo("30023:pubkey:article");
   assertEquals(filter, { kinds: [7], "#a": ["30023:pubkey:article"] });
 });
+
+// ===== 汎用ビルダーメソッド =====
+
+Deno.test("FilterBuilder - 汎用メソッド", async (t) => {
+  await t.step("author() - authors フィールドが正しく設定される", () => {
+    const filter = FilterBuilder.author("pubkey-abc");
+    assertEquals(filter, { authors: ["pubkey-abc"] });
+  });
+
+  await t.step("kind() - kinds フィールドが正しく設定される", () => {
+    const filter = FilterBuilder.kind(30023);
+    assertEquals(filter, { kinds: [30023] });
+  });
+
+  await t.step("since() - since フィールドが正しく設定される", () => {
+    const filter = FilterBuilder.since(1700000000);
+    assertEquals(filter, { since: 1700000000 });
+  });
+
+  await t.step("tagged() - タグフィルターが正しく設定される", () => {
+    const filter = FilterBuilder.tagged("e", ["event1", "event2"]);
+    assertEquals(filter, { "#e": ["event1", "event2"] });
+  });
+
+  await t.step("tagged() - p タグフィルター", () => {
+    const filter = FilterBuilder.tagged("p", ["pubkey1"]);
+    assertEquals(filter, { "#p": ["pubkey1"] });
+  });
+});
+
+// ===== combine =====
+
+Deno.test("FilterBuilder - combine", async (t) => {
+  await t.step("2つのフィルターをマージできる", () => {
+    const filter = FilterBuilder.combine(
+      { kinds: [1] },
+      { authors: ["pub1"] },
+    );
+    assertEquals(filter.kinds, [1]);
+    assertEquals(filter.authors, ["pub1"]);
+  });
+
+  await t.step("kinds の重複が除去される", () => {
+    const filter = FilterBuilder.combine(
+      { kinds: [1, 3] },
+      { kinds: [1, 7] },
+    );
+    const kinds = filter.kinds!;
+    assertEquals(kinds.includes(1), true);
+    assertEquals(kinds.includes(3), true);
+    assertEquals(kinds.includes(7), true);
+    // 重複なし
+    assertEquals(kinds.filter((k) => k === 1).length, 1);
+  });
+
+  await t.step("since は最大値、until は最小値でマージされる", () => {
+    const filter = FilterBuilder.combine(
+      { since: 1700000000, until: 1700002000 },
+      { since: 1700001000, until: 1700003000 },
+    );
+    assertEquals(filter.since, 1700001000); // 最大値
+    assertEquals(filter.until, 1700002000); // 最小値
+  });
+
+  await t.step("limit は最小値でマージされる", () => {
+    const filter = FilterBuilder.combine(
+      { limit: 100 },
+      { limit: 50 },
+    );
+    assertEquals(filter.limit, 50);
+  });
+});

@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
+import { EventBuilder } from "../src/testing/event_builder.ts";
 import type { NostrEvent } from "../src/types.ts";
 
 function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -481,6 +482,88 @@ Deno.test("MockRelay - manages multiple connections and handles partial disconne
   }
 });
 
+// ===== getSubscriptions =====
+
+Deno.test("MockRelay - getSubscriptions", async (t) => {
+  await t.step("初期状態では空の Map を返す", () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+    const subs = relay.getSubscriptions();
+    assertEquals(subs.size, 0);
+  });
+
+  await t.step("REQ 後にサブスクリプションが含まれる", async () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+
+    pool.install();
+    try {
+      const ws = await openWs("wss://relay.example.com");
+      collectMessages(ws);
+
+      ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+      ws.send(
+        JSON.stringify(["REQ", "sub2", { kinds: [0] }, { authors: ["pub1"] }]),
+      );
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+      const subs = relay.getSubscriptions();
+      assertEquals(subs.size, 2);
+      assertEquals(subs.has("sub1"), true);
+      assertEquals(subs.has("sub2"), true);
+
+      const sub1Filters = subs.get("sub1")!;
+      assertEquals(sub1Filters.length, 1);
+      assertEquals(sub1Filters[0].kinds, [1]);
+
+      const sub2Filters = subs.get("sub2")!;
+      assertEquals(sub2Filters.length, 2);
+
+      ws.close();
+      await new Promise<void>((resolve) => {
+        ws.onclose = () => resolve();
+      });
+    } finally {
+      pool.uninstall();
+    }
+  });
+
+  await t.step("CLOSE 後にサブスクリプションが削除される", async () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+
+    pool.install();
+    try {
+      const ws = await openWs("wss://relay.example.com");
+      collectMessages(ws);
+
+      ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+      ws.send(JSON.stringify(["REQ", "sub2", { kinds: [0] }]));
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+      assertEquals(relay.getSubscriptions().size, 2);
+
+      ws.send(JSON.stringify(["CLOSE", "sub1"]));
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+      const subs = relay.getSubscriptions();
+      assertEquals(subs.size, 1);
+      assertEquals(subs.has("sub1"), false);
+      assertEquals(subs.has("sub2"), true);
+
+      ws.close();
+      await new Promise<void>((resolve) => {
+        ws.onclose = () => resolve();
+      });
+    } finally {
+      pool.uninstall();
+    }
+  });
+});
+
 Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
@@ -534,4 +617,36 @@ Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
   } finally {
     pool.uninstall();
   }
+});
+
+// ===== clearOlderThan =====
+
+Deno.test("MockRelay - clearOlderThan", async (t) => {
+  await t.step("指定タイムスタンプより古いイベントを削除する", () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+    // 異なるタイムスタンプのイベントを登録
+    relay.store(EventBuilder.kind1().createdAt(100).content("old1").build());
+    relay.store(EventBuilder.kind1().createdAt(200).content("old2").build());
+    relay.store(EventBuilder.kind1().createdAt(300).content("new1").build());
+    relay.store(EventBuilder.kind1().createdAt(400).content("new2").build());
+
+    const deleted = relay.clearOlderThan(300);
+    assertEquals(deleted, 2);
+  });
+
+  await t.step("削除対象がない場合は 0 を返す", () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+    relay.store(EventBuilder.kind1().createdAt(500).build());
+    const deleted = relay.clearOlderThan(100);
+    assertEquals(deleted, 0);
+  });
+
+  await t.step("空のストアでも正常に動作する", () => {
+    const pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+    const deleted = relay.clearOlderThan(1000);
+    assertEquals(deleted, 0);
+  });
 });

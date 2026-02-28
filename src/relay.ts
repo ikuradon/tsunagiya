@@ -109,7 +109,14 @@ export class MockRelay {
    * ブロードキャストは行わない。サブスクリプションへの配信が必要な場合は
    * {@link broadcast} を別途呼び出すこと。
    *
+   * @param event ストアに登録するイベント
    * @returns ストアに追加された場合 true、無視された場合 false
+   * @example
+   * ```ts
+   * const relay = pool.relay("wss://relay.example.com");
+   * const event = EventBuilder.kind1().content("hello").build();
+   * relay.store(event);
+   * ```
    */
   store(event: NostrEvent): boolean {
     // NIP-09: kind:5 削除リクエストの処理
@@ -242,6 +249,33 @@ export class MockRelay {
   }
 
   // ===== 検証ヘルパー =====
+
+  /**
+   * 現在のアクティブサブスクリプション一覧を返す
+   *
+   * 全接続のサブスクリプションを集約し、subId → filters の
+   * 読み取り専用ビューを提供する。同じ subId が複数接続にある場合は
+   * 最初に見つかったものを使う。
+   *
+   * @example
+   * ```ts
+   * const subs = relay.getSubscriptions();
+   * for (const [subId, filters] of subs) {
+   *   console.log(`${subId}: ${JSON.stringify(filters)}`);
+   * }
+   * ```
+   */
+  getSubscriptions(): ReadonlyMap<string, ReadonlyArray<NostrFilter>> {
+    const result = new Map<string, NostrFilter[]>();
+    for (const subscriptions of this.#subscriptions.values()) {
+      for (const [subId, filters] of subscriptions) {
+        if (!result.has(subId)) {
+          result.set(subId, filters);
+        }
+      }
+    }
+    return result;
+  }
 
   /** 全受信メッセージ（パース済み） */
   get received(): ClientMessage[] {
@@ -400,6 +434,11 @@ export class MockRelay {
       }),
       deletedIds: [...this.#deletedIds],
       info: { ...this.#info },
+      metadata: {
+        subscriptionCount: this.getSubscriptions().size,
+        connectionCount: this.#connections.size,
+        eventCount: this.#store.length,
+      },
     };
   }
 
@@ -439,6 +478,27 @@ export class MockRelay {
     }));
     this.#deletedIds = new Set(snap.deletedIds ?? []);
     this.#info = snap.info ? { ...snap.info } : {};
+  }
+
+  /**
+   * 指定タイムスタンプより古いイベントをストアから削除する
+   *
+   * 大量イベント時のメモリ最適化用。
+   *
+   * @param timestamp UNIXタイムスタンプ (秒)。これより古い created_at のイベントが削除される
+   * @returns 削除されたイベント数
+   * @example
+   * ```ts
+   * // 1時間以上前のイベントを削除
+   * const cutoff = Math.floor(Date.now() / 1000) - 3600;
+   * const deleted = relay.clearOlderThan(cutoff);
+   * console.log(`${deleted} events removed`);
+   * ```
+   */
+  clearOlderThan(timestamp: number): number {
+    const before = this.#store.length;
+    this.#store = this.#store.filter((e) => e.created_at >= timestamp);
+    return before - this.#store.length;
   }
 
   /**
@@ -501,6 +561,14 @@ export class MockRelay {
    * マッチした場合にそのサブスクリプションへ送信する。
    *
    * ストアへの保存は行わない。保存が必要な場合は {@link store} を別途呼び出すこと。
+   *
+   * @param event ブロードキャストするイベント
+   * @example
+   * ```ts
+   * const event = EventBuilder.kind1().content("hello").build();
+   * relay.store(event);
+   * relay.broadcast(event);
+   * ```
    */
   broadcast(event: NostrEvent): void {
     for (const [ws, subscriptions] of this.#subscriptions) {
@@ -939,9 +1007,10 @@ export class MockRelay {
         ) {
           return { stored: false, ephemeral: false };
         }
-        this.#store = this.#store.filter(
-          (e) => !(e.kind === event.kind && e.pubkey === event.pubkey),
+        const idx = this.#store.findIndex(
+          (e) => e.kind === event.kind && e.pubkey === event.pubkey,
         );
+        if (idx !== -1) this.#store.splice(idx, 1);
       }
       this.#store.push(event);
       return { stored: true, ephemeral: false };
@@ -962,9 +1031,10 @@ export class MockRelay {
         ) {
           return { stored: false, ephemeral: false };
         }
-        this.#store = this.#store.filter(
-          (e) => getParameterizedId(e) !== newParamId,
+        const idx = this.#store.findIndex(
+          (e) => getParameterizedId(e) === newParamId,
         );
+        if (idx !== -1) this.#store.splice(idx, 1);
       }
       this.#store.push(event);
       return { stored: true, ephemeral: false };

@@ -30,6 +30,13 @@ export interface TimelineFilterOptions {
 export class FilterBuilder {
   /**
    * タイムラインフィルター (kind:1)
+   *
+   * @param options フィルターオプション
+   * @example
+   * ```ts
+   * const filter = FilterBuilder.timeline({ limit: 20, since: 1700000000 });
+   * // → { kinds: [1], limit: 20, since: 1700000000 }
+   * ```
    */
   static timeline(options: TimelineFilterOptions = {}): NostrFilter {
     const filter: NostrFilter = { kinds: [1] };
@@ -226,5 +233,112 @@ export class FilterBuilder {
    */
   static dmRelayList(pubkey: string): NostrFilter {
     return { kinds: [10050], authors: [pubkey] };
+  }
+
+  /**
+   * 著者フィルター
+   *
+   * @param pubkey 公開鍵
+   * @example
+   * ```ts
+   * const filter = FilterBuilder.author("abc123");
+   * // → { authors: ["abc123"] }
+   * ```
+   */
+  static author(pubkey: string): NostrFilter {
+    return { authors: [pubkey] };
+  }
+
+  /**
+   * kind フィルター
+   *
+   * @param k イベントkind
+   */
+  static kind(k: number): NostrFilter {
+    return { kinds: [k] };
+  }
+
+  /**
+   * 時刻下限フィルター
+   *
+   * @param timestamp since (UNIX秒)
+   */
+  static since(timestamp: number): NostrFilter {
+    return { since: timestamp };
+  }
+
+  /**
+   * タグフィルター
+   *
+   * @param tagName タグ名（#なし、例: "e", "p"）
+   * @param values マッチする値の配列
+   */
+  static tagged(tagName: string, values: string[]): NostrFilter {
+    return { [`#${tagName}`]: values };
+  }
+
+  /**
+   * 複数フィルターをマージした単一フィルターを生成する
+   *
+   * kinds/authors は結合してユニーク化、since は最大値、
+   * until は最小値、limit は最小値を採用する。
+   *
+   * @param filters マージするフィルター群
+   * @example
+   * ```ts
+   * const combined = FilterBuilder.combine(
+   *   { kinds: [1], since: 100 },
+   *   { kinds: [7], since: 200 },
+   * );
+   * // → { kinds: [1, 7], since: 200 }
+   * ```
+   */
+  static combine(...filters: NostrFilter[]): NostrFilter {
+    const result: NostrFilter = {};
+    const kindsSet = new Set<number>();
+    const authorsSet = new Set<string>();
+    const tagMap = new Map<string, Set<string>>();
+    let since: number | undefined;
+    let until: number | undefined;
+    let limit: number | undefined;
+
+    for (const f of filters) {
+      if (f.kinds) {
+        for (const k of f.kinds) kindsSet.add(k);
+      }
+      if (f.authors) {
+        for (const a of f.authors) authorsSet.add(a);
+      }
+      if (f.since !== undefined) {
+        since = since === undefined ? f.since : Math.max(since, f.since);
+      }
+      if (f.until !== undefined) {
+        until = until === undefined ? f.until : Math.min(until, f.until);
+      }
+      if (f.limit !== undefined) {
+        limit = limit === undefined ? f.limit : Math.min(limit, f.limit);
+      }
+      for (const key of Object.keys(f)) {
+        if (key.startsWith("#")) {
+          const vals = f[key as `#${string}`];
+          if (vals) {
+            const set = tagMap.get(key) ?? new Set<string>();
+            for (const v of vals) set.add(v);
+            tagMap.set(key, set);
+          }
+        }
+      }
+    }
+
+    if (kindsSet.size > 0) result.kinds = Array.from(kindsSet);
+    if (authorsSet.size > 0) result.authors = Array.from(authorsSet);
+    if (since !== undefined) result.since = since;
+    if (until !== undefined) result.until = until;
+    if (limit !== undefined) result.limit = limit;
+    for (const [key, vals] of tagMap) {
+      result[key as `#${string}`] = Array.from(vals);
+    }
+
+    return result;
   }
 }

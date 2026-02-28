@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { MockPool } from "../../src/pool.ts";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { restore, snapshot } from "../../src/testing/snapshot.ts";
@@ -234,4 +234,18 @@ Deno.test("snapshot - restores state after disconnectAfter()", async () => {
   } finally {
     pool.uninstall();
   }
+});
+
+Deno.test("snapshot - メタデータが含まれる", () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+  // イベントをストアに追加
+  relay.store(EventBuilder.kind1().build());
+  relay.store(EventBuilder.kind1().build());
+
+  const snap = relay.snapshot();
+  assertExists(snap.metadata);
+  assertEquals(snap.metadata!.eventCount, 2);
+  assertEquals(snap.metadata!.subscriptionCount, 0);
+  assertEquals(snap.metadata!.connectionCount, 0);
 });

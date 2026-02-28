@@ -15,6 +15,7 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 1,
   info: 2,
   debug: 3,
+  trace: 4,
 };
 
 /**

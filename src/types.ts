@@ -148,7 +148,7 @@ export type COUNTHandler = (
 ) => { count: number } | Promise<{ count: number }>;
 
 /** ログレベル */
-export type LogLevel = "silent" | "error" | "info" | "debug";
+export type LogLevel = "silent" | "error" | "info" | "debug" | "trace";
 
 /** ストリームオプション */
 export interface StreamOptions {
@@ -217,4 +217,13 @@ export interface RelaySnapshot {
   deletedIds?: string[];
   /** NIP-11 リレー情報 */
   info?: RelayInformation;
+  /** スナップショットメタデータ */
+  metadata?: {
+    /** アクティブなサブスクリプション数 */
+    subscriptionCount: number;
+    /** アクティブな接続数 */
+    connectionCount: number;
+    /** ストア内のイベント数 */
+    eventCount: number;
+  };
 }
