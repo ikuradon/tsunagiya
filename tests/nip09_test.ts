@@ -392,10 +392,181 @@ Deno.test("NIP-09 EventBuilder.deletion() - creates kind:5 with e-tags", () => {
   assertEquals(event.tags[1], ["e", "id2"]);
 });
 
-Deno.test("NIP-09 EventBuilder.deletionByAddress() - creates kind:5 with a-tags", () => {
+Deno.test("NIP-09 EventBuilder.deletionByAddress() - creates kind:5 with a-tags and k-tags", () => {
   const builder = EventBuilder.deletionByAddress(["30000:pubkey:d-tag"]);
   const event = builder.build();
   assertEquals(event.kind, 5);
-  assertEquals(event.tags.length, 1);
+  assertEquals(event.tags.length, 2);
   assertEquals(event.tags[0], ["a", "30000:pubkey:d-tag"]);
+  assertEquals(event.tags[1], ["k", "30000"]);
+});
+
+Deno.test("NIP-09 EventBuilder.deletionByAddress() - deduplicates k-tags", () => {
+  const builder = EventBuilder.deletionByAddress([
+    "30000:pubkey:list1",
+    "30000:pubkey:list2",
+  ]);
+  const event = builder.build();
+  assertEquals(event.kind, 5);
+  assertEquals(event.tags.length, 3); // 2 a-tags + 1 k-tag
+  assertEquals(event.tags[0], ["a", "30000:pubkey:list1"]);
+  assertEquals(event.tags[1], ["a", "30000:pubkey:list2"]);
+  assertEquals(event.tags[2], ["k", "30000"]);
+});
+
+Deno.test("NIP-09 EventBuilder.deletion() - adds k-tags when kinds specified", () => {
+  const builder = EventBuilder.deletion(["id1"], [1, 30023]);
+  const event = builder.build();
+  assertEquals(event.kind, 5);
+  assertEquals(event.tags.length, 3);
+  assertEquals(event.tags[0], ["e", "id1"]);
+  assertEquals(event.tags[1], ["k", "1"]);
+  assertEquals(event.tags[2], ["k", "30023"]);
+});
+
+Deno.test("NIP-09 deletion - a-tag does not delete event newer than deletion request", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  const pubkey = "aabb";
+  const now = Math.floor(Date.now() / 1000);
+
+  // ターゲットイベントの created_at が削除リクエストより後
+  const target = EventBuilder.kind(30000).pubkey(pubkey)
+    .tag("d", "my-list")
+    .createdAt(now + 100)
+    .content("newer content").build();
+  relay.store(target);
+
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+    const messages: string[] = [];
+
+    ws.addEventListener("open", () => {
+      const deletion = EventBuilder.deletionByAddress(
+        [`30000:${pubkey}:my-list`],
+      )
+        .pubkey(pubkey)
+        .createdAt(now) // 削除リクエストはターゲットより古い
+        .build();
+      ws.send(JSON.stringify(["EVENT", deletion]));
+    });
+    ws.addEventListener("message", (e) => {
+      messages.push(e.data as string);
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // 削除リクエストは受理されるが、ターゲットは削除されない
+    assertEquals(relay.deletedIds.has(target.id), false);
+
+    // ターゲットがまだストアに存在することを確認
+    const ws2 = new WebSocket("wss://relay.example.com");
+    const msgs2: string[] = [];
+    ws2.addEventListener("open", () => {
+      ws2.send(
+        JSON.stringify(["REQ", "sub1", { kinds: [30000], authors: [pubkey] }]),
+      );
+    });
+    ws2.addEventListener("message", (e) => {
+      msgs2.push(e.data as string);
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(msgs2.length, 2); // EVENT + EOSE
+    assertEquals(JSON.parse(msgs2[0])[0], "EVENT");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-09 deletion - e-tag does not delete event newer than deletion request", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  const pubkey = "aabb";
+  const now = Math.floor(Date.now() / 1000);
+
+  // ターゲットイベントの created_at が削除リクエストより後
+  const target = EventBuilder.kind1().pubkey(pubkey)
+    .createdAt(now + 100)
+    .content("newer content").build();
+  relay.store(target);
+
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+    const messages: string[] = [];
+
+    ws.addEventListener("open", () => {
+      const deletion = EventBuilder.deletion([target.id])
+        .pubkey(pubkey)
+        .createdAt(now) // 削除リクエストはターゲットより古い
+        .build();
+      ws.send(JSON.stringify(["EVENT", deletion]));
+    });
+    ws.addEventListener("message", (e) => {
+      messages.push(e.data as string);
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // 削除リクエストは受理されるが、ターゲットは削除されない
+    assertEquals(relay.deletedIds.has(target.id), false);
+
+    // ターゲットがまだストアに存在することを確認
+    const ws2 = new WebSocket("wss://relay.example.com");
+    const msgs2: string[] = [];
+    ws2.addEventListener("open", () => {
+      ws2.send(
+        JSON.stringify(["REQ", "sub1", { ids: [target.id] }]),
+      );
+    });
+    ws2.addEventListener("message", (e) => {
+      msgs2.push(e.data as string);
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(msgs2.length, 2); // EVENT + EOSE
+    assertEquals(JSON.parse(msgs2[0])[0], "EVENT");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-09 deletion - e-tag deletes event with same created_at", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  const pubkey = "aabb";
+  const now = Math.floor(Date.now() / 1000);
+
+  // ターゲットと削除リクエストの created_at が同じ
+  const target = EventBuilder.kind1().pubkey(pubkey)
+    .createdAt(now)
+    .content("same timestamp").build();
+  relay.store(target);
+
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+
+    ws.addEventListener("open", () => {
+      const deletion = EventBuilder.deletion([target.id])
+        .pubkey(pubkey)
+        .createdAt(now) // 同じタイムスタンプ
+        .build();
+      ws.send(JSON.stringify(["EVENT", deletion]));
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    // created_at が等しい場合は削除される（<= 条件）
+    assertEquals(relay.deletedIds.has(target.id), true);
+  } finally {
+    pool.uninstall();
+  }
 });

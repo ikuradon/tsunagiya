@@ -598,11 +598,17 @@ export class EventBuilder {
    * 削除リクエスト (kind:5) ビルダーを作成する (NIP-09)
    *
    * @param eventIds 削除対象のイベントID配列
+   * @param kinds 削除対象の kind 配列（k tag として付与）
    */
-  static deletion(eventIds: string[]): EventBuilder {
+  static deletion(eventIds: string[], kinds?: number[]): EventBuilder {
     const builder = new EventBuilder(5);
     for (const id of eventIds) {
       builder.tag("e", id);
+    }
+    if (kinds) {
+      for (const k of kinds) {
+        builder.tag("k", String(k));
+      }
     }
     return builder;
   }
@@ -610,12 +616,20 @@ export class EventBuilder {
   /**
    * アドレス指定の削除リクエスト (kind:5) ビルダーを作成する (NIP-09)
    *
+   * アドレスから kind を自動抽出し k tag として付与する。
+   *
    * @param addresses 削除対象のアドレス配列 (kind:pubkey:d-tag 形式)
    */
   static deletionByAddress(addresses: string[]): EventBuilder {
     const builder = new EventBuilder(5);
+    const kinds = new Set<string>();
     for (const addr of addresses) {
       builder.tag("a", addr);
+      const kind = addr.split(":")[0];
+      if (kind) kinds.add(kind);
+    }
+    for (const k of kinds) {
+      builder.tag("k", k);
     }
     return builder;
   }

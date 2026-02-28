@@ -919,7 +919,10 @@ export class MockRelay {
       if (tag[0] === "e" && tag[1]) {
         const targetId = tag[1];
         const target = this.#store.find((e) => e.id === targetId);
-        if (target && target.pubkey === deletionEvent.pubkey) {
+        if (
+          target && target.pubkey === deletionEvent.pubkey &&
+          target.created_at <= deletionEvent.created_at
+        ) {
           idsToDelete.add(targetId);
         }
       }
@@ -936,6 +939,7 @@ export class MockRelay {
             const target = this.#store.find((e) => {
               if (
                 e.kind === aKind && e.pubkey === aPubkey &&
+                e.created_at <= deletionEvent.created_at &&
                 isParameterizedReplaceable(e.kind)
               ) {
                 const dValue = e.tags.find((t) => t[0] === "d")?.[1] ?? "";
@@ -943,6 +947,7 @@ export class MockRelay {
               }
               if (
                 e.kind === aKind && e.pubkey === aPubkey &&
+                e.created_at <= deletionEvent.created_at &&
                 isReplaceable(e.kind)
               ) {
                 return true;
