@@ -98,6 +98,17 @@ export class MockWebSocket extends EventTarget {
     this.#scheduleOpen();
   }
 
+  #clearTimers(): void {
+    if (this.#connectionTimer !== undefined) {
+      clearTimeout(this.#connectionTimer);
+      this.#connectionTimer = undefined;
+    }
+    if (this.#openTimer !== undefined) {
+      clearTimeout(this.#openTimer);
+      this.#openTimer = undefined;
+    }
+  }
+
   #scheduleOpen(): void {
     const delay = this.#relay?.options.connectionDelay ?? 0;
     const doOpen = () => {
@@ -161,6 +172,7 @@ export class MockWebSocket extends EventTarget {
     }
 
     this.#readyState = WebSocketReadyState.CLOSING;
+    this.#clearTimers();
 
     queueMicrotask(() => {
       this.#relay?._unregisterConnection(this);
@@ -192,6 +204,7 @@ export class MockWebSocket extends EventTarget {
       return;
     }
 
+    this.#clearTimers();
     this.#relay?._unregisterConnection(this);
     this.#fireClose(code, reason);
   }

@@ -625,6 +625,7 @@ export class MockRelay {
       // メッセージ構造の基本検証
       if (!Array.isArray(raw) || raw.length < 1) {
         this.#errors.push("error: invalid message format");
+        this.#log("receive", data, "error");
         const notice: RelayMessage = [
           "NOTICE",
           "error: invalid message format",
@@ -1059,10 +1060,11 @@ export class MockRelay {
     }
 
     if (kind === "replaceable") {
-      const existing = this.#store.find(
+      const idx = this.#store.findIndex(
         (e) => e.kind === event.kind && e.pubkey === event.pubkey,
       );
-      if (existing) {
+      if (idx !== -1) {
+        const existing = this.#store[idx];
         if (event.created_at < existing.created_at) {
           return { stored: false, ephemeral: false };
         }
@@ -1072,10 +1074,7 @@ export class MockRelay {
         ) {
           return { stored: false, ephemeral: false };
         }
-        const idx = this.#store.findIndex(
-          (e) => e.kind === event.kind && e.pubkey === event.pubkey,
-        );
-        if (idx !== -1) this.#store.splice(idx, 1);
+        this.#store.splice(idx, 1);
       }
       this.#store.push(event);
       return { stored: true, ephemeral: false };
@@ -1083,10 +1082,11 @@ export class MockRelay {
 
     if (kind === "parameterized_replaceable") {
       const newParamId = getParameterizedId(event);
-      const existing = this.#store.find(
+      const idx = this.#store.findIndex(
         (e) => getParameterizedId(e) === newParamId,
       );
-      if (existing) {
+      if (idx !== -1) {
+        const existing = this.#store[idx];
         if (event.created_at < existing.created_at) {
           return { stored: false, ephemeral: false };
         }
@@ -1096,10 +1096,7 @@ export class MockRelay {
         ) {
           return { stored: false, ephemeral: false };
         }
-        const idx = this.#store.findIndex(
-          (e) => getParameterizedId(e) === newParamId,
-        );
-        if (idx !== -1) this.#store.splice(idx, 1);
+        this.#store.splice(idx, 1);
       }
       this.#store.push(event);
       return { stored: true, ephemeral: false };

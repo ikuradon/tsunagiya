@@ -105,6 +105,7 @@ export class AuthState {
       }
     }
 
+    this.#challenges.delete(ws);
     this.#authenticated.add(ws);
     return [true, ""];
   }
