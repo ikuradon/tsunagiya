@@ -1038,6 +1038,28 @@ export class MockRelay {
 
   // ===== イベント種別判定・ストア =====
 
+  #replaceEvent(
+    event: NostrEvent,
+    predicate: (e: NostrEvent) => boolean,
+  ): { stored: boolean; ephemeral: boolean } {
+    const idx = this.#store.findIndex(predicate);
+    if (idx !== -1) {
+      const existing = this.#store[idx];
+      if (event.created_at < existing.created_at) {
+        return { stored: false, ephemeral: false };
+      }
+      if (
+        event.created_at === existing.created_at &&
+        event.id >= existing.id
+      ) {
+        return { stored: false, ephemeral: false };
+      }
+      this.#store.splice(idx, 1);
+    }
+    this.#store.push(event);
+    return { stored: true, ephemeral: false };
+  }
+
   /**
    * イベント種別に応じてストアに追加・置換する
    *
@@ -1060,46 +1082,18 @@ export class MockRelay {
     }
 
     if (kind === "replaceable") {
-      const idx = this.#store.findIndex(
+      return this.#replaceEvent(
+        event,
         (e) => e.kind === event.kind && e.pubkey === event.pubkey,
       );
-      if (idx !== -1) {
-        const existing = this.#store[idx];
-        if (event.created_at < existing.created_at) {
-          return { stored: false, ephemeral: false };
-        }
-        if (
-          event.created_at === existing.created_at &&
-          event.id >= existing.id
-        ) {
-          return { stored: false, ephemeral: false };
-        }
-        this.#store.splice(idx, 1);
-      }
-      this.#store.push(event);
-      return { stored: true, ephemeral: false };
     }
 
     if (kind === "parameterized_replaceable") {
       const newParamId = getParameterizedId(event);
-      const idx = this.#store.findIndex(
+      return this.#replaceEvent(
+        event,
         (e) => getParameterizedId(e) === newParamId,
       );
-      if (idx !== -1) {
-        const existing = this.#store[idx];
-        if (event.created_at < existing.created_at) {
-          return { stored: false, ephemeral: false };
-        }
-        if (
-          event.created_at === existing.created_at &&
-          event.id >= existing.id
-        ) {
-          return { stored: false, ephemeral: false };
-        }
-        this.#store.splice(idx, 1);
-      }
-      this.#store.push(event);
-      return { stored: true, ephemeral: false };
     }
 
     // Regular

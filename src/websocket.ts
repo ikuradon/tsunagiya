@@ -83,10 +83,8 @@ export class MockWebSocket extends EventTarget {
     const timeout = this.#relay.options.connectionTimeout;
     if (timeout !== undefined && timeout > 0) {
       this.#connectionTimer = setTimeout(() => {
-        this.#connectionTimer = undefined;
         if (this.#readyState === WebSocketReadyState.CONNECTING) {
-          clearTimeout(this.#openTimer);
-          this.#openTimer = undefined;
+          this.#clearTimers();
           this.#relay?._unregisterConnection(this);
           this.#fireError();
           this.#fireClose(1006, "Connection timeout");
@@ -117,10 +115,7 @@ export class MockWebSocket extends EventTarget {
       this.#readyState = WebSocketReadyState.OPEN;
 
       // 接続タイムアウトタイマーをクリア
-      if (this.#connectionTimer !== undefined) {
-        clearTimeout(this.#connectionTimer);
-        this.#connectionTimer = undefined;
-      }
+      this.#clearTimers();
 
       const openEvent = new Event("open");
       this.onopen?.(openEvent);
