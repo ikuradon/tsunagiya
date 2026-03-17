@@ -67,6 +67,10 @@ URL 単位で動作する仮想リレー。
 
 <!--@include: ../_shared/snippets/testing-helpers.md-->
 
+## Vitest での使い方
+
+<!--@include: ../_shared/snippets/vitest-usage.md-->
+
 ## 対応 NIP
 
 <!--@include: ../_shared/tables/nip-support.md-->

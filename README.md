@@ -7,8 +7,16 @@ Nostr relay mock library for Deno/TypeScript.
 
 ## インストール
 
+**Deno:**
+
 ```bash
 deno add jsr:@ikuradon/tsunagiya
+```
+
+**npm:**
+
+```bash
+npm install @ikuradon/tsunagiya
 ```
 
 ## 基本的な使い方
@@ -390,6 +398,56 @@ const snap = snapshot(relay);
 // ... 操作 ...
 restore(relay, snap);
 ```
+
+## Vitest での使い方
+
+npm パッケージとしてインストールすれば、Vitest でそのまま使えます。
+
+```typescript
+import { afterEach, describe, expect, it } from "vitest";
+import { MockPool } from "@ikuradon/tsunagiya";
+
+describe("Nostr client", () => {
+  let pool: MockPool;
+
+  afterEach(() => pool?.uninstall());
+
+  it("should fetch events from relay", async () => {
+    pool = new MockPool();
+    const relay = pool.relay("wss://relay.example.com");
+
+    relay.store({
+      id: "abc123",
+      pubkey: "pubkey1",
+      kind: 1,
+      content: "hello nostr",
+      created_at: 1700000000,
+      tags: [],
+      sig: "sig1",
+    });
+
+    pool.install();
+
+    const ws = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    const messages: string[] = [];
+    ws.onmessage = (ev) => messages.push(ev.data as string);
+
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(messages.some((m) => m.includes("abc123"))).toBe(true);
+    ws.close();
+  });
+});
+```
+
+> **Note:** Vitest のデフォルト環境 (`environment: 'node'`) で動作します。
+> `jsdom` や `happy-dom` 環境では WebSocket の競合が起きる可能性があるため、
+> `environment: 'node'` を推奨します。
 
 ## E2Eテスト対応
 

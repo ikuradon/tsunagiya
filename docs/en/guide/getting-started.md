@@ -66,6 +66,10 @@ Import from `@ikuradon/tsunagiya/testing`.
 
 <!--@include: ../../_shared/snippets/en/testing-helpers.md-->
 
+## Using with Vitest
+
+<!--@include: ../../_shared/snippets/en/vitest-usage.md-->
+
 ## Supported NIPs
 
 <!--@include: ../../_shared/tables/en/nip-support.md-->

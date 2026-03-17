@@ -4,7 +4,13 @@
 deno add jsr:@ikuradon/tsunagiya
 ```
 
-**Node.js / Bun:**
+**npm:**
+
+```bash
+npm install @ikuradon/tsunagiya
+```
+
+**JSR (Node.js / Bun):**
 
 ```bash
 npx jsr add @ikuradon/tsunagiya

@@ -45,16 +45,24 @@ inside an `onEVENT` handler.
 
 ### Q5. Can it be used with runtimes other than Deno (Node.js, Bun)?
 
+Yes. It is published as an npm package (`@ikuradon/tsunagiya`), so you can
+install it directly with `npm install`. It works with test frameworks like
+Vitest and Jest.
+
+```bash
+npm install @ikuradon/tsunagiya
+```
+
 Since v0.2.0, compatibility with the following major Nostr client libraries has
 been verified through E2E tests:
 
-- **nostr-tools** (`npm:nostr-tools@^2`) - REQ/EVENT processing via SimplePool
-- **NDK** (`npm:@nostr-dev-kit/ndk@^2`) - Event fetch/publish via NDK instance
-- **rx-nostr** (`npm:rx-nostr@^3`) - RxNostr Reactive API (createRxNostr / use)
-- **nostr-fetch** (`npm:nostr-fetch@^0`) - Event fetching via NostrFetcher
-  (fetch / iterator)
+- **nostr-tools** - REQ/EVENT processing via SimplePool
+- **NDK** - Event fetch/publish via NDK instance
+- **rx-nostr** - RxNostr Reactive API (createRxNostr / use)
+- **nostr-fetch** - Event fetching via NostrFetcher (fetch / iterator)
 
-These libraries work using Deno's npm compatibility feature.
+See [Getting Started](/en/guide/getting-started#using-with-vitest) for Vitest
+usage.
 
 ---
 

@@ -45,18 +45,24 @@ outline: deep
 
 ### Q5. Deno 以外のランタイム（Node.js, Bun）で使える？
 
+はい。npm
+パッケージ（`@ikuradon/tsunagiya`）として公開しているため、`npm install`
+でそのまま使えます。Vitest, Jest 等のテストフレームワークでも動作します。
+
+```bash
+npm install @ikuradon/tsunagiya
+```
+
 v0.2.0 以降では、以下の主要 Nostr クライアントライブラリとの互換性を E2E
 テストで検証しています:
 
-- **nostr-tools** (`npm:nostr-tools@^2`) - SimplePool での REQ/EVENT 処理
-- **NDK** (`npm:@nostr-dev-kit/ndk@^2`) - NDK
-  インスタンス経由のイベント取得・投稿
-- **rx-nostr** (`npm:rx-nostr@^3`) - RxNostr の Reactive API（createRxNostr /
-  use）
-- **nostr-fetch** (`npm:nostr-fetch@^0`) - NostrFetcher
-  によるイベント取得（fetch / iterator）
+- **nostr-tools** - SimplePool での REQ/EVENT 処理
+- **NDK** - NDK インスタンス経由のイベント取得・投稿
+- **rx-nostr** - RxNostr の Reactive API（createRxNostr / use）
+- **nostr-fetch** - NostrFetcher によるイベント取得（fetch / iterator）
 
-これらのライブラリは Deno の npm 互換性機能を利用して動作します。
+Vitest での使い方は [はじめに](/guide/getting-started#vitest-での使い方)
+を参照してください。
 
 ---
 
