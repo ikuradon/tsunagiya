@@ -6,6 +6,7 @@ import {
   restore,
   snapshot,
   streamEvents,
+  waitFor,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
@@ -112,6 +113,21 @@ const stream = startStream(relay, {
   count: 10,
 });
 stream.stop();
+```
+
+Condition waiting helper:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// Poll until a condition is met (alternative to fixed setTimeout)
+await waitFor(() => received.length >= 3);
+
+// Custom timeout and polling interval
+await waitFor(() => relay.connectionCount === 0, {
+  timeout: 3000,
+  interval: 20,
+});
 ```
 
 Snapshot:

@@ -368,6 +368,16 @@ assertClosed(relay, "sub1");
 assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 ```
 
+### 条件待ちヘルパー
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// 条件が満たされるまでポーリングで待機（固定 setTimeout の代替）
+await waitFor(() => received.length >= 3);
+await waitFor(() => relay.connectionCount === 0, { timeout: 3000 });
+```
+
 ### リアルタイムストリーム
 
 ```typescript

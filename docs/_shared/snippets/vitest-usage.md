@@ -81,6 +81,43 @@ describe("Nostr client", () => {
 });
 ```
 
+### 条件待ちヘルパー（`waitFor`）
+
+固定時間の `setTimeout` 待ちは CI
+環境でフレーキーテストの原因になります。`waitFor`
+はポーリングベースで条件が満たされるまで待機します:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// 3件のイベントが届くまで待つ（固定 setTimeout の代わりに）
+await waitFor(() => received.length >= 3);
+
+// タイムアウト・間隔のカスタマイズ
+await waitFor(() => relay.connectionCount === 0, {
+  timeout: 3000,
+  interval: 20,
+});
+```
+
+### 非同期クリーンアップの待機
+
+rx-nostr 等のライブラリは `dispose()` 後も内部で非同期的に WebSocket
+を閉じることがあります。`waitFor` で全接続が閉じるまで確実に待機できます:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+afterEach(async () => {
+  rxNostr.dispose();
+  // 全接続が閉じるまで待つ
+  await waitFor(() => relay.connectionCount === 0);
+  pool.uninstall();
+});
+```
+
+これにより、テスト間の非同期リークによるフレーキーテストを防止できます。
+
 ### テスト支援ヘルパーの活用
 
 `@ikuradon/tsunagiya/testing` のヘルパーも Vitest でそのまま使えます:

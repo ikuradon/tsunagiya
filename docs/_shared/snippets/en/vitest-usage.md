@@ -82,6 +82,42 @@ describe("Nostr client", () => {
 });
 ```
 
+### Condition Waiting Helper (`waitFor`)
+
+Fixed `setTimeout` waits cause flaky tests in CI environments. `waitFor` polls
+until a condition is met:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// Wait until 3 events are received (instead of fixed setTimeout)
+await waitFor(() => received.length >= 3);
+
+// Custom timeout and interval
+await waitFor(() => relay.connectionCount === 0, {
+  timeout: 3000,
+  interval: 20,
+});
+```
+
+### Waiting for Async Cleanup
+
+Libraries like rx-nostr may close WebSocket connections asynchronously after
+`dispose()`. Use `waitFor` to reliably wait until all connections are closed:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+afterEach(async () => {
+  rxNostr.dispose();
+  // Wait until all connections are closed
+  await waitFor(() => relay.connectionCount === 0);
+  pool.uninstall();
+});
+```
+
+This prevents flaky tests caused by async leaks between test cases.
+
 ### Using Test Helpers
 
 The helpers from `@ikuradon/tsunagiya/testing` work with Vitest as-is:

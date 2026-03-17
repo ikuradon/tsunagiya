@@ -6,6 +6,7 @@ import {
   restore,
   snapshot,
   streamEvents,
+  waitFor,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
@@ -112,6 +113,21 @@ const stream = startStream(relay, {
   count: 10,
 });
 stream.stop();
+```
+
+条件待ちヘルパー:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// 条件が満たされるまでポーリングで待機（固定 setTimeout の代替）
+await waitFor(() => received.length >= 3);
+
+// タイムアウト・ポーリング間隔のカスタマイズ
+await waitFor(() => relay.connectionCount === 0, {
+  timeout: 3000,
+  interval: 20,
+});
 ```
 
 スナップショット:

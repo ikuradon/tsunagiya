@@ -34,3 +34,5 @@ export {
 
 export { startStream, streamEvents } from "./stream.ts";
 export { restore, snapshot } from "./snapshot.ts";
+export { waitFor } from "./wait.ts";
+export type { WaitForOptions } from "./wait.ts";

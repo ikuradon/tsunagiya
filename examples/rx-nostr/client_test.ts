@@ -2,7 +2,7 @@
  * rx-nostr クライアント テスト
  *
  * tsunagiya MockRelay を使って rx-nostr クライアントの各コマンドをテスト。
- * rx-nostr 内部の非同期操作がテスト境界を超えるため sanitize を無効化。
+ * waitFor で rx-nostr 内部の非同期クリーンアップを待機する。
  *
  * @module
  */
@@ -10,7 +10,7 @@
 import { assertEquals, assertGreater, test } from "../_compat/mod.ts";
 import { MockPool } from "../../src/mod.ts";
 import type { NostrEvent } from "../../src/types.ts";
-import { streamEvents } from "../../src/testing/mod.ts";
+import { streamEvents, waitFor } from "../../src/testing/mod.ts";
 
 import {
   createRxNostr,
@@ -27,10 +27,7 @@ import {
 
 const { sk, pk, hexSk } = generateKey();
 
-/** テスト共通オプション: rx-nostr 内部の非同期リークを許容 */
-const testOpts = { sanitizeResources: false, sanitizeOps: false };
-
-test("rx-nostr: timeline (backward)", testOpts, async () => {
+test("rx-nostr: timeline (backward)", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-tl.test");
 
@@ -55,12 +52,13 @@ test("rx-nostr: timeline (backward)", testOpts, async () => {
     assertEquals(events[2].content, "first post");
 
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: post", testOpts, async () => {
+test("rx-nostr: post", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-post.test");
 
@@ -82,12 +80,13 @@ test("rx-nostr: post", testOpts, async () => {
     assertEquals(posted.length, 1);
 
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: like", testOpts, async () => {
+test("rx-nostr: like", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-like.test");
 
@@ -111,12 +110,13 @@ test("rx-nostr: like", testOpts, async () => {
     assertEquals(reactions[0][1].content, "+");
 
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: delete", testOpts, async () => {
+test("rx-nostr: delete", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-del.test");
 
@@ -142,12 +142,13 @@ test("rx-nostr: delete", testOpts, async () => {
     assertEquals(eTag?.[1], targetEvent.id);
 
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: stream (forward)", testOpts, async () => {
+test("rx-nostr: stream (forward)", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.rx-stream.test");
 
@@ -161,8 +162,8 @@ test("rx-nostr: stream (forward)", testOpts, async () => {
       received.push(ev);
     });
 
-    // 少し待ってからストリームイベントを配信
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    // サブスクリプションが確立するまで待つ
+    await waitFor(() => relay.connectionCount > 0);
 
     const streamedEvents = [
       signEvent(sk, "stream event 1"),
@@ -171,8 +172,8 @@ test("rx-nostr: stream (forward)", testOpts, async () => {
     ];
     const sh = streamEvents(relay, streamedEvents, { interval: 50 });
 
-    // イベントが届くまで待つ
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    // 3件届くまで待つ
+    await waitFor(() => received.length >= 3);
 
     sh.stop();
     handle.stop();
@@ -184,12 +185,13 @@ test("rx-nostr: stream (forward)", testOpts, async () => {
     assertEquals(contents.includes("stream event 3"), true);
 
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: multi-relay", testOpts, async () => {
+test("rx-nostr: multi-relay", async () => {
   const pool = new MockPool();
   const relay1 = pool.relay("wss://relay1.rx-multi.test");
   const relay2 = pool.relay("wss://relay2.rx-multi.test");
@@ -212,14 +214,17 @@ test("rx-nostr: multi-relay", testOpts, async () => {
     assertEquals(contents, ["from relay1", "from relay2"]);
 
     rxNostr.dispose();
+    await waitFor(
+      () => relay1.connectionCount === 0 && relay2.connectionCount === 0,
+    );
   } finally {
     pool.uninstall();
   }
 });
 
-test("rx-nostr: cleanup (dispose)", testOpts, () => {
+test("rx-nostr: cleanup (dispose)", async () => {
   const pool = new MockPool();
-  pool.relay("wss://relay.rx-cleanup.test");
+  const relay = pool.relay("wss://relay.rx-cleanup.test");
 
   pool.install();
   try {
@@ -228,6 +233,7 @@ test("rx-nostr: cleanup (dispose)", testOpts, () => {
 
     // dispose 後はエラーなく終了する
     rxNostr.dispose();
+    await waitFor(() => relay.connectionCount === 0);
 
     // 2回 dispose しても問題ない
     rxNostr.dispose();
