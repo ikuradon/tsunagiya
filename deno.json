@@ -27,7 +27,8 @@
     "fmt": "deno fmt",
     "docs:dev": "cd docs && deno task dev",
     "docs:build": "cd docs && deno task build",
-    "docs:preview": "cd docs && deno task preview"
+    "docs:preview": "cd docs && deno task preview",
+    "build:npm": "deno run -A scripts/build_npm.ts"
   },
   "compilerOptions": {
     "strict": true
@@ -36,6 +37,7 @@
     "include": ["src/", "README.md", "LICENSE", "deno.json"]
   },
   "imports": {
+    "@deno/dnt": "jsr:@deno/dnt@^0.41",
     "@std/assert": "jsr:@std/assert@^1.0.18",
     "nostr-tools/pure": "npm:nostr-tools@^2/pure",
     "nostr-tools/pool": "npm:nostr-tools@^2/pool",
