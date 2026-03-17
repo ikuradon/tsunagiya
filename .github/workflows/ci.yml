@@ -2,13 +2,21 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions: {}
 
 env:
   DENO_DIR: ~/.deno
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
+  # ====================
+  # CI jobs (always run)
+  # ====================
   test-deno:
     name: Test on Deno
     runs-on: ubuntu-latest
@@ -18,15 +26,15 @@ jobs:
       matrix:
         deno-version: [v2.x]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache Deno dependencies
-        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.DENO_DIR }}
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
           deno-version: ${{ matrix.deno-version }}
       - run: deno task check
@@ -36,12 +44,12 @@ jobs:
       - name: Coverage report (LCOV)
         run: deno coverage ./.cov --lcov --output=.cov/lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@015f24e6818733317a2da2edd6290ab26238649a # v5.0.7
+        uses: codecov/codecov-action@0561704f0f02c16a585d4c7555e57fa2e44cf909 # v5.5.2
         with:
           files: .cov/lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@ea165f8d65b6db9a8b9c8e4d2b6ff2a4df6a5f88 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: coverage-report
           path: .cov/
@@ -52,18 +60,18 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache Deno dependencies
-        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.DENO_DIR }}
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
           deno-version: v2.x
-      - run: deno publish --dry-run
+      - run: deno publish --dry-run --allow-dirty
 
   npm-build-check:
     name: npm build check
@@ -71,15 +79,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache Deno dependencies
-        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.DENO_DIR }}
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
           deno-version: v2.x
       - name: Build npm package
@@ -99,15 +107,15 @@ jobs:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache Deno dependencies
-        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.DENO_DIR }}
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
           deno-version: v2.x
       - name: Run E2E tests
@@ -122,8 +130,8 @@ jobs:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
-      - uses: actions/setup-node@49933ea5288caeca8642195f882d025a3c667d10 # v4.4.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22.x
       - name: Install dependencies
@@ -146,8 +154,8 @@ jobs:
       matrix:
         library: [nostr-tools, ndk, rx-nostr, nostr-fetch]
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
-      - uses: oven-sh/setup-bun@735343b667d3e6656c6f4f0184889b8e1e6e0ffb # v2.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Install dependencies
         working-directory: examples
         run: bun install
@@ -165,18 +173,153 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Cache Deno dependencies
-        uses: actions/cache@d4323d4d3a2e36bf352f8f2ef86b4a3e5ef63e5d # v4.2.2
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ${{ env.DENO_DIR }}
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      - uses: denoland/setup-deno@909c0c441fb18c26536c4a0e2ca7836e96e42e4c # v2.2.0
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
           deno-version: v2.x
       - name: Check docs format
         run: deno fmt --check docs/.vitepress/
       - name: Lint docs
         run: deno lint docs/.vitepress/
+
+  # =======================================
+  # Publish (v* tags only, after all CI)
+  # =======================================
+
+  publish-jsr:
+    name: Publish to JSR
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      [
+        test-deno,
+        publish-check,
+        npm-build-check,
+        e2e-libraries,
+        e2e-node,
+        e2e-bun,
+        docs-check,
+      ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Cache Deno dependencies
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
+        with:
+          deno-version: v2.x
+      - name: Check not a dev version
+        run: |
+          VERSION=$(deno eval "import denoJson from './deno.json' with { type: 'json' }; console.log(denoJson.version)")
+          if echo "$VERSION" | grep -q "\-dev"; then
+            echo "Error: version '$VERSION' contains '-dev'. Aborting publish."
+            exit 1
+          fi
+          echo "Version: $VERSION (OK)"
+      - name: Publish package
+        run: deno publish --allow-dirty
+
+  publish-npm:
+    name: Publish to npm
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      [
+        test-deno,
+        publish-check,
+        npm-build-check,
+        e2e-libraries,
+        e2e-node,
+        e2e-bun,
+        docs-check,
+      ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Cache Deno dependencies
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
+        with:
+          deno-version: v2.x
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+      - name: Build npm package
+        run: deno run -A scripts/build_npm.ts
+      - name: Publish to npm
+        working-directory: npm
+        run: NODE_AUTH_TOKEN="" npm publish --provenance --access public
+
+  # =============================================
+  # Deploy docs (main only, after CI passes)
+  # =============================================
+
+  deploy-docs-build:
+    name: Build documentation
+    if: github.ref == 'refs/heads/main'
+    needs: [test-deno, docs-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+      - name: Cache Deno dependencies
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
+        with:
+          deno-version: v2.x
+      - name: Install dependencies
+        run: cd docs && deno install
+      - name: Build with VitePress
+        run: deno task docs:build
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: docs/.vitepress/dist
+
+  deploy-docs:
+    name: Deploy documentation
+    if: github.ref == 'refs/heads/main'
+    needs: [deploy-docs-build]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

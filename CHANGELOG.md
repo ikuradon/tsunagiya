@@ -29,6 +29,11 @@
 
 - Add `npm-build-check` job to CI workflow
 - Add `publish-npm` job to publish workflow (OIDC Trusted Publishers)
+- Update all GitHub Actions to latest versions:
+  - `actions/checkout` v6.0.2, `actions/cache` v5.0.3, `actions/setup-node`
+    v6.3.0, `denoland/setup-deno` v2.0.3, `oven-sh/setup-bun` v2.2.0,
+    `codecov/codecov-action` v5.5.2, `actions/upload-artifact` v7.0.0,
+    `actions/upload-pages-artifact` v4.0.0
 
 ## Unreleased
 
