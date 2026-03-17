@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.4.0 (2026-03-18)
+
+### New Features
+
+- **npm publishing**: Published as `@ikuradon/tsunagiya` on npm via dnt build.
+  Supports ESM with full type definitions. CI publishes to both JSR and npm on
+  tag push.
+- **`waitFor` helper**: Polling-based condition waiting utility in
+  `@ikuradon/tsunagiya/testing`. CI-friendly alternative to fixed `setTimeout`
+  waits that cause flaky tests on slow environments.
+
+### Improvements
+
+- Remove sanitize option workarounds from rx-nostr E2E tests by using `waitFor`
+  for async cleanup
+- Replace fixed-time delays in rx-nostr stream test with condition-based waiting
+
+### Documentation
+
+- Add npm install instructions to README and docs
+- Add Vitest usage guide with setup, test examples, and environment
+  recommendations (ja/en)
+- Add `waitFor` helper documentation to testing helpers guide
+- Update FAQ to reflect npm availability
+
+### CI
+
+- Add `npm-build-check` job to CI workflow
+- Add `publish-npm` job to publish workflow (OIDC Trusted Publishers)
+
 ## Unreleased
 
 ### New Features
