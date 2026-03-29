@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # GitHub Actions — weekly, grouped into single PR
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # examples/ npm deps — weekly, grouped
+  - package-ecosystem: "npm"
+    directory: "/examples"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore"
+    groups:
+      npm-dependencies:
+        patterns: ["*"]
+
+  # docs/ npm deps (VitePress etc.) — monthly
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "docs"

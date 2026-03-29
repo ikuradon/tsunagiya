@@ -1,7 +1,15 @@
 import { assertEquals } from "@std/assert";
 
 import { DeliveryScheduler } from "../src/relay/delivery_scheduler.ts";
+import type { RandomSource } from "../src/types.ts";
 import { waitFor } from "../src/testing/wait.ts";
+
+function makeFixedRandom(value: number): RandomSource {
+  return {
+    next: () => value,
+    fill: (bytes: Uint8Array) => bytes.fill(0),
+  };
+}
 
 function createSocket() {
   const received: string[] = [];
@@ -125,4 +133,106 @@ Deno.test("DeliveryScheduler - schedule and delayed fanout share one relay timer
 
   assertEquals(scheduler.profile().activeTimerCount, 0);
   assertEquals(disconnectCount, 1);
+});
+
+// ===== deliverWithJitter =====
+
+Deno.test("DeliveryScheduler - deliverWithJitter applies jitter to delay", async () => {
+  const scheduler = new DeliveryScheduler();
+  const target = createSocket();
+  const random = makeFixedRandom(0.75); // jitter = (0.75*2-1)*10 = +5
+
+  scheduler.deliverWithJitter(target.socket as never, "msg1", {
+    baseDelay: 20,
+    jitter: 10,
+    random,
+  });
+
+  assertEquals(target.received.length, 0);
+  await waitFor(() => target.received.length === 1, { timeout: 200 });
+  assertEquals(target.received, ["msg1"]);
+  scheduler.clear();
+});
+
+Deno.test("DeliveryScheduler - deliverWithJitter clamps negative delay to immediate", async () => {
+  const scheduler = new DeliveryScheduler();
+  const target = createSocket();
+  const random = makeFixedRandom(0.0); // jitter = (0*2-1)*100 = -100
+
+  scheduler.deliverWithJitter(target.socket as never, "msg1", {
+    baseDelay: 10,
+    jitter: 100,
+    random,
+  });
+
+  // Clamped to 0 → immediate via queueMicrotask
+  assertEquals(scheduler.profile().immediateDeliveryCount, 1);
+  await waitFor(() => target.received.length === 1);
+  assertEquals(target.received, ["msg1"]);
+  scheduler.clear();
+});
+
+Deno.test("DeliveryScheduler - deliverWithJitter with zero jitter", async () => {
+  const scheduler = new DeliveryScheduler();
+  const target = createSocket();
+  const random = makeFixedRandom(0.5);
+
+  scheduler.deliverWithJitter(target.socket as never, "msg1", {
+    baseDelay: 15,
+    jitter: 0,
+    random,
+  });
+
+  assertEquals(scheduler.profile().delayedDeliveryCount, 1);
+  await waitFor(() => target.received.length === 1, { timeout: 200 });
+  assertEquals(target.received, ["msg1"]);
+  scheduler.clear();
+});
+
+// ===== Out-of-order delivery =====
+
+Deno.test("DeliveryScheduler - outOfOrderRate 0 preserves FIFO order", async () => {
+  const scheduler = new DeliveryScheduler();
+  const target = createSocket();
+  const random = makeFixedRandom(0.5);
+
+  for (const label of ["A", "B", "C"]) {
+    scheduler.deliverWithJitter(target.socket as never, label, {
+      baseDelay: 15,
+      jitter: 0,
+      random,
+      outOfOrderRate: 0,
+    });
+  }
+
+  await waitFor(() => target.received.length === 3, { timeout: 200 });
+  assertEquals(target.received, ["A", "B", "C"]);
+  scheduler.clear();
+});
+
+Deno.test("DeliveryScheduler - outOfOrderRate > 0 shuffles deliveries", async () => {
+  const scheduler = new DeliveryScheduler();
+  const target = createSocket();
+
+  // Use a random that will cause Fisher-Yates to swap entries
+  let callIndex = 0;
+  const randomValues = [0.5, 0.5, 0.5, 0.1, 0.9]; // for jitter + shuffle
+  const shuffleRandom: RandomSource = {
+    next: () => randomValues[callIndex++ % randomValues.length],
+    fill: (bytes: Uint8Array) => bytes.fill(0),
+  };
+
+  for (const label of ["A", "B", "C"]) {
+    scheduler.deliverWithJitter(target.socket as never, label, {
+      baseDelay: 15,
+      jitter: 0,
+      random: shuffleRandom,
+      outOfOrderRate: 1.0,
+    });
+  }
+
+  await waitFor(() => target.received.length === 3, { timeout: 200 });
+  // All 3 messages delivered (order may vary due to shuffle)
+  assertEquals(new Set(target.received), new Set(["A", "B", "C"]));
+  scheduler.clear();
 });

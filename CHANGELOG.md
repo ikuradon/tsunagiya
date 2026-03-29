@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.5.0 (2026-03-29)
+
+### New Features
+
+- **Network condition simulation**: New `network` option on `MockRelayOptions`
+  for realistic network behavior testing:
+  - `connectDelay`: Connection establishment delay (ms)
+  - `messageDelay`: Base message delivery delay (ms)
+  - `jitter`: Delay jitter range (ms). Actual delay = delay ± random(jitter)
+  - `outOfOrderRate`: Probability of out-of-order message delivery (0.0–1.0)
+  - `transientDisconnect`: Temporary disconnection simulation with probability
+    and cooldown duration
+
+### Architecture
+
+- **Relay module barrel export**: Added `src/relay/mod.ts` as internal barrel
+  for the 11 relay sub-modules extracted in v0.4.0 refactoring
+- **Internal module refactoring**: Completed extraction of relay internals into
+  `src/relay/`, `src/internal/`, `src/platform/`, `src/types/` (started in
+  v0.4.0)
+
+### Tests
+
+- Add unit tests for `src/internal/` modules (clone, url, validation, runtime,
+  search) — 106 tests
+- Add unit tests for `src/platform/` modules (global_hooks, nip11_fetch,
+  pool_hooks) — 17 tests
+- Fix `testing/stream.ts` branch coverage: 79.4% → 80.6%
+- Add network simulation tests (connectDelay, messageDelay, transientDisconnect)
+- Total test count: 471 → 606
+
+### Infrastructure
+
+- **GitHub Releases**: Automatic release creation with auto-generated notes on
+  tag push (after JSR/npm publish)
+- **Dependabot**: Weekly updates for GitHub Actions and examples/ npm deps,
+  monthly for docs/ npm deps
+- **Release notes categorization**: `.github/release.yml` with PR label-based
+  categories (feat, fix, perf, docs)
+
 ## v0.4.0 (2026-03-18)
 
 ### New Features
@@ -35,7 +75,7 @@
     `codecov/codecov-action` v5.5.2, `actions/upload-artifact` v7.0.0,
     `actions/upload-pages-artifact` v4.0.0
 
-## Unreleased
+## Unreleased (pre-v0.5.0 refactoring)
 
 ### New Features
 

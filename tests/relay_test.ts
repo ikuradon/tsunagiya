@@ -1679,3 +1679,124 @@ Deno.test("MockRelay - parameterized replaceable event with same timestamp and l
     "parameterized replaceable event with same timestamp and larger id should not be stored",
   );
 });
+
+// ===== NetworkConditions =====
+
+Deno.test("MockRelay - network.connectDelay delays WebSocket open event", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com", {
+    network: { connectDelay: 50 },
+  });
+  pool.install();
+  try {
+    const start = Date.now();
+    const ws = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+    const elapsed = Date.now() - start;
+    assertEquals(elapsed >= 40, true, `Expected >= 40ms, got ${elapsed}ms`);
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - network.messageDelay delays responses", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com", {
+    network: { messageDelay: 30 },
+    random: { next: () => 0.5, fill: (b: Uint8Array) => b.fill(0) },
+  });
+  relay.store(makeEvent());
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    const start = Date.now();
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+
+    await new Promise<void>((resolve) => {
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data as string);
+        if (msg[0] === "EVENT") resolve();
+      };
+    });
+    const elapsed = Date.now() - start;
+    assertEquals(elapsed >= 20, true, `Expected >= 20ms, got ${elapsed}ms`);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
+    });
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - network.transientDisconnect triggers close", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com", {
+    network: {
+      transientDisconnect: { probability: 1.0, duration: 100 },
+    },
+    random: { next: () => 0.0, fill: (b: Uint8Array) => b.fill(0) },
+  });
+  relay.store(makeEvent());
+  pool.install();
+  try {
+    const ws = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+
+    const closePromise = new Promise<CloseEvent>((resolve) => {
+      ws.onclose = (ev) => resolve(ev);
+    });
+
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    const closeEvent = await closePromise;
+    assertEquals(closeEvent.code, 1001);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - network.transientDisconnect cooldown rejects reconnection", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.example.com", {
+    network: {
+      transientDisconnect: { probability: 1.0, duration: 200 },
+    },
+    random: { next: () => 0.0, fill: (b: Uint8Array) => b.fill(0) },
+  });
+  pool.install();
+  try {
+    // First connection
+    const ws1 = new WebSocket("wss://relay.example.com");
+    await new Promise<void>((resolve) => {
+      ws1.onopen = () => resolve();
+    });
+    // Trigger transient disconnect
+    const ws1Close = new Promise<void>((resolve) => {
+      ws1.onclose = () => resolve();
+    });
+    ws1.send(JSON.stringify(["REQ", "sub1", {}]));
+    await ws1Close;
+
+    // Try to reconnect during cooldown — should be rejected
+    const ws2 = new WebSocket("wss://relay.example.com");
+    const closeEvent = await new Promise<CloseEvent>((resolve) => {
+      ws2.addEventListener("close", (ev) => resolve(ev), { once: true });
+    });
+    assertEquals(closeEvent.code, 1001);
+  } finally {
+    pool.uninstall();
+  }
+});

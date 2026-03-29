@@ -50,6 +50,7 @@ export type {
   LogHandler,
   LogLevel,
   MockRelayOptions,
+  NetworkConditions,
   NostrEvent,
   NostrFilter,
   RandomSource,
