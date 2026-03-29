@@ -6,6 +6,25 @@ import type {
 } from "./nostr.ts";
 import type { Clock, LogHandler, RandomSource } from "./runtime.ts";
 
+/** ネットワーク条件シミュレーション設定 */
+export interface NetworkConditions {
+  /** 接続確立までの遅延 (ms) */
+  connectDelay?: number;
+  /** メッセージ配信の基本遅延 (ms) */
+  messageDelay?: number;
+  /** 遅延のジッター幅 (ms)。実際の遅延は delay ± random(jitter) */
+  jitter?: number;
+  /** メッセージ順序のシャッフル確率 (0.0–1.0) */
+  outOfOrderRate?: number;
+  /** 一時的な接続断のシミュレーション設定 */
+  transientDisconnect?: {
+    /** 切断が発生する確率 (0.0–1.0)。メッセージ配信ごとに判定 */
+    probability: number;
+    /** 切断から再接続可能になるまでの時間 (ms) */
+    duration: number;
+  };
+}
+
 /** MockRelayオプション */
 export interface MockRelayOptions {
   /** レイテンシ (ms) */
@@ -30,6 +49,8 @@ export interface MockRelayOptions {
   clock?: Clock;
   /** 乱数ソース */
   random?: RandomSource;
+  /** ネットワーク条件シミュレーション */
+  network?: NetworkConditions;
 }
 
 /** REQハンドラー型 */

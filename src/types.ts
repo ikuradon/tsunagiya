@@ -22,6 +22,7 @@ export type {
   COUNTHandler,
   EVENTHandler,
   MockRelayOptions,
+  NetworkConditions,
   RelayInformation,
   RelayLimitation,
   RelaySnapshot,
