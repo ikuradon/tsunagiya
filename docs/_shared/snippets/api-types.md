@@ -66,6 +66,22 @@ interface MockRelayOptions {
   authVerifier?: EventVerifier; // AUTHイベント署名検証
   clock?: Clock; // 時刻ソース
   random?: RandomSource; // 乱数ソース
+  network?: NetworkConditions; // ネットワーク条件シミュレーション
+}
+```
+
+NetworkConditions:
+
+```typescript
+interface NetworkConditions {
+  connectDelay?: number; // 接続確立遅延 (ms)
+  messageDelay?: number; // メッセージ配信遅延 (ms)
+  jitter?: number; // 遅延ジッター幅 (ms)
+  outOfOrderRate?: number; // 順序シャッフル確率 (0.0–1.0)
+  transientDisconnect?: {
+    probability: number; // 切断確率 (0.0–1.0)
+    duration: number; // 再接続不可期間 (ms)
+  };
 }
 ```
 

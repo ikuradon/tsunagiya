@@ -54,7 +54,7 @@ Deno.test("fetch events from relay", async () => {
 - 複数リレー同時対応
 - Indexed EventStore + compiled filter fast path による高速な `REQ` / `COUNT`
 - NIP-01 フィルター自動マッチング + カスタムハンドラー
-- 不安定リレーのシミュレート（レイテンシ、エラー率、切断）
+- 不安定リレーのシミュレート（レイテンシ、エラー率、切断、ネットワーク条件シミュレーション）
 - NIP-42 AUTH チャレンジ/レスポンス
 - ランタイム入力検証（message/filter/subId/tag/content limit）
 - 送信メッセージの記録・検証ヘルパー

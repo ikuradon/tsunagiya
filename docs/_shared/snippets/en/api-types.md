@@ -66,6 +66,22 @@ interface MockRelayOptions {
   authVerifier?: EventVerifier; // AUTH event signature verification
   clock?: Clock; // time source
   random?: RandomSource; // randomness source
+  network?: NetworkConditions; // network condition simulation
+}
+```
+
+NetworkConditions:
+
+```typescript
+interface NetworkConditions {
+  connectDelay?: number; // connection establishment delay (ms)
+  messageDelay?: number; // message delivery delay (ms)
+  jitter?: number; // delay jitter range (ms)
+  outOfOrderRate?: number; // out-of-order delivery probability (0.0–1.0)
+  transientDisconnect?: {
+    probability: number; // disconnect probability (0.0–1.0)
+    duration: number; // reconnection cooldown (ms)
+  };
 }
 ```
 

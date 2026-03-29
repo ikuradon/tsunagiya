@@ -52,7 +52,13 @@ deno task docs:dev          # ドキュメント開発サーバー
 2. **MockRelay** — URL単位の仮想リレー。ストア・ハンドラー・検証機能
 3. **MockWebSocket** — WebSocket APIの模倣。MockRelayへルーティング
 4. **filter.ts** — NIP-01フィルターマッチング（純粋関数）
-5. **auth.ts** — NIP-42 AUTH チャレンジ/レスポンス
+5. **auth.ts** — NIP-42 AUTH
+   チャレンジ/レスポンス（AuthService互換エクスポート）
+6. **src/relay/** — リレー内部モジュール（EventStore, DeliveryScheduler,
+   AuthService, ConnectionRuntime, FilterCompiler 等）
+7. **src/internal/** — 共有ユーティリティ（clone, url, validation, runtime,
+   search）
+8. **src/platform/** — グローバルフック管理（WebSocket/fetch差し替え、NIP-11）
 
 ### ディレクトリ構造
 
@@ -67,6 +73,34 @@ src/
 ├── event_kind.ts       # イベント種別判定
 ├── types.ts            # 型定義
 ├── logger.ts           # ログ機能
+├── relay/
+│   ├── mod.ts              # リレー内部モジュール barrel export
+│   ├── auth_service.ts     # NIP-42 AUTH サービス
+│   ├── connection_runtime.ts # WebSocket接続ランタイム
+│   ├── delivery_scheduler.ts # 配信スケジューラ（ジッター・順序シャッフル対応）
+│   ├── event_store.ts      # インデックス付きイベントストア
+│   ├── filter_compiler.ts  # フィルターコンパイラ
+│   ├── message_codec.ts    # メッセージパーサー・バリデーション
+│   ├── relay_inspector.ts  # 受信メッセージ記録・検査
+│   ├── response_builders.ts # レスポンスメッセージビルダー
+│   ├── router.ts           # クライアントメッセージルーター
+│   ├── subscription_registry.ts # サブスクリプション管理
+│   └── error_messages.ts   # エラーメッセージ定数
+├── internal/
+│   ├── clone.ts            # ディープコピーヘルパー
+│   ├── runtime.ts          # デフォルトランタイム依存
+│   ├── search.ts           # NIP-50検索テキスト正規化
+│   ├── url.ts              # URL正規化・ヘッダー解析
+│   └── validation.ts       # 入力バリデーション
+├── platform/
+│   ├── global_hooks.ts     # globalThis WebSocket/fetch フック
+│   ├── nip11_fetch.ts      # NIP-11 fetch インターセプト
+│   └── pool_hooks.ts       # MockPool固有フック管理
+├── types/
+│   ├── nostr.ts            # Nostr型定義
+│   ├── relay.ts            # リレー型定義（NetworkConditions含む）
+│   ├── runtime.ts          # ランタイム型定義（Clock, RandomSource）
+│   └── testing.ts          # テスト支援型定義
 └── testing/
     ├── mod.ts          # テスト支援エントリポイント
     ├── event_builder.ts
@@ -94,6 +128,16 @@ tests/
 ├── integration_test.ts
 ├── stream_snapshot_integration_test.ts
 ├── performance_test.ts
+├── internal/
+│   ├── clone_test.ts
+│   ├── url_test.ts
+│   ├── validation_test.ts
+│   ├── runtime_test.ts
+│   └── search_test.ts
+├── platform/
+│   ├── global_hooks_test.ts
+│   ├── nip11_fetch_test.ts
+│   └── pool_hooks_test.ts
 └── testing/
     ├── event_builder_test.ts
     ├── filter_builder_test.ts

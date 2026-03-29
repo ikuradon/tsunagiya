@@ -14,14 +14,14 @@ const sampleInfo: RelayInformation = {
 
 // ===== createNip11Response =====
 
-Deno.test("createNip11Response - returns 200 status", async () => {
+Deno.test("createNip11Response - returns 200 status", () => {
   const response = createNip11Response(sampleInfo);
   assertEquals(response.status, 200);
 });
 
 Deno.test(
   "createNip11Response - returns correct content-type header",
-  async () => {
+  () => {
     const response = createNip11Response(sampleInfo);
     assertEquals(
       response.headers.get("Content-Type"),
