@@ -2,6 +2,29 @@ import { assertEquals, assertExists } from "@std/assert";
 import { MockPool } from "../../src/pool.ts";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { restore, snapshot } from "../../src/testing/snapshot.ts";
+import { waitFor } from "../../src/testing/wait.ts";
+
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  await waitFor(condition, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitForCondition(() => messages.length >= count);
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
 
 Deno.test("snapshot - saves and restores store", () => {
   const pool = new MockPool();
@@ -33,18 +56,15 @@ Deno.test("snapshot - saves and restores received messages", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.received.length === 1);
 
     const snap = snapshot(relay);
 
     ws.send(JSON.stringify(["REQ", "sub2", { kinds: [0] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.received.length === 2);
 
     assertEquals(relay.received.length, 2);
 
@@ -53,10 +73,7 @@ Deno.test("snapshot - saves and restores received messages", async () => {
     assertEquals(relay.received.length, 1);
     assertEquals(relay.received[0][0], "REQ");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -111,19 +128,30 @@ Deno.test("snapshot - timestamp is recorded", () => {
   assertEquals(snap.timestamp <= after, true);
 });
 
+Deno.test("snapshot - uses injected clock for timestamp", () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com", {
+    clock: {
+      now(): number {
+        return 424242;
+      },
+    },
+  });
+
+  const snap = snapshot(relay);
+  assertEquals(snap.timestamp, 424242);
+});
+
 Deno.test("snapshot - received REQ filters are deep copied", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], authors: ["abc"] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.received.length === 1);
 
     const snap = snapshot(relay);
 
@@ -142,10 +170,7 @@ Deno.test("snapshot - received REQ filters are deep copied", async () => {
     assertEquals(currentFilter.kinds[0], 1);
     assertEquals(currentFilter.authors[0], "abc");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -192,14 +217,14 @@ Deno.test("snapshot - restores state after disconnectAfter()", async () => {
     });
 
     ws1.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages1, 2);
 
     assertEquals(messages1.length, 2); // EVENT + EOSE
 
     // disconnectAfter で切断
     relay.disconnectAfter(50);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await waitForCondition(() => ws1.readyState === WebSocket.CLOSED);
 
     // 切断されたことを確認
     assertEquals(ws1.readyState, WebSocket.CLOSED);
@@ -215,7 +240,7 @@ Deno.test("snapshot - restores state after disconnectAfter()", async () => {
     });
 
     ws2.send(JSON.stringify(["REQ", "sub2", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages2, 2);
 
     // スナップショット時点のイベントが取得できる
     const eventMsgs = messages2
@@ -227,10 +252,7 @@ Deno.test("snapshot - restores state after disconnectAfter()", async () => {
     const eose = JSON.parse(messages2[messages2.length - 1]);
     assertEquals(eose[0], "EOSE");
 
-    ws2.close();
-    await new Promise<void>((resolve) => {
-      ws2.onclose = () => resolve();
-    });
+    await closeWs(ws2);
   } finally {
     pool.uninstall();
   }

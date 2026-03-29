@@ -63,6 +63,9 @@ interface MockRelayOptions {
   requiresAuth?: boolean;
   logging?: boolean | LogHandler;
   verifier?: EventVerifier; // イベント署名検証
+  authVerifier?: EventVerifier; // AUTHイベント署名検証
+  clock?: Clock; // 時刻ソース
+  random?: RandomSource; // 乱数ソース
 }
 ```
 

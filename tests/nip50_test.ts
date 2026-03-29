@@ -3,6 +3,33 @@ import { filterEvents, matchFilter, matchFilters } from "../src/filter.ts";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
 import { FilterBuilder } from "../src/testing/filter_builder.ts";
+import { waitFor } from "../src/testing/wait.ts";
+
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
 
 // ===== matchFilter with search =====
 
@@ -15,6 +42,20 @@ Deno.test("NIP-50 matchFilter - matches case insensitively", () => {
   const event = EventBuilder.kind1().content("Hello World").build();
   assertEquals(matchFilter(event, { search: "HELLO" }), true);
   assertEquals(matchFilter(event, { search: "hello world" }), true);
+});
+Deno.test("NIP-50 matchFilter - normalizes punctuation and separators", () => {
+  const event = EventBuilder.kind1()
+    .content("Nostr-tools / relay_mock guide")
+    .build();
+  assertEquals(matchFilter(event, { search: "nostr tools relay mock" }), true);
+  assertEquals(matchFilter(event, { search: "nostr-tools relay_mock" }), true);
+});
+
+Deno.test("NIP-50 matchFilter - normalizes full-width and repeated whitespace", () => {
+  const event = EventBuilder.kind1().content("Ｎｏｓｔｒ　　Ｒｏｃｋｓ")
+    .build();
+  assertEquals(matchFilter(event, { search: "nostr rocks" }), true);
+  assertEquals(matchFilter(event, { search: "  NOSTR   ROCKS  " }), true);
 });
 
 Deno.test("NIP-50 matchFilter - rejects non-matching search", () => {
@@ -106,18 +147,16 @@ Deno.test("NIP-50 REQ - returns matching events via search filter", async () => 
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(
-        JSON.stringify(["REQ", "sub1", { kinds: [1], search: "nostr" }]),
-      );
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(
+      JSON.stringify(["REQ", "sub1", { kinds: [1], search: "nostr" }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 3);
 
     // 2 EVENT + EOSE = 3
     assertEquals(messages.length, 3);
@@ -128,6 +167,45 @@ Deno.test("NIP-50 REQ - returns matching events via search filter", async () => 
       contents.every((c: string) => c.toLowerCase().includes("nostr")),
       true,
     );
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-50 REQ - matches normalized punctuation query via search filter", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  relay.store(
+    EventBuilder.kind1().content("Nostr-tools / relay_mock guide").build(),
+  );
+  relay.store(EventBuilder.kind1().content("Bitcoin market guide").build());
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages: string[] = [];
+    ws.addEventListener("message", (e) => {
+      messages.push(e.data as string);
+    });
+    ws.send(
+      JSON.stringify([
+        "REQ",
+        "sub-normalized",
+        { kinds: [1], search: "nostr tools relay mock" },
+      ]),
+    );
+
+    await waitForMessageCount(messages, 2);
+
+    const events = messages
+      .filter((m) => JSON.parse(m)[0] === "EVENT")
+      .map((m) => JSON.parse(m)[2].content);
+    assertEquals(events, ["Nostr-tools / relay_mock guide"]);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -157,21 +235,21 @@ Deno.test("NIP-50 COUNT - counts events matching search filter", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(
-        JSON.stringify(["COUNT", "count1", { kinds: [1], search: "nostr" }]),
-      );
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(
+      JSON.stringify(["COUNT", "count1", { kinds: [1], search: "nostr" }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 1);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

@@ -5,6 +5,7 @@ import {
   FilterBuilder,
   restore,
   snapshot,
+  startStream,
   streamEvents,
   waitFor,
 } from "@ikuradon/tsunagiya/testing";
@@ -21,6 +22,21 @@ const event = EventBuilder.kind1()
 
 // random generation
 const random = EventBuilder.random({ kind: 1 });
+
+// deterministic runtime
+const fixedClock = { now: () => 1700000000000 };
+const fixedRandom = {
+  next: () => 0.25,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x11);
+  },
+};
+const deterministic = EventBuilder.kind1({
+  clock: fixedClock,
+  random: fixedRandom,
+})
+  .content("stable")
+  .build();
 
 // broken event
 const broken = EventBuilder.kind1()
@@ -97,12 +113,18 @@ assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 Real-time stream:
 
 ```typescript
-import { startStream, streamEvents } from "@ikuradon/tsunagiya/testing";
+const fixedRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
 
 // deliver events with time delay
 const handle = streamEvents(relay, events, {
   interval: 100,
   jitter: 50,
+  random: fixedRandom,
 });
 handle.stop();
 
@@ -111,6 +133,7 @@ const stream = startStream(relay, {
   eventGenerator: () => EventBuilder.random({ kind: 1 }),
   interval: 1000,
   count: 10,
+  random: fixedRandom,
 });
 stream.stop();
 ```

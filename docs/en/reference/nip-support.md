@@ -4,11 +4,11 @@ outline: deep
 
 # NIP Support Status
 
-NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.3.0.
+NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.4.0.
 
 ---
 
-## Supported NIPs (v0.3.0)
+## Supported NIPs (v0.4.0)
 
 <!--@include: ../../_shared/tables/en/nip-support.md-->
 
@@ -58,11 +58,11 @@ NIP (Nostr Implementation Possibilities) support status for tsunagiya v0.3.0.
 
 ---
 
-## Planned NIPs (v0.3.0 and later)
+## Planned NIPs (v0.4.0 and later)
 
 | NIP    | Description   | Target Version | Overview               |
 | ------ | ------------- | -------------- | ---------------------- |
-| NIP-94 | File Metadata | v0.3.0         | Template for kind:1063 |
+| NIP-94 | File Metadata | v0.4.x         | Template for kind:1063 |
 
 ---
 

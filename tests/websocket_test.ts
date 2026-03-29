@@ -1,6 +1,38 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
+import { waitFor } from "../src/testing/wait.ts";
 import { WebSocketReadyState } from "../src/types.ts";
+
+async function openWs(
+  url: string,
+  protocol?: string | string[],
+): Promise<WebSocket> {
+  const ws = protocol === undefined
+    ? new WebSocket(url)
+    : new WebSocket(url, protocol);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
 
 Deno.test("MockWebSocket - opens and closes properly", async () => {
   const pool = new MockPool();
@@ -97,11 +129,7 @@ Deno.test("MockWebSocket - receives messages via addEventListener", async () => 
   pool.install();
 
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     const messages: string[] = [];
     ws.addEventListener("message", (ev: MessageEvent) => {
@@ -109,9 +137,7 @@ Deno.test("MockWebSocket - receives messages via addEventListener", async () => 
     });
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-
-    // 非同期処理の完了を待つ
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
 
     // EVENT + EOSE を受信
     assertEquals(messages.length, 2);
@@ -125,10 +151,7 @@ Deno.test("MockWebSocket - receives messages via addEventListener", async () => 
     assertEquals(eoseMsg[0], "EOSE");
     assertEquals(eoseMsg[1], "sub1");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -147,10 +170,7 @@ Deno.test("MockWebSocket - returns correct url property", async () => {
       ws.onopen = () => resolve();
     });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -164,20 +184,12 @@ Deno.test("MockWebSocket - protocol property with string", async () => {
   pool.install();
 
   try {
-    const ws = new WebSocket(
+    const ws = await openWs(
       "wss://relay.protocol-string.example.com",
       "nostr",
     );
     assertEquals(ws.protocol, "nostr");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
-
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -189,20 +201,12 @@ Deno.test("MockWebSocket - protocol property with array", async () => {
   pool.install();
 
   try {
-    const ws = new WebSocket(
+    const ws = await openWs(
       "wss://relay.protocol-array.example.com",
       ["nostr", "v2"],
     );
     assertEquals(ws.protocol, "nostr");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
-
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -214,20 +218,12 @@ Deno.test("MockWebSocket - protocol property with empty array", async () => {
   pool.install();
 
   try {
-    const ws = new WebSocket(
+    const ws = await openWs(
       "wss://relay.protocol-empty.example.com",
       [],
     );
     assertEquals(ws.protocol, "");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
-
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -239,11 +235,7 @@ Deno.test("MockWebSocket - send non-string throws", async () => {
   pool.install();
 
   try {
-    const ws = new WebSocket("wss://relay.send-non-string.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.send-non-string.example.com");
 
     let threw = false;
     try {
@@ -253,10 +245,7 @@ Deno.test("MockWebSocket - send non-string throws", async () => {
     }
     assertEquals(threw, true, "send(ArrayBuffer) should throw");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -268,16 +257,8 @@ Deno.test("MockWebSocket - close on already closed is no-op", async () => {
   pool.install();
 
   try {
-    const ws = new WebSocket("wss://relay.double-close.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
-
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    const ws = await openWs("wss://relay.double-close.example.com");
+    await closeWs(ws);
 
     // 2回目の close はエラーにならない（no-op）
     ws.close();
@@ -348,10 +329,7 @@ Deno.test("MockWebSocket - connectionDelay within timeout opens successfully", a
     assertEquals(opened, true);
     assertEquals(ws.readyState, WebSocketReadyState.OPEN);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

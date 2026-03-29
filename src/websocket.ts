@@ -46,17 +46,26 @@ export class MockWebSocket extends EventTarget {
   onmessage: ((ev: MessageEvent) => void) | null = null;
   onerror: ((ev: Event) => void) | null = null;
 
-  /** @internal RelayResolverはMockPoolが設定する */
-  static _resolveRelay: RelayResolver | null = null;
+  static #resolveRelay: RelayResolver | null = null;
 
-  constructor(url: string | URL, protocols?: string | string[]) {
+  /** @internal RelayResolverはplatform hookが設定する */
+  static setRelayResolver(resolver: RelayResolver | null): void {
+    MockWebSocket.#resolveRelay = resolver;
+  }
+
+  constructor(
+    url: string | URL,
+    protocolsOrOptions?: string | string[] | WebSocketOptions,
+  ) {
     super();
     this.url = typeof url === "string" ? url : url.toString();
-    if (protocols) {
-      this.protocol = Array.isArray(protocols) ? protocols[0] ?? "" : protocols;
+    if (typeof protocolsOrOptions === "string") {
+      this.protocol = protocolsOrOptions;
+    } else if (Array.isArray(protocolsOrOptions)) {
+      this.protocol = protocolsOrOptions[0] ?? "";
     }
 
-    this.#relay = MockWebSocket._resolveRelay?.(this.url);
+    this.#relay = MockWebSocket.#resolveRelay?.(this.url);
 
     if (!this.#relay) {
       // リレーが見つからない場合はエラーして閉じる

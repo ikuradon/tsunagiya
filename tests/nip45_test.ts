@@ -1,6 +1,40 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
+import { waitFor } from "../src/testing/wait.ts";
+
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function waitForCountMessage(
+  relay: { hasCOUNT(subId: string): boolean },
+  subId: string,
+  messages: string[],
+  count = 1,
+): Promise<void> {
+  await Promise.all([
+    waitForMessageCount(messages, count),
+    waitFor(() => relay.hasCOUNT(subId), {
+      timeout: 1000,
+      interval: 5,
+    }),
+  ]);
+}
 
 Deno.test("NIP-45 COUNT - returns correct count for matching events", async () => {
   const pool = new MockPool();
@@ -13,16 +47,14 @@ Deno.test("NIP-45 COUNT - returns correct count for matching events", async () =
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     assertEquals(messages.length, 1);
     const count = JSON.parse(messages[0]);
@@ -36,20 +68,18 @@ Deno.test("NIP-45 COUNT - returns correct count for matching events", async () =
 
 Deno.test("NIP-45 COUNT - returns 0 for no matches", async () => {
   const pool = new MockPool();
-  pool.relay("wss://relay.example.com");
+  const relay = pool.relay("wss://relay.example.com");
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 0);
@@ -67,18 +97,16 @@ Deno.test("NIP-45 COUNT - applies OR logic across multiple filters", async () =>
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(
-        JSON.stringify(["COUNT", "count1", { kinds: [1] }, { kinds: [7] }]),
-      );
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(
+      JSON.stringify(["COUNT", "count1", { kinds: [1] }, { kinds: [7] }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 2);
@@ -97,16 +125,14 @@ Deno.test("NIP-45 COUNT - uses custom onCOUNT handler", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 42);
@@ -126,16 +152,14 @@ Deno.test("NIP-45 COUNT - supports async onCOUNT handler", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(JSON.stringify(["COUNT", "count1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 99);
@@ -155,18 +179,45 @@ Deno.test("NIP-45 COUNT - filters count by author", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(
-        JSON.stringify(["COUNT", "count1", { kinds: [1], authors: [pubkey] }]),
-      );
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(
+      JSON.stringify(["COUNT", "count1", { kinds: [1], authors: [pubkey] }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
+
+    const count = JSON.parse(messages[0]);
+    assertEquals(count[2].count, 2);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("NIP-45 COUNT - applies limit before counting", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  relay.store(EventBuilder.kind1().createdAt(1000).build());
+  relay.store(EventBuilder.kind1().createdAt(2000).build());
+  relay.store(EventBuilder.kind1().createdAt(3000).build());
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages: string[] = [];
+    ws.addEventListener("message", (e) => {
+      messages.push(e.data as string);
+    });
+    ws.send(JSON.stringify(["COUNT", "count-limit", {
+      kinds: [1],
+      limit: 2,
+    }]));
+
+    await waitForCountMessage(relay, "count-limit", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 2);
@@ -183,13 +234,14 @@ Deno.test("NIP-45 verification - countCOUNTs() counts COUNT messages", async () 
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
-      ws.send(JSON.stringify(["COUNT", "c2", { kinds: [7] }]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
+    ws.send(JSON.stringify(["COUNT", "c2", { kinds: [7] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => relay.countCOUNTs() === 2, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     assertEquals(relay.countCOUNTs(), 2);
   } finally {
@@ -203,12 +255,13 @@ Deno.test("NIP-45 verification - findCOUNT() finds by subId", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "my-count", { kinds: [1] }]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["COUNT", "my-count", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => relay.hasCOUNT("my-count"), {
+      timeout: 1000,
+      interval: 5,
+    });
 
     const found = relay.findCOUNT("my-count");
     assertEquals(found?.[0], "COUNT");
@@ -225,12 +278,13 @@ Deno.test("NIP-45 verification - hasCOUNT() checks existence", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => relay.hasCOUNT("c1"), {
+      timeout: 1000,
+      interval: 5,
+    });
 
     assertEquals(relay.hasCOUNT("c1"), true);
     assertEquals(relay.hasCOUNT("c2"), false);
@@ -248,24 +302,21 @@ Deno.test("NIP-45 COUNT - deduplicates events across filters", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      // Both filters match the same event
-      ws.send(
-        JSON.stringify([
-          "COUNT",
-          "count1",
-          { kinds: [1] },
-          { ids: [event.id] },
-        ]),
-      );
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(
+      JSON.stringify([
+        "COUNT",
+        "count1",
+        { kinds: [1] },
+        { ids: [event.id] },
+      ]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "count1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 1); // Not 2
@@ -284,16 +335,14 @@ Deno.test("NIP-45 COUNT - clears onCOUNT handler on reset", async () => {
   // After reset, default counting should be used
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
     const messages: string[] = [];
-    ws.addEventListener("open", () => {
-      ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
-    });
     ws.addEventListener("message", (e) => {
       messages.push(e.data as string);
     });
+    ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCountMessage(relay, "c1", messages);
 
     const count = JSON.parse(messages[0]);
     assertEquals(count[2].count, 0); // Not 999

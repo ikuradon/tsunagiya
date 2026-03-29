@@ -10,7 +10,7 @@
 
 import { assertEquals, assertExists, test } from "../_compat/mod.ts";
 import { MockPool } from "../../src/mod.ts";
-import { EventBuilder } from "../../src/testing/mod.ts";
+import { EventBuilder, waitFor } from "../../src/testing/mod.ts";
 import type { RelayMessage } from "../../src/types.ts";
 import { timeline } from "./client.ts";
 
@@ -24,6 +24,32 @@ async function openWs(url: string): Promise<WebSocket> {
     ws.onopen = () => resolve();
   });
   return ws;
+}
+
+/** 接続直後から受信メッセージを記録する */
+async function openWsWithMessages(
+  url: string,
+  received: RelayMessage[],
+): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  ws.addEventListener("message", (ev: MessageEvent) => {
+    received.push(JSON.parse(ev.data as string) as RelayMessage);
+  });
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function waitForMessage<T extends RelayMessage>(
+  received: RelayMessage[],
+  predicate: (message: RelayMessage) => boolean,
+): Promise<T> {
+  await waitFor(() => received.some(predicate), {
+    timeout: 1000,
+    interval: 5,
+  });
+  return received.find(predicate) as T;
 }
 
 /** WebSocket を閉じて close イベントを待つ */
@@ -145,25 +171,20 @@ test(
 
     pool.install();
     try {
-      const wsA = await openWs("wss://relay-a.test");
-      const wsB = await openWs("wss://relay-b.test");
+      const receivedA: RelayMessage[] = [];
+      const receivedB: RelayMessage[] = [];
+      const wsA = await openWsWithMessages("wss://relay-a.test", receivedA);
+      const wsB = await openWsWithMessages("wss://relay-b.test", receivedB);
 
       try {
-        const receivedA: RelayMessage[] = [];
-        const receivedB: RelayMessage[] = [];
-
-        wsA.addEventListener("message", (ev: MessageEvent) => {
-          receivedA.push(JSON.parse(ev.data as string) as RelayMessage);
-        });
-        wsB.addEventListener("message", (ev: MessageEvent) => {
-          receivedB.push(JSON.parse(ev.data as string) as RelayMessage);
-        });
-
-        // AUTH チャレンジを待つ
-        await new Promise<void>((resolve) => setTimeout(resolve, 20));
-
-        const authChallengeA = receivedA.find((m) => m[0] === "AUTH");
-        const authChallengeB = receivedB.find((m) => m[0] === "AUTH");
+        const authChallengeA = await waitForMessage<["AUTH", string]>(
+          receivedA,
+          (m) => m[0] === "AUTH",
+        );
+        const authChallengeB = await waitForMessage<["AUTH", string]>(
+          receivedB,
+          (m) => m[0] === "AUTH",
+        );
         assertExists(authChallengeA);
         assertExists(authChallengeB);
 
@@ -172,7 +193,7 @@ test(
           .content("")
           .pubkey(TEST_PUBKEY)
           .tag("relay", "wss://relay-a.test")
-          .tag("challenge", authChallengeA[1] as string)
+          .tag("challenge", authChallengeA[1])
           .build();
         wsA.send(JSON.stringify(["AUTH", authEventA]));
 
@@ -181,21 +202,21 @@ test(
           .content("")
           .pubkey(TEST_PUBKEY)
           .tag("relay", "wss://relay-b.test")
-          .tag("challenge", authChallengeB[1] as string)
+          .tag("challenge", authChallengeB[1])
           .build();
         wsB.send(JSON.stringify(["AUTH", authEventB]));
 
-        await new Promise<void>((resolve) => setTimeout(resolve, 20));
-
         // リレーA: OK true（認証成功）
-        const okA = receivedA.find(
+        const okA = await waitForMessage<["OK", string, boolean, string]>(
+          receivedA,
           (m) => m[0] === "OK" && m[1] === authEventA.id,
         );
         assertExists(okA);
         assertEquals(okA[2], true);
 
         // リレーB: OK false（認証失敗）
-        const okB = receivedB.find(
+        const okB = await waitForMessage<["OK", string, boolean, string]>(
+          receivedB,
           (m) => m[0] === "OK" && m[1] === authEventB.id,
         );
         assertExists(okB);

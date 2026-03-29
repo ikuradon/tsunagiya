@@ -18,6 +18,7 @@ import {
   EventBuilder,
   startStream,
   streamEvents,
+  waitFor,
 } from "../../src/testing/mod.ts";
 import type { NostrEvent, RelayMessage } from "../../src/types.ts";
 import { post, stream, timeline } from "./client.ts";
@@ -33,6 +34,31 @@ async function openWs(url: string): Promise<WebSocket> {
     ws.onopen = () => resolve();
   });
   return ws;
+}
+
+async function openWsWithMessages(
+  url: string,
+  received: RelayMessage[],
+): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  ws.addEventListener("message", (ev: MessageEvent) => {
+    received.push(JSON.parse(ev.data as string) as RelayMessage);
+  });
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function waitForMessage<T extends RelayMessage>(
+  received: RelayMessage[],
+  predicate: (message: RelayMessage) => boolean,
+): Promise<T> {
+  await waitFor(() => received.some(predicate), {
+    timeout: 1000,
+    interval: 5,
+  });
+  return received.find(predicate) as T;
 }
 
 // ===== カスタムハンドラー =====
@@ -279,18 +305,14 @@ test("advanced: NIP-42 AUTH - handles challenge/response with requiresAuth", asy
 
   pool.install();
   try {
-    const ws = await openWs(TEST_RELAY);
+    const received: RelayMessage[] = [];
+    const ws = await openWsWithMessages(TEST_RELAY, received);
 
     try {
-      const received: RelayMessage[] = [];
-      ws.addEventListener("message", (ev: MessageEvent) => {
-        received.push(JSON.parse(ev.data as string) as RelayMessage);
-      });
-
-      // AUTH チャレンジを待つ
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
-
-      const authChallenge = received.find((m) => m[0] === "AUTH");
+      const authChallenge = await waitForMessage<["AUTH", string]>(
+        received,
+        (m) => m[0] === "AUTH",
+      );
       assertExists(authChallenge);
       const challenge = authChallenge[1];
       assert(typeof challenge === "string");
@@ -303,11 +325,10 @@ test("advanced: NIP-42 AUTH - handles challenge/response with requiresAuth", asy
         .build();
       ws.send(JSON.stringify(["AUTH", authEvent]));
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
-
       // OK レスポンスで認証成功確認
-      const okMsg = received.find((m) =>
-        m[0] === "OK" && m[1] === authEvent.id
+      const okMsg = await waitForMessage<["OK", string, boolean, string]>(
+        received,
+        (m) => m[0] === "OK" && m[1] === authEvent.id,
       );
       assertExists(okMsg);
       assertEquals(okMsg[2], true);

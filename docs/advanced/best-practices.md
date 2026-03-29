@@ -85,11 +85,22 @@ pool.relay("wss://relay.example.com", { connectionTimeout: 50 });
 ### 3. streamEvents の間隔を短くする
 
 ```typescript
+const stableRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
+
 // ❌ 遅い
-streamEvents(relay, events, { interval: 1000 });
+streamEvents(relay, events, {
+  interval: 1000,
+  jitter: 100,
+  random: stableRandom,
+});
 
 // ✅ 速い
-streamEvents(relay, events, { interval: 10 });
+streamEvents(relay, events, { interval: 10, jitter: 2, random: stableRandom });
 ```
 
 ---

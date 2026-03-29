@@ -7,6 +7,7 @@
  */
 
 import type { MockRelay } from "../relay.ts";
+import { systemRandomSource } from "../internal/runtime.ts";
 import type {
   NostrEvent,
   StartStreamOptions,
@@ -33,6 +34,7 @@ export function streamEvents(
 ): StreamHandle {
   const interval = options.interval ?? 100;
   const jitter = options.jitter ?? 0;
+  const random = options.random ?? systemRandomSource;
   let index = 0;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -41,7 +43,7 @@ export function streamEvents(
     if (stopped || index >= events.length) return;
 
     const delay = interval +
-      (jitter > 0 ? Math.round((Math.random() * 2 - 1) * jitter) : 0);
+      (jitter > 0 ? Math.round((random.next() * 2 - 1) * jitter) : 0);
     const effectiveDelay = Math.max(0, delay);
 
     timer = setTimeout(() => {
@@ -87,6 +89,7 @@ export function startStream(
 ): StreamHandle {
   const interval = options.interval ?? 1000;
   const jitter = options.jitter ?? 0;
+  const random = options.random ?? systemRandomSource;
   const maxCount = options.count;
   let count = 0;
   let stopped = false;
@@ -100,7 +103,7 @@ export function startStream(
     }
 
     const delay = interval +
-      (jitter > 0 ? Math.round((Math.random() * 2 - 1) * jitter) : 0);
+      (jitter > 0 ? Math.round((random.next() * 2 - 1) * jitter) : 0);
     const effectiveDelay = Math.max(0, delay);
 
     timer = setTimeout(() => {

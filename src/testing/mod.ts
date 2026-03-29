@@ -15,6 +15,7 @@ export type {
   CalendarTimeEventOptions,
   ChatMessageOptions,
   CorruptOptions,
+  EventBuilderRuntimeOptions,
   GiftWrapOptions,
   ListOptions,
   LongFormOptions,

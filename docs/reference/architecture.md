@@ -4,38 +4,84 @@ outline: deep
 
 # アーキテクチャ
 
-繋ぎ屋は `globalThis.WebSocket` を差し替えることで、既存の Nostr
-クライアントコードを無変更でテスト可能にするモックライブラリです。
+繋ぎ屋は `globalThis.WebSocket` と `globalThis.fetch` を差し替えることで、
+既存の Nostr クライアントコードを無変更でテストできるモックライブラリです。
+
+2026-03 の全面リファクタリングでは、公開 API を変えずに内部を責務分離しました。
+`MockPool` と `MockRelay` は引き続きエントリポイントですが、実装本体は platform
+hook、message codec、router、event store、auth、subscription、 delivery
+に分割されています。
 
 ## 概要
 
 ```mermaid
 flowchart LR
-    TC["テストコード"] -->|"pool.install()"| GWS["globalThis.WebSocket"]
-    TC -->|"pool.install()"| GF["globalThis.fetch"]
-    GWS -->|"差し替え"| MWS["MockWebSocket"]
-    GF -->|"差し替え"| NIP11["NIP-11 インターセプト"]
-    MWS -->|"ルーティング"| MR["MockRelay（URL単位）"]
-    NIP11 --> MR
-```
+    TC["テストコード"] --> MP["MockPool"]
+    MP --> PH["platform/pool_hooks"]
+    PH --> GWS["globalThis.WebSocket"]
+    PH --> GF["globalThis.fetch"]
+    GWS --> MWS["MockWebSocket"]
+    GF --> N11["NIP-11 fetch handler"]
+    MWS --> MR["MockRelay"]
+    N11 --> MR
 
----
+    MR --> CODEC["message_codec"]
+    MR --> ROUTER["router"]
+    MR --> STORE["EventStore"]
+    MR --> SUBS["SubscriptionRegistry"]
+    MR --> AUTH["AuthService"]
+    MR --> DELIV["DeliveryScheduler"]
+    STORE --> FC["filter_compiler"]
+```
 
 ## コンポーネント構成
 
-```
+```text
 src/
-├── pool.ts         MockPool       — 全体管理・WebSocket差し替え
-├── relay.ts        MockRelay      — URL単位の仮想リレー
-├── websocket.ts    MockWebSocket  — WebSocket API互換モック
-├── filter.ts       matchFilter 等 — NIP-01フィルターマッチング（純粋関数）
-├── auth.ts         AuthState      — NIP-42 AUTHチャレンジ/レスポンス
-├── event_kind.ts                  — イベント種別判定（Regular/Replaceable/Ephemeral等）
-├── logger.ts                      — ロガー
-└── types.ts                       — 型定義
+├── pool.ts                       MockPool
+├── relay.ts                      MockRelay（公開 API 用オーケストレータ）
+├── websocket.ts                  MockWebSocket
+├── auth.ts                       AuthState 互換エクスポート
+├── filter.ts                     matchFilter / filterEvents
+├── event_kind.ts                 kind 分類・replaceable 判定
+├── logger.ts                     Logger
+├── types.ts                      公開型定義の互換 re-export
+├── types/
+│   ├── nostr.ts                 Nostr event/filter/message 型
+│   ├── relay.ts                 relay option/snapshot/handler 型
+│   ├── runtime.ts               logger/clock/random/WebSocket readyState 型
+│   └── testing.ts               stream option/handle 型
+├── internal/
+│   ├── clone.ts                  defensive copy
+│   ├── runtime.ts                system clock / random defaults
+│   ├── url.ts                    URL 正規化・NIP-11 判定
+│   └── validation.ts             runtime shape validation
+├── platform/
+│   ├── global_hooks.ts           globalThis 差し替え/復元
+│   ├── nip11_fetch.ts            NIP-11 fetch fallback/intercept
+│   └── pool_hooks.ts             MockPool 用 install/uninstall
+├── relay/
+│   ├── auth_service.ts           AUTH challenge/validation
+│   ├── connection_runtime.ts     接続集合・受信経路・配送起点
+│   ├── delivery_scheduler.ts     timer 管理と配送
+│   ├── error_messages.ts         エラー文言生成
+│   ├── event_store.ts            保存・置換・削除・query/count
+│   ├── filter_compiler.ts        compiled predicate / fast path
+│   ├── message_codec.ts          parse + limit validation
+│   ├── response_builders.ts      relay 応答メッセージ生成
+│   ├── relay_inspector.ts        received/errors/authResults の診断境界
+│   ├── router.ts                 message type dispatch
+│   └── subscription_registry.ts  接続ごとの購読管理
+└── testing/
+    ├── assertions.ts
+    ├── event_builder.ts
+    ├── filter_builder.ts
+    ├── snapshot.ts
+    ├── stream.ts
+    └── wait.ts
 ```
 
-### クラス関係図
+## 主要オブジェクト
 
 ```mermaid
 classDiagram
@@ -44,438 +90,254 @@ classDiagram
         +install() void
         +uninstall() void
         +reset() void
-        -relays Map~string, MockRelay~
-        -originalWebSocket typeof WebSocket
-        -originalFetch typeof fetch
+        +connections Map~string, number~
+        +installed boolean
     }
     class MockRelay {
-        +store(event) void
+        +store(event) boolean
+        +broadcast(event) void
         +onREQ(handler) void
-        +hasEvent(id) boolean
-        +countREQs() number
+        +onEVENT(handler) void
+        +onCOUNT(handler) void
+        +requireAuth(validator) void
+        +setVerifier(verifier) void
+        +setAuthVerifier(verifier) void
         +snapshot() RelaySnapshot
-        -store NostrEvent[]
-        -received ReceivedMessage[]
-        -connections Set~MockWebSocket~
-        -subscriptions Map
-        -authState AuthState
+        +restore(snapshot) void
+    }
+    class EventStore {
+        +store(event) boolean
+        +publish(event) PublishEventResult
+        +queryMany(filters) NostrEvent[]
+        +count(filters) number
+        +snapshot() EventStoreSnapshot
+        +restore(snapshot) void
+    }
+    class RelayConnectionRuntime {
+        +registerConnection(ws) void
+        +unregisterConnection(ws) void
+        +handleOpen(ws) void
+        +handleMessage(ws, raw) void
+        +sendMessage(ws, message) void
+    }
+    class SubscriptionRegistry {
+        +set(ws, subId, filters) void
+        +delete(ws, subId) void
+        +matchingSubscriptions(event) Array
+        +getView() ReadonlyMap
+    }
+    class AuthService {
+        +sendChallenge(ws) RelayMessage
+        +handleAuthResponse(ws, event, relayUrl) Promise
+        +isAuthenticated(ws) boolean
+    }
+    class DeliveryScheduler {
+        +schedule(delayMs, task) void
+        +deliver(ws, payload, delayMs) void
+        +clear() void
     }
     class MockWebSocket {
         +send(data) void
         +close() void
-        -relay MockRelay
-        -readyState number
+        +setRelayResolver(resolver) void
         +_receiveMessage(data) void
         +_forceClose(code, reason) void
     }
-    class AuthState {
-        +sendChallenge(ws) string
-        +handleAuthResponse(ws, event, url) boolean
-        -validator Function
-        -challenges Map
-        -authenticated Set
-    }
 
-    MockPool "1" --> "0..*" MockRelay : 管理
-    MockRelay "1" --> "0..*" MockWebSocket : 接続管理
-    MockRelay "1" --> "1" AuthState : 認証管理
+    MockPool --> MockRelay : URLごとに管理
+    MockPool --> MockWebSocket : install 時に差し替え
+    MockRelay --> EventStore
+    MockRelay --> RelayConnectionRuntime
+    MockRelay --> SubscriptionRegistry
+    MockRelay --> AuthService
+    MockRelay --> DeliveryScheduler
+    MockWebSocket --> MockRelay : resolver 経由で接続
 ```
 
-### MockPool (`src/pool.ts`)
+`src/auth.ts` の `AuthState` は互換エクスポートです。実装本体は
+`src/relay/auth_service.ts` にあります。接続数、AUTH 強制、parse/router
+入口、ランダムエラー、NOTICE/OK/CLOSED の配送起点は
+`src/relay/connection_runtime.ts` にあります。received / errors / authResults の
+診断 API は `src/relay/relay_inspector.ts` に集約され、`MockRelay` は facade
+のみを 提供します。`EventStore` は `id` / `kind` / `pubkey` に加えて tag
+値索引も持ち、 `#e` / `#p` / `#d` を含む filter
+の候補集合を狭めます。`MockRelayOptions.clock` と `MockRelayOptions.random`
+を使うと、snapshot timestamp、ログ時刻、AUTH challenge、
+latency/error/disconnect の乱択を決定論的に差し替えられます。公開型定義は
+`src/types.ts` から見えますが、実体は `src/types/*` へ分割されています。
 
-複数の MockRelay を URL 単位で管理するコンテナ。テストのエントリポイント。
-
-| 主要メンバー         | 型                         | 役割                                |
-| -------------------- | -------------------------- | ----------------------------------- |
-| `#relays`            | `Map<string, MockRelay>`   | URL → MockRelay のマッピング        |
-| `#originalWebSocket` | `typeof WebSocket \| null` | uninstall 用に元の WebSocket を保存 |
-| `#originalFetch`     | `typeof fetch \| null`     | uninstall 用に元の fetch を保存     |
-
-**主要メソッド:**
-
-- `relay(url, options?)` — MockRelay を登録・取得（同一 URL
-  は既存インスタンスを返す）
-- `install()` — `globalThis.WebSocket` と `globalThis.fetch` を差し替え
-- `uninstall()` — 元の実装を復元
-- `reset()` — 全リレーの状態をクリア
-
-### MockRelay (`src/relay.ts`)
-
-URL 単位で動作する仮想 Nostr
-リレー。イベントのストア・フィルタリング・カスタムハンドラー・検証ヘルパー・不安定性シミュレート・NIP-42
-AUTH を提供する。
-
-| 主要フィールド   | 型                                               | 役割                             |
-| ---------------- | ------------------------------------------------ | -------------------------------- |
-| `#store`         | `NostrEvent[]`                                   | イベントストア（永続イベント）   |
-| `#received`      | `ReceivedMessage[]`                              | 受信メッセージのログ             |
-| `#connections`   | `Set<MockWebSocket>`                             | アクティブな接続一覧             |
-| `#subscriptions` | `Map<MockWebSocket, Map<string, NostrFilter[]>>` | 接続ごとのサブスクリプション     |
-| `#authState`     | `AuthState`                                      | NIP-42 認証状態                  |
-| `#pendingTimers` | `Set<ReturnType<typeof setTimeout>>`             | 保留中タイマー（reset 時クリア） |
-
-### MockWebSocket (`src/websocket.ts`)
-
-`globalThis.WebSocket` の差し替え先。`EventTarget` を継承して WebSocket API
-を模倣する。
-
-| 主要メンバー                | 役割                                         |
-| --------------------------- | -------------------------------------------- |
-| `static _resolveRelay`      | MockPool が設定する URL → MockRelay 解決関数 |
-| `#relay`                    | ルーティング先の MockRelay                   |
-| `send(data)`                | `relay._handleMessage()` に転送              |
-| `_receiveMessage(data)`     | リレーから呼ばれる受信コールバック           |
-| `_forceClose(code, reason)` | リレーから強制切断                           |
-
-### WebSocket readyState 遷移
+## 受信経路
 
 ```mermaid
-stateDiagram-v2
-    [*] --> CONNECTING : new WebSocket(url)
-    CONNECTING --> OPEN : queueMicrotask\n(scheduleOpen)
-    OPEN --> CLOSING : ws.close()
-    OPEN --> CLOSED : _forceClose()\n（リレーから強制切断）
-    CLOSING --> CLOSED : close イベント発火
-    CONNECTING --> CLOSED : URL 未登録\n(エラー)
-    CLOSED --> [*]
+sequenceDiagram
+    participant C as クライアント
+    participant MWS as MockWebSocket
+    participant MR as MockRelay
+    participant Codec as message_codec
+    participant Router as router
+    participant Store as EventStore
+    participant Subs as SubscriptionRegistry
+    participant Auth as AuthService
+    participant Deliv as DeliveryScheduler
 
-    note right of CONNECTING
-        readyState = 0
-        リレー検索中
-    end note
-    note right of OPEN
-        readyState = 1
-        メッセージ送受信可能
-    end note
-    note right of CLOSING
-        readyState = 2
-        クローズ処理中
-    end note
-    note right of CLOSED
-        readyState = 3
-        接続終了
-    end note
+    C->>MWS: ws.send(rawJson)
+    MWS->>MR: _handleMessage(ws, rawJson)
+    MR->>Codec: parseClientMessage(rawJson, limits)
+
+    alt validation error
+        Codec-->>MR: NOTICE 用エラー
+        MR->>Deliv: deliver(ws, notice, latency)
+    else parse success
+        Codec-->>MR: ParsedClientMessage
+        MR->>MR: RelayInspector と log を更新
+        MR->>Router: routeClientMessage(message, handlers)
+
+        alt EVENT
+            Router->>Store: publish(event)
+            Router->>Subs: matchingSubscriptions(event)
+        else REQ / COUNT
+            Router->>Store: queryMany(filters) / count(filters)
+            Router->>Subs: set(ws, subId, filters)
+        else AUTH
+            Router->>Auth: handleAuthResponse(...)
+        else CLOSE
+            Router->>Subs: delete(ws, subId)
+        end
+
+        MR->>Deliv: deliver(ws, payload, latency)
+    end
 ```
 
-### filter.ts
+ポイント:
 
-NIP-01 フィルターマッチングの純粋関数群。副作用なし。
+- `message_codec.ts` が JSON parse、構造検証、サイズ制限を先に処理する
+- `router.ts` は type ごとの dispatch だけを担当し、`MockRelay` に async error
+  callback を返す
+- `MockRelay` 本体は orchestration
+  に寄せ、保存・購読・認証・配送は専用クラスへ委譲する
 
-| 関数                           | 説明                                                     |
-| ------------------------------ | -------------------------------------------------------- |
-| `matchFilter(event, filter)`   | イベントが単一フィルターにマッチするか（全条件AND）      |
-| `matchFilters(event, filters)` | 複数フィルターのいずれかにマッチするか（フィルター間OR） |
-| `filterEvents(events, filter)` | イベント配列を絞り込み・降順ソート・limit 適用           |
+## ストアと問い合わせ
 
-### auth.ts (NIP-42)
+### 保存・置換・削除
 
-接続ごとの AUTH チャレンジ/レスポンスを管理するクラス。
+```mermaid
+flowchart TD
+    Publish["EventStore.publish(event)"] --> Deleted{"deletedIds\nに存在?"}
+    Deleted -->|"Yes"| Block["blocked を返す"]
+    Deleted -->|"No"| Kind5{"kind == 5?"}
+    Kind5 -->|"Yes"| Delete["e/a タグを解釈して削除\nkind:5 自体は保存"]
+    Kind5 -->|"No"| Classify{"kind 分類"}
+    Classify --> Regular["Regular: 保存"]
+    Classify --> Repl["Replaceable: kind+pubkey 最新を置換"]
+    Classify --> Param["Addressable: kind+pubkey+d-tag 最新を置換"]
+    Classify --> Ephem["Ephemeral: 保存せず配信のみ"]
+```
 
-| メンバー                             | 役割                                               |
-| ------------------------------------ | -------------------------------------------------- |
-| `#validator`                         | カスタムバリデーター関数                           |
-| `#challenges`                        | 接続 → チャレンジ文字列 のマッピング               |
-| `#authenticated`                     | 認証済み接続の Set                                 |
-| `sendChallenge(ws)`                  | ランダムチャレンジを生成して AUTH メッセージを返す |
-| `handleAuthResponse(ws, event, url)` | kind:22242 の AUTH 応答を検証                      |
+`EventStore` は次の索引を持ちます。
 
----
+- `idIndex`: `id -> Set<NostrEvent>`
+- `kindIndex`: `kind -> Set<NostrEvent>`
+- `pubkeyIndex`: `pubkey -> Set<NostrEvent>`
+- `replaceableIndex`: `kind:pubkey -> latest event`
+- `parameterizedIndex`: `kind:pubkey:d-tag -> latest event`
 
-## WebSocket インターセプトの仕組み
+同 timestamp の replaceable / parameterized replaceable は、 `created_at`
+が同じなら `id` の辞書順が小さい方を優先して保持します。
+
+### REQ / COUNT fast path
+
+```mermaid
+flowchart TD
+    Filters["REQ / COUNT filters"] --> Compile["filter_compiler.compileFilter()"]
+    Compile --> Pick["使える索引(id/kind/pubkey)から\n最小候補集合を選択"]
+    Pick --> Ordered["順序付き候補列を構築"]
+    Ordered --> Match["compiled predicate で評価"]
+    Match --> Limit["created_at desc / id asc を維持\nlimit を適用"]
+    Limit --> Result["EVENT 群 または count"]
+```
+
+ポイント:
+
+- `REQ` と `COUNT` はフィルターごとに compiled predicate を使う
+- 索引が使えない広いフィルターだけがフルスキャンへフォールバックする
+- `restore()` 後は索引を再構築するため、snapshot 復元後も同じ fast path が使える
+
+## Platform hook と NIP-11
 
 ```mermaid
 sequenceDiagram
     participant TC as テストコード
     participant MP as MockPool
-    participant MWS as MockWebSocket
+    participant PH as pool_hooks
+    participant GH as global_hooks
+    participant N11 as nip11_fetch
     participant MR as MockRelay
 
     TC->>MP: pool.install()
-    Note over MP: globalThis.WebSocket = MockWebSocket<br>MockWebSocket._resolveRelay = ...<br>globalThis.fetch = NIP-11インターセプト版
+    MP->>PH: installPoolHooks(lookupRelay)
+    PH->>GH: 現在の WebSocket/fetch を退避
+    PH->>GH: MockWebSocket を install
+    PH->>N11: createNip11FetchHandler(lookupRelay, originalFetch)
+    PH->>GH: fetch handler を install
 
-    TC->>MWS: new WebSocket("wss://...")
-    MWS->>MR: _resolveRelay(url) で検索
-    MR-->>MWS: MockRelay インスタンス
-    MWS->>MR: relay._registerConnection(this)
-    Note over MWS: queueMicrotask で scheduleOpen()
+    TC->>globalThis.fetch: fetch("https://relay...", {Accept: application/nostr+json})
+    globalThis.fetch->>N11: intercept
+    N11->>MR: lookupRelay(normalizedWsUrl)
 
-    MWS->>MWS: readyState = OPEN
-    MWS->>TC: open イベント / onopen 発火
-    MWS->>MR: relay._handleOpen(this)
-    Note over MR: requiresAuth の場合<br>setTimeout(0) で AUTH チャレンジ送信
-
-    TC->>MP: pool.uninstall()
-    Note over MP: globalThis.WebSocket = 元の WebSocket<br>globalThis.fetch = 元の fetch
-```
-
----
-
-## メッセージフロー
-
-### クライアント → リレー (send)
-
-```mermaid
-sequenceDiagram
-    participant C as クライアント
-    participant MWS as MockWebSocket
-    participant MR as MockRelay
-
-    C->>MWS: ws.send('["REQ", "sub1", {...}]')
-    Note over MWS: readyState が OPEN でなければ DOMException
-    MWS->>MR: relay._handleMessage(this, data)
-
-    Note over MR: 1. JSON.parse でパース<br>2. メッセージ構造の基本検証<br>3. received[] にログ記録<br>4. ランダム切断チェック (disconnectRate)<br>5. エラー率チェック (errorRate)<br>6. AUTH 未認証チェック (requiresAuth)<br>7. メッセージ種別に応じてルーティング
-
-    alt EVENT
-        MR->>MR: #handleEvent()
-    else REQ
-        MR->>MR: #handleReq()
-    else CLOSE
-        MR->>MR: #handleClose()
-    else AUTH
-        MR->>MR: #handleAuth()
-    else COUNT
-        MR->>MR: #handleCount()
+    alt relay が存在
+        MR-->>N11: getInfo()
+        N11-->>TC: application/nostr+json Response
+    else relay が存在しない / 非 NIP-11
+        N11-->>TC: original fetch へ fallback
     end
-
-    MR->>MWS: #sendWithLatency(ws, response)
 ```
 
-### エラーシミュレーション判定フロー
+`MockPool` 自体は global state を持たず、install/uninstall の責務は
+`platform/pool_hooks.ts` に集約されています。
 
-```mermaid
-flowchart TD
-    Start["メッセージ受信"] --> DC{"disconnectRate\nチェック"}
-    DC -->|"乱数 < disconnectRate"| FClose["強制切断\n_forceClose()"]
-    DC -->|"通過"| EC{"errorRate\nチェック"}
-    EC -->|"乱数 < errorRate"| NErr["NOTICE エラー返送"]
-    EC -->|"通過"| Auth{"requiresAuth\nかつ未認証?"}
-    Auth -->|"Yes"| AuthErr["restricted: auth required\nエラー返送"]
-    Auth -->|"No / 認証済み"| Route["メッセージ種別ルーティング\nEVENT / REQ / CLOSE / AUTH / COUNT"]
-    FClose --> End["処理終了"]
-    NErr --> End
-    AuthErr --> End
-    Route --> End
-```
+## 性能と安全性
 
-### リレー → クライアント (受信)
+| 項目                   | 現在の特性                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `REQ` / `COUNT`        | compiled filter + 索引選択で大規模ストア時の候補数を減らす                                                                   |
+| `snapshot` / `restore` | deep copy を返し、`restore()` 時に索引を再構築する                                                                           |
+| AUTH                   | challenge / authenticated を接続単位で保持し、ストア走査に依存しない                                                         |
+| 配送                   | latency 0 は `queueMicrotask`、遅延配送は `DeliveryScheduler` が relay-wide batch flush で 1 本の timer へ集約する           |
+| reset                  | `DeliveryScheduler.clear()`、購読、AUTH 状態、受信ログをまとめて初期化                                                       |
+| 入力検証               | `max_message_length`、filter 数、`max_subid_length`、`max_limit`、`max_event_tags`、`max_content_length` を routing 前に拒否 |
+| 署名検証               | EVENT 用 `setVerifier()` と AUTH 用 `setAuthVerifier()` を分離                                                               |
 
-```mermaid
-sequenceDiagram
-    participant MR as MockRelay
-    participant MWS as MockWebSocket
-    participant C as クライアント
+## 公開 API 互換性
 
-    MR->>MR: #sendWithLatency(ws, message)
-    Note over MR: latency == 0: queueMicrotask で即時配信<br>latency  > 0: setTimeout(latency) で遅延配信
+このリファクタリングは内部構造の変更であり、公開 API の互換性を維持します。
 
-    MR->>MWS: _receiveMessage(data)
-    Note over MWS: readyState が OPEN でなければ無視
-    MWS->>MWS: MessageEvent を作成
-    MWS->>C: onmessage / "message" イベント発火
-```
-
----
-
-## データフロー
-
-### イベントストア
-
-```mermaid
-flowchart TD
-    Store["store(event)"] --> K5{"kind:5\n（削除）?"}
-    K5 -->|"Yes"| Del["#handleDeletion()\n+ store に追加"]
-    K5 -->|"No"| KClass{"イベント種別分類"}
-    KClass --> Regular["Regular\n→ store に追加"]
-    KClass --> Repl["Replaceable\n→ 同一 kind+pubkey の古いものを置換"]
-    KClass --> ParamRepl["Addressable\n→ 同一 kind+pubkey+d-tag の古いものを置換"]
-    KClass --> Ephem["Ephemeral\n→ store に追加しない"]
-```
-
-### イベント種別の分類フロー
-
-```mermaid
-flowchart TD
-    Start["kind 番号"] --> R1{"kind == 0, 3\nまたは\n10000-19999?"}
-    R1 -->|"Yes"| Replaceable["Replaceable\n（置換可能）"]
-    R1 -->|"No"| R2{"kind == 20000-29999?"}
-    R2 -->|"Yes"| Ephemeral["Ephemeral\n（非永続）"]
-    R2 -->|"No"| R3{"kind == 30000-39999?"}
-    R3 -->|"Yes"| Addressable["Addressable\n（d-tag で識別）"]
-    R3 -->|"No"| Regular["Regular\n（通常）\nNIP-01 定義: 1, 2, 4-44, 1000-9999\n※ 未分類 kind も Regular として扱う"]
-```
-
-### REQ 処理とサブスクリプション管理
-
-```mermaid
-sequenceDiagram
-    participant C as クライアント
-    participant MR as MockRelay
-    participant Store as イベントストア
-
-    C->>MR: REQ 送信 (subId, filters)
-    MR->>MR: subscriptions[ws][subId] = filters を登録
-
-    alt カスタム reqHandler あり
-        MR->>MR: reqHandler(subId, filters) を呼ぶ
-    else なし
-        MR->>Store: filterEvents() でマッチするイベントを取得
-        Store-->>MR: マッチしたイベント一覧
-    end
-
-    loop マッチした各イベント
-        MR->>C: EVENT メッセージ送信
-    end
-    MR->>C: EOSE メッセージ送信
-
-    Note over MR,C: 以降、store() + broadcast() で<br>新着イベントをアクティブなサブスクリプションへ配信
-```
-
-### サブスクリプションデータ構造
-
-```
-#subscriptions: Map<MockWebSocket, Map<string, NostrFilter[]>>
-
-  ConnectionA ──→ { "sub1": [filter1, filter2],
-                    "sub2": [filter3] }
-  ConnectionB ──→ { "sub1": [filter4] }
-```
-
----
-
-## NIP 処理フロー
-
-### NIP-42 AUTH フロー
-
-```mermaid
-sequenceDiagram
-    participant C as クライアント
-    participant MR as MockRelay
-    participant AS as AuthState
-
-    Note over MR: requiresAuth: true / requireAuth(validator) 設定済み
-
-    C->>MR: 接続 (new WebSocket)
-    MR->>MR: _handleOpen(ws)
-    Note over MR: setTimeout(0) で AUTH チャレンジ送信
-    MR->>AS: sendChallenge(ws)
-    AS-->>C: ["AUTH", challenge]
-
-    C->>MR: AUTH イベント (kind:22242) 送信
-    MR->>AS: handleAuthResponse(ws, authEvent, url)
-    Note over AS: 1. チャレンジタグの一致確認<br>2. kind:22242 チェック<br>3. validator(authEvent) または relay タグ検証<br>4. 成功 → authenticated.add(ws)
-    AS-->>MR: 認証結果
-    MR-->>C: ["OK", eventId, true/false, message]
-```
-
-### NIP-09 削除処理フロー
-
-```mermaid
-flowchart TD
-    Start["クライアントが kind:5 イベント送信"] --> HE["MockRelay#handleEvent()"]
-    HE --> HD["#handleDeletion(event)"]
-    HD --> ETag["e タグで参照されるイベントを store から削除"]
-    HD --> ATag["a タグで参照される\nReplaceable / Addressable イベントも削除"]
-    HD --> Record["deletedIds に削除済み ID を記録"]
-    ETag --> Block["削除済み ID の再投稿は\n'blocked: event was deleted' で拒否"]
-    ATag --> Block
-    Record --> Block
-```
-
-### NIP-11 リレー情報フロー
-
-```mermaid
-sequenceDiagram
-    participant C as クライアント
-    participant MP as MockPool
-    participant MR as MockRelay
-
-    Note over MR: relay.setInfo({ name: "...", description: "..." })
-
-    C->>MP: fetch(url, { headers: { Accept: "application/nostr+json" } })
-    Note over MP: isNip11Request() で判定<br>HTTP/HTTPS URL を WS/WSS に変換してリレー検索
-    MP->>MR: relay.getInfo()
-    MR-->>MP: リレー情報オブジェクト
-    MP-->>C: Response(JSON.stringify(info),\n{ "Content-Type": "application/nostr+json" })
-```
-
-### イベント注入とリアルタイムストリーム
-
-```mermaid
-flowchart TD
-    Inject["relay.store(event) + relay.broadcast(event)\n（testing/ の streamEvents 等が使用）"]
-    Inject --> Classify["store(event)\nでストアに保存"]
-    Inject --> Broadcast["broadcast(event)"]
-    Broadcast --> Filter["全アクティブサブスクリプションの\nフィルターと照合"]
-    Filter --> Match["マッチした接続・サブスクリプションへ\nEVENT メッセージを送信"]
-    Match --> Recv["MockWebSocket#_receiveMessage()\n→ クライアントの onmessage"]
-```
-
----
+- `MockPool`、`MockRelay`、`filter.ts`、`event_kind.ts` の公開エクスポートは維持
+- `AuthState` は `AuthService` への互換ラッパーとして維持
+- `@ikuradon/tsunagiya/testing` の helper 群は同じ import path で利用可能
+- 安定対象は公開 export
+  のみで、`src/internal/**`、`src/relay/**`、`src/platform/**`
+  は内部実装として扱う
 
 ## テスト時のライフサイクル
 
-```typescript
-// 1. 初期化
+```ts
 const pool = new MockPool();
 const relay = pool.relay("wss://relay.example.com");
 
-// 2. 事前データ・設定
-relay.store(event); // イベントを事前登録
-relay.onREQ((subId, filters) =>
-  // カスタムハンドラー
-  customEvents
-);
-
-// 3. WebSocket 差し替え
+relay.store(event);
 pool.install();
 
 try {
-  // 4. テスト実行（クライアントコードをそのまま呼ぶ）
   const ws = new WebSocket("wss://relay.example.com");
-  // ...
-
-  // 5. 検証
-  relay.hasEvent("abc123"); // イベント受信確認
-  relay.countREQs(); // REQ 受信数確認
+  // テスト対象コードをそのまま実行
 } finally {
-  // 6. 必ず復元（テスト間の干渉を防ぐ）
   pool.uninstall();
 }
 ```
 
----
+実運用上の注意:
 
-## テストヘルパー全体像
-
-```mermaid
-flowchart LR
-    subgraph testing ["@ikuradon/tsunagiya/testing"]
-        EB["EventBuilder\nテスト用イベント生成\n（NIP別テンプレート）"]
-        FB["FilterBuilder\nフィルターパターン生成\n（NIP別テンプレート）"]
-        Assert["アサーション\nassertReceivedREQ\nassertEventPublished 等"]
-        Stream["ストリーム\nstreamEvents\nstartStream"]
-        Snap["スナップショット\nrelay.snapshot()\nrelay.restore()"]
-    end
-
-    EB -->|"生成したイベントを注入"| MR["MockRelay"]
-    FB -->|"フィルター生成"| MR
-    MR -->|"状態確認"| Assert
-    Stream -->|"リアルタイム配信"| MR
-    MR -->|"状態保存・復元"| Snap
-```
-
----
-
-## 注意事項
-
-- **テスト間の干渉**: `globalThis.WebSocket`
-  の差し替えはグローバル操作のため、テストの `finally` ブロックで必ず
-  `pool.uninstall()` を呼ぶこと
-- **署名検証なし**:
-  テスト用ライブラリとして、イベント署名は文字列として扱う（実際の暗号処理は依存を増やすため実装しない）。署名検証が必要な場合は
-  `onEVENT` ハンドラーで独自に実装する
-- **非同期配信**: レイテンシ 0 の場合でも `queueMicrotask`
-  で非同期配信する（`send()`
-  内で同期的にレスポンスを返すと一部クライアントが誤動作する）
-- **単一インスタンス**: `MockPool` は同時に 1 インスタンスのみ `install` 可能
+- `pool.install()` は同時に 1 インスタンスのみ
+- テストでは `finally` で必ず `pool.uninstall()` する
+- 固定 `setTimeout` より `testing/wait.ts` の `waitFor()` を優先する
+- 内部モジュールを直接 import せず、公開 export を使う

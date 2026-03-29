@@ -85,11 +85,22 @@ pool.relay("wss://relay.example.com", { connectionTimeout: 50 });
 ### 3. Use short intervals for streamEvents
 
 ```typescript
+const stableRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
+
 // ❌ Slow
-streamEvents(relay, events, { interval: 1000 });
+streamEvents(relay, events, {
+  interval: 1000,
+  jitter: 100,
+  random: stableRandom,
+});
 
 // ✅ Fast
-streamEvents(relay, events, { interval: 10 });
+streamEvents(relay, events, { interval: 10, jitter: 2, random: stableRandom });
 ```
 
 ---

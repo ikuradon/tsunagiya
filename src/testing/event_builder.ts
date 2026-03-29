@@ -9,17 +9,42 @@
  */
 
 import type {
+  Clock,
   EventSigner,
   NostrEvent,
   NostrFilter,
+  RandomSource,
   UnsignedEvent,
 } from "../types.ts";
+import { systemClock, systemRandomSource } from "../internal/runtime.ts";
 
 /** ランダムhex文字列を生成する */
-function randomHex(bytes: number): string {
+function randomHex(bytes: number, random: RandomSource): string {
   const arr = new Uint8Array(bytes);
-  crypto.getRandomValues(arr);
+  random.fill(arr);
   return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+interface ResolvedEventBuilderRuntimeOptions {
+  readonly clock: Clock;
+  readonly random: RandomSource;
+}
+
+/** EventBuilder 用 runtime 依存 */
+export interface EventBuilderRuntimeOptions {
+  /** 時刻ソース */
+  clock?: Clock;
+  /** 乱数ソース */
+  random?: RandomSource;
+}
+
+function resolveRuntime(
+  runtime: EventBuilderRuntimeOptions = {},
+): ResolvedEventBuilderRuntimeOptions {
+  return {
+    clock: runtime.clock ?? systemClock,
+    random: runtime.random ?? systemRandomSource,
+  };
 }
 
 /** corrupt オプション */
@@ -163,6 +188,8 @@ export interface GiftWrapOptions {
  * ```
  */
 export class EventBuilder {
+  readonly #clock: Clock;
+  readonly #random: RandomSource;
   #id: string;
   #pubkey: string;
   #kind: number;
@@ -171,21 +198,27 @@ export class EventBuilder {
   #tags: string[][];
   #sig: string;
 
-  private constructor(kind: number) {
-    this.#id = randomHex(32);
-    this.#pubkey = randomHex(32);
+  private constructor(
+    kind: number,
+    runtime: EventBuilderRuntimeOptions = {},
+  ) {
+    const resolved = resolveRuntime(runtime);
+    this.#clock = resolved.clock;
+    this.#random = resolved.random;
+    this.#id = randomHex(32, this.#random);
+    this.#pubkey = randomHex(32, this.#random);
     this.#kind = kind;
     this.#content = "";
-    this.#created_at = Math.floor(Date.now() / 1000);
+    this.#created_at = Math.floor(this.#clock.now() / 1000);
     this.#tags = [];
-    this.#sig = randomHex(64);
+    this.#sig = randomHex(64, this.#random);
   }
 
   // ===== スタティック ファクトリ =====
 
   /** kind:0 (Metadata) ビルダーを作成する */
-  static kind0(): EventBuilder {
-    return new EventBuilder(0);
+  static kind0(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return new EventBuilder(0, runtime);
   }
 
   /**
@@ -196,28 +229,31 @@ export class EventBuilder {
    * const event = EventBuilder.kind1().content("hello").build();
    * ```
    */
-  static kind1(): EventBuilder {
-    return new EventBuilder(1);
+  static kind1(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return new EventBuilder(1, runtime);
   }
 
   /** kind:3 (Contacts) ビルダーを作成する */
-  static kind3(): EventBuilder {
-    return new EventBuilder(3);
+  static kind3(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return new EventBuilder(3, runtime);
   }
 
   /** kind:4 (Encrypted DM) ビルダーを作成する */
-  static kind4(): EventBuilder {
-    return new EventBuilder(4);
+  static kind4(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return new EventBuilder(4, runtime);
   }
 
   /** kind:7 (Reaction) ビルダーを作成する */
-  static kind7(): EventBuilder {
-    return new EventBuilder(7);
+  static kind7(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return new EventBuilder(7, runtime);
   }
 
   /** 任意のkindでビルダーを作成する */
-  static kind(k: number): EventBuilder {
-    return new EventBuilder(k);
+  static kind(
+    k: number,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    return new EventBuilder(k, runtime);
   }
 
   // ===== ビルダーメソッド =====
@@ -282,7 +318,7 @@ export class EventBuilder {
    * 引数の秘密鍵は互換性のために受け付けるが、実際には使用しない（モック署名のためランダム文字列を生成）。
    */
   sign(_privateKey?: string): EventBuilder {
-    this.#sig = randomHex(64);
+    this.#sig = randomHex(64, this.#random);
     return this;
   }
 
@@ -292,9 +328,11 @@ export class EventBuilder {
    * 指定したフィールドを不正な値に置き換える。
    */
   corrupt(options: CorruptOptions): EventBuilder {
-    if (options.id) this.#id = "corrupted_" + randomHex(8);
-    if (options.pubkey) this.#pubkey = "corrupted_" + randomHex(8);
-    if (options.sig) this.#sig = "corrupted_" + randomHex(8);
+    if (options.id) this.#id = "corrupted_" + randomHex(8, this.#random);
+    if (options.pubkey) {
+      this.#pubkey = "corrupted_" + randomHex(8, this.#random);
+    }
+    if (options.sig) this.#sig = "corrupted_" + randomHex(8, this.#random);
     if (options.created_at) this.#created_at = -1;
     return this;
   }
@@ -380,10 +418,11 @@ export class EventBuilder {
    */
   static random(
     options: { kind?: number; pubkey?: string } = {},
+    runtime?: EventBuilderRuntimeOptions,
   ): NostrEvent {
-    const builder = new EventBuilder(options.kind ?? 1);
+    const builder = new EventBuilder(options.kind ?? 1, runtime);
     if (options.pubkey) builder.pubkey(options.pubkey);
-    builder.content("random: " + randomHex(8));
+    builder.content("random: " + randomHex(8, builder.#random));
     return builder.build();
   }
 
@@ -401,10 +440,14 @@ export class EventBuilder {
    * const events = EventBuilder.bulk(5, { seed: "test" });
    * ```
    */
-  static bulk(count: number, options: BulkOptions = {}): NostrEvent[] {
+  static bulk(
+    count: number,
+    options: BulkOptions = {},
+    runtime?: EventBuilderRuntimeOptions,
+  ): NostrEvent[] {
     const events: NostrEvent[] = [];
     for (let i = 0; i < count; i++) {
-      const builder = new EventBuilder(options.kind ?? 1);
+      const builder = new EventBuilder(options.kind ?? 1, runtime);
       if (options.pubkey) builder.pubkey(options.pubkey);
       if (options.seed !== undefined) {
         // シードベースの決定論的ID/pubkey生成
@@ -434,12 +477,18 @@ export class EventBuilder {
    *
    * created_at が interval 秒ずつ増加するイベント列を生成する。
    */
-  static timeline(count: number, options: TimelineOptions = {}): NostrEvent[] {
+  static timeline(
+    count: number,
+    options: TimelineOptions = {},
+    runtime?: EventBuilderRuntimeOptions,
+  ): NostrEvent[] {
     const interval = options.interval ?? 60;
-    const startTime = options.startTime ?? Math.floor(Date.now() / 1000);
+    const resolved = resolveRuntime(runtime);
+    const startTime = options.startTime ??
+      Math.floor(resolved.clock.now() / 1000);
     const events: NostrEvent[] = [];
     for (let i = 0; i < count; i++) {
-      const builder = new EventBuilder(options.kind ?? 1);
+      const builder = new EventBuilder(options.kind ?? 1, runtime);
       if (options.pubkey) builder.pubkey(options.pubkey);
       builder.createdAt(startTime + i * interval);
       builder.content(`timeline event ${i}`);
@@ -460,15 +509,19 @@ export class EventBuilder {
    * // reply2 は reply1 への返信
    * ```
    */
-  static thread(depth: number): NostrEvent[] {
+  static thread(
+    depth: number,
+    runtime?: EventBuilderRuntimeOptions,
+  ): NostrEvent[] {
     const events: NostrEvent[] = [];
-    const rootPubkey = randomHex(32);
+    const resolved = resolveRuntime(runtime);
+    const rootPubkey = randomHex(32, resolved.random);
 
     for (let i = 0; i < depth; i++) {
-      const builder = new EventBuilder(1);
-      const pubkey = i === 0 ? rootPubkey : randomHex(32);
+      const builder = new EventBuilder(1, runtime);
+      const pubkey = i === 0 ? rootPubkey : randomHex(32, resolved.random);
       builder.pubkey(pubkey);
-      builder.createdAt(Math.floor(Date.now() / 1000) + i);
+      builder.createdAt(Math.floor(resolved.clock.now() / 1000) + i);
       builder.content(`thread message ${i}`);
 
       if (i > 0) {
@@ -497,12 +550,14 @@ export class EventBuilder {
   static withReactions(
     reactionCount: number,
     options?: { content?: string; targetKind?: number },
+    runtime?: EventBuilderRuntimeOptions,
   ): [NostrEvent, NostrEvent[]] {
-    const post = EventBuilder.kind1().content("post with reactions").build();
+    const post = EventBuilder.kind1(runtime).content("post with reactions")
+      .build();
 
     const reactions: NostrEvent[] = [];
     for (let i = 0; i < reactionCount; i++) {
-      const reaction = EventBuilder.kind7()
+      const reaction = EventBuilder.kind7(runtime)
         .content(options?.content ?? "+")
         .tag("e", post.id)
         .tag("p", post.pubkey);
@@ -530,8 +585,11 @@ export class EventBuilder {
    * // original.content は "hello" のまま
    * ```
    */
-  static from(event: NostrEvent): EventBuilder {
-    const builder = EventBuilder.kind(event.kind);
+  static from(
+    event: NostrEvent,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = EventBuilder.kind(event.kind, runtime);
     builder.#id = event.id;
     builder.#pubkey = event.pubkey;
     builder.#content = event.content;
@@ -555,9 +613,12 @@ export class EventBuilder {
    * // event.kind === 1, event.pubkey === "abc123"
    * ```
    */
-  static matchFilter(filter: NostrFilter): NostrEvent {
+  static matchFilter(
+    filter: NostrFilter,
+    runtime?: EventBuilderRuntimeOptions,
+  ): NostrEvent {
     const kind = filter.kinds?.[0] ?? 1;
-    const builder = EventBuilder.kind(kind);
+    const builder = EventBuilder.kind(kind, runtime);
 
     if (filter.authors?.[0]) {
       builder.pubkey(filter.authors[0]);
@@ -571,7 +632,7 @@ export class EventBuilder {
 
     if (filter.ids?.[0]) {
       const prefix = filter.ids[0];
-      const remaining = randomHex(32);
+      const remaining = randomHex(32, builder.#random);
       builder.id((prefix + remaining).slice(0, 64));
     }
 
@@ -600,8 +661,12 @@ export class EventBuilder {
    * @param eventIds 削除対象のイベントID配列
    * @param kinds 削除対象の kind 配列（k tag として付与）
    */
-  static deletion(eventIds: string[], kinds?: number[]): EventBuilder {
-    const builder = new EventBuilder(5);
+  static deletion(
+    eventIds: string[],
+    kinds?: number[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(5, runtime);
     for (const id of eventIds) {
       builder.tag("e", id);
     }
@@ -620,8 +685,11 @@ export class EventBuilder {
    *
    * @param addresses 削除対象のアドレス配列 (kind:pubkey:d-tag 形式)
    */
-  static deletionByAddress(addresses: string[]): EventBuilder {
-    const builder = new EventBuilder(5);
+  static deletionByAddress(
+    addresses: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(5, runtime);
     const kinds = new Set<string>();
     for (const addr of addresses) {
       builder.tag("a", addr);
@@ -641,16 +709,20 @@ export class EventBuilder {
    */
   static metadata(
     profile: { name?: string; about?: string; picture?: string },
+    runtime?: EventBuilderRuntimeOptions,
   ): EventBuilder {
-    return EventBuilder.kind0()
+    return EventBuilder.kind0(runtime)
       .content(JSON.stringify(profile));
   }
 
   /**
    * Contacts イベント (kind:3) を生成する
    */
-  static contacts(pubkeys: string[]): EventBuilder {
-    const builder = EventBuilder.kind3();
+  static contacts(
+    pubkeys: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = EventBuilder.kind3(runtime);
     for (const pk of pubkeys) {
       builder.tag("p", pk);
     }
@@ -662,8 +734,12 @@ export class EventBuilder {
    *
    * content はモック暗号文（実際の暗号化は行わない）。
    */
-  static dm(recipientPubkey: string, content: string): EventBuilder {
-    return EventBuilder.kind4()
+  static dm(
+    recipientPubkey: string,
+    content: string,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    return EventBuilder.kind4(runtime)
       .content("mock-encrypted:" + content)
       .tag("p", recipientPubkey);
   }
@@ -671,16 +747,22 @@ export class EventBuilder {
   /**
    * グループメッセージ (NIP-29, kind:9) ビルダーを作成する
    */
-  static groupMessage(groupId: string): EventBuilder {
-    return EventBuilder.kind(9)
+  static groupMessage(
+    groupId: string,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    return EventBuilder.kind(9, runtime)
       .tag("h", groupId);
   }
 
   /**
    * Zap Request (kind:9734, NIP-57) を生成する
    */
-  static zapRequest(options: ZapRequestOptions): EventBuilder {
-    const builder = EventBuilder.kind(9734)
+  static zapRequest(
+    options: ZapRequestOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = EventBuilder.kind(9734, runtime)
       .content("")
       .tag("amount", String(options.amount))
       .tag("lnurl", options.lnurl)
@@ -697,8 +779,8 @@ export class EventBuilder {
   /**
    * NIP-07 Request (kind:24133) を生成する
    */
-  static nip07Request(): EventBuilder {
-    return EventBuilder.kind(24133)
+  static nip07Request(runtime?: EventBuilderRuntimeOptions): EventBuilder {
+    return EventBuilder.kind(24133, runtime)
       .content("mock-nip07-request");
   }
 
@@ -707,8 +789,11 @@ export class EventBuilder {
   /**
    * Date-based Calendar Event (kind:31922, NIP-52) ビルダーを作成する
    */
-  static calendarDateEvent(options: CalendarDateEventOptions): EventBuilder {
-    const builder = new EventBuilder(31922)
+  static calendarDateEvent(
+    options: CalendarDateEventOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(31922, runtime)
       .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
       .tag("title", options.title)
       .tag("start", options.startDate);
@@ -731,8 +816,11 @@ export class EventBuilder {
   /**
    * Time-based Calendar Event (kind:31923, NIP-52) ビルダーを作成する
    */
-  static calendarTimeEvent(options: CalendarTimeEventOptions): EventBuilder {
-    const builder = new EventBuilder(31923)
+  static calendarTimeEvent(
+    options: CalendarTimeEventOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(31923, runtime)
       .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
       .tag("title", options.title)
       .tag("start", String(options.start));
@@ -759,8 +847,11 @@ export class EventBuilder {
   /**
    * Calendar Collection (kind:31924, NIP-52) ビルダーを作成する
    */
-  static calendarCollection(options: CalendarCollectionOptions): EventBuilder {
-    const builder = new EventBuilder(31924)
+  static calendarCollection(
+    options: CalendarCollectionOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(31924, runtime)
       .tag("d", options.title.toLowerCase().replace(/\s+/g, "-"))
       .tag("title", options.title);
     for (const eventRef of options.events) {
@@ -772,8 +863,11 @@ export class EventBuilder {
   /**
    * Calendar Event RSVP (kind:31925, NIP-52) ビルダーを作成する
    */
-  static calendarRsvp(options: CalendarRsvpOptions): EventBuilder {
-    const builder = new EventBuilder(31925)
+  static calendarRsvp(
+    options: CalendarRsvpOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(31925, runtime)
       .tag("a", options.eventAddress)
       .tag("d", options.eventAddress)
       .tag("status", options.status);
@@ -791,8 +885,9 @@ export class EventBuilder {
    */
   static relayList(
     relays: Array<{ url: string; marker?: "read" | "write" }>,
+    runtime?: EventBuilderRuntimeOptions,
   ): EventBuilder {
-    const builder = new EventBuilder(10002);
+    const builder = new EventBuilder(10002, runtime);
     for (const relay of relays) {
       if (relay.marker) {
         builder.tag("r", relay.url, relay.marker);
@@ -811,8 +906,12 @@ export class EventBuilder {
    * @param targetEvent リポスト対象イベント
    * @param relayUrl 対象イベントが存在するリレーURL
    */
-  static repost(targetEvent: NostrEvent, relayUrl?: string): EventBuilder {
-    const builder = new EventBuilder(6)
+  static repost(
+    targetEvent: NostrEvent,
+    relayUrl?: string,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(6, runtime)
       .content(JSON.stringify(targetEvent))
       .tag("e", targetEvent.id, relayUrl ?? "")
       .tag("p", targetEvent.pubkey);
@@ -830,8 +929,9 @@ export class EventBuilder {
   static genericRepost(
     targetEvent: NostrEvent,
     relayUrl?: string,
+    runtime?: EventBuilderRuntimeOptions,
   ): EventBuilder {
-    const builder = new EventBuilder(16)
+    const builder = new EventBuilder(16, runtime)
       .content(JSON.stringify(targetEvent))
       .tag("e", targetEvent.id, relayUrl ?? "")
       .tag("p", targetEvent.pubkey)
@@ -846,8 +946,11 @@ export class EventBuilder {
    *
    * @param options Long-form Content オプション
    */
-  static longFormContent(options: LongFormOptions): EventBuilder {
-    const builder = new EventBuilder(30023)
+  static longFormContent(
+    options: LongFormOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(30023, runtime)
       .content(options.content)
       .tag("d", options.identifier)
       .tag("title", options.title);
@@ -869,8 +972,11 @@ export class EventBuilder {
    *
    * @param options Long-form Content オプション
    */
-  static longFormDraft(options: LongFormOptions): EventBuilder {
-    const builder = new EventBuilder(30024)
+  static longFormDraft(
+    options: LongFormOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(30024, runtime)
       .content(options.content)
       .tag("d", options.identifier)
       .tag("title", options.title);
@@ -895,8 +1001,12 @@ export class EventBuilder {
    * @param url 対象コンテンツのURL
    * @param contentType コンテンツタイプ (e.g. "text/html")
    */
-  static externalReaction(url: string, contentType: string): EventBuilder {
-    return new EventBuilder(17)
+  static externalReaction(
+    url: string,
+    contentType: string,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    return new EventBuilder(17, runtime)
       .content("+")
       .tag("i", url)
       .tag("k", contentType);
@@ -909,8 +1019,11 @@ export class EventBuilder {
    *
    * @param options ミュートリストオプション
    */
-  static muteList(options: ListOptions): EventBuilder {
-    const builder = new EventBuilder(10000);
+  static muteList(
+    options: ListOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(10000, runtime);
     if (options.pubkeys) {
       for (const pk of options.pubkeys) builder.tag("p", pk);
     }
@@ -934,8 +1047,11 @@ export class EventBuilder {
    *
    * @param eventIds ピン留めするイベントID一覧
    */
-  static pinList(eventIds: string[]): EventBuilder {
-    const builder = new EventBuilder(10001);
+  static pinList(
+    eventIds: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(10001, runtime);
     for (const id of eventIds) builder.tag("e", id);
     return builder;
   }
@@ -945,8 +1061,11 @@ export class EventBuilder {
    *
    * @param options ブックマークオプション
    */
-  static bookmarks(options: ListOptions): EventBuilder {
-    const builder = new EventBuilder(10003);
+  static bookmarks(
+    options: ListOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(10003, runtime);
     if (options.pubkeys) {
       for (const pk of options.pubkeys) builder.tag("p", pk);
     }
@@ -971,8 +1090,12 @@ export class EventBuilder {
    * @param dTag リストの識別子
    * @param pubkeys フォローする公開鍵一覧
    */
-  static followSet(dTag: string, pubkeys: string[]): EventBuilder {
-    const builder = new EventBuilder(30000).tag("d", dTag);
+  static followSet(
+    dTag: string,
+    pubkeys: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(30000, runtime).tag("d", dTag);
     for (const pk of pubkeys) builder.tag("p", pk);
     return builder;
   }
@@ -983,8 +1106,12 @@ export class EventBuilder {
    * @param dTag リストの識別子
    * @param relayUrls リレーURL一覧
    */
-  static relaySet(dTag: string, relayUrls: string[]): EventBuilder {
-    const builder = new EventBuilder(30002).tag("d", dTag);
+  static relaySet(
+    dTag: string,
+    relayUrls: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(30002, runtime).tag("d", dTag);
     for (const url of relayUrls) builder.tag("relay", url);
     return builder;
   }
@@ -995,8 +1122,12 @@ export class EventBuilder {
    * @param dTag リストの識別子
    * @param emojis 絵文字一覧 ([name, url] のタプル)
    */
-  static emojiSet(dTag: string, emojis: Array<[string, string]>): EventBuilder {
-    const builder = new EventBuilder(30030).tag("d", dTag);
+  static emojiSet(
+    dTag: string,
+    emojis: Array<[string, string]>,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(30030, runtime).tag("d", dTag);
     for (const [name, url] of emojis) builder.tag("emoji", name, url);
     return builder;
   }
@@ -1008,8 +1139,11 @@ export class EventBuilder {
    *
    * @param options チャットメッセージオプション
    */
-  static chatMessage(options: ChatMessageOptions): EventBuilder {
-    const builder = new EventBuilder(14)
+  static chatMessage(
+    options: ChatMessageOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(14, runtime)
       .content(options.content)
       .tag("p", options.recipientPubkey);
     if (options.replyTo) builder.tag("e", options.replyTo, "", "reply");
@@ -1024,8 +1158,11 @@ export class EventBuilder {
    *
    * @param innerEvent ラップするイベント
    */
-  static seal(innerEvent: NostrEvent): EventBuilder {
-    return new EventBuilder(13)
+  static seal(
+    innerEvent: NostrEvent,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    return new EventBuilder(13, runtime)
       .content("mock-sealed:" + JSON.stringify(innerEvent));
   }
 
@@ -1036,12 +1173,16 @@ export class EventBuilder {
    *
    * @param options ギフトラップオプション
    */
-  static giftWrap(options: GiftWrapOptions): EventBuilder {
+  static giftWrap(
+    options: GiftWrapOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
     // ランダム pubkey と過去のランダムな created_at を使用
-    const randomCreatedAt = Math.floor(Date.now() / 1000) -
-      Math.floor(Math.random() * 172800); // 最大2日前
-    return new EventBuilder(1059)
-      .pubkey(randomHex(32))
+    const resolved = resolveRuntime(runtime);
+    const randomCreatedAt = Math.floor(resolved.clock.now() / 1000) -
+      Math.floor(resolved.random.next() * 172800); // 最大2日前
+    return new EventBuilder(1059, runtime)
+      .pubkey(randomHex(32, resolved.random))
       .createdAt(randomCreatedAt)
       .content("mock-giftwrapped:" + JSON.stringify(options.innerEvent))
       .tag("p", options.recipientPubkey);
@@ -1052,8 +1193,11 @@ export class EventBuilder {
    *
    * @param relayUrls DM受信用リレーURL一覧
    */
-  static dmRelayList(relayUrls: string[]): EventBuilder {
-    const builder = new EventBuilder(10050);
+  static dmRelayList(
+    relayUrls: string[],
+    runtime?: EventBuilderRuntimeOptions,
+  ): EventBuilder {
+    const builder = new EventBuilder(10050, runtime);
     for (const url of relayUrls) builder.tag("relay", url);
     return builder;
   }
@@ -1065,12 +1209,15 @@ export class EventBuilder {
    *
    * @param options チャットメッセージオプション
    */
-  static privateDM(options: ChatMessageOptions): NostrEvent {
-    const chatEvent = EventBuilder.chatMessage(options).build();
-    const sealedEvent = EventBuilder.seal(chatEvent).build();
+  static privateDM(
+    options: ChatMessageOptions,
+    runtime?: EventBuilderRuntimeOptions,
+  ): NostrEvent {
+    const chatEvent = EventBuilder.chatMessage(options, runtime).build();
+    const sealedEvent = EventBuilder.seal(chatEvent, runtime).build();
     return EventBuilder.giftWrap({
       recipientPubkey: options.recipientPubkey,
       innerEvent: sealedEvent,
-    }).build();
+    }, runtime).build();
   }
 }

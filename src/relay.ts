@@ -10,38 +10,42 @@
 import type {
   AuthValidator,
   ClientMessage,
+  Clock,
   COUNTHandler,
   EVENTHandler,
   EventVerifier,
-  LogLevel,
   MockRelayOptions,
   NostrEvent,
   NostrFilter,
   RelayInformation,
-  RelayMessage,
   RelaySnapshot,
   REQHandler,
 } from "./types.ts";
-import { filterEvents, matchFilters } from "./filter.ts";
+import { cloneRelayInformation } from "./internal/clone.ts";
+import { systemClock } from "./internal/runtime.ts";
+import { AuthService } from "./relay/auth_service.ts";
+import { RelayConnectionRuntime } from "./relay/connection_runtime.ts";
 import {
-  classifyEvent,
-  getParameterizedId,
-  isParameterizedReplaceable,
-  isReplaceable,
-} from "./event_kind.ts";
-import { AuthState } from "./auth.ts";
+  BLOCKED_EVENT_WAS_DELETED,
+  DUPLICATE_ALREADY_HAVE_NEWER_EVENT,
+  internalProcessingError,
+  INVALID_BAD_SIGNATURE,
+} from "./relay/error_messages.ts";
+import { EventStore } from "./relay/event_store.ts";
+import { RelayInspector } from "./relay/relay_inspector.ts";
+import {
+  DEFAULT_MESSAGE_VALIDATION_LIMITS,
+  type MessageValidationLimits,
+} from "./relay/message_codec.ts";
+import {
+  countMessage,
+  eoseMessage,
+  eventMessage,
+  okMessage,
+} from "./relay/response_builders.ts";
+import { SubscriptionRegistry } from "./relay/subscription_registry.ts";
 import { createLogger, type Logger } from "./logger.ts";
 import type { MockWebSocket } from "./websocket.ts";
-
-/** 受信メッセージの記録 */
-interface ReceivedMessage {
-  /** 受信時刻 (ms) */
-  timestamp: number;
-  /** パース済みメッセージ */
-  message: ClientMessage;
-  /** 送信元WebSocket（スナップショットから復元した場合は null） */
-  socket: MockWebSocket | null;
-}
 
 /**
  * URL単位で動作する仮想Nostrリレー
@@ -53,31 +57,58 @@ export class MockRelay {
   readonly url: string;
   readonly options: MockRelayOptions;
 
-  #store: NostrEvent[] = [];
-  #received: ReceivedMessage[] = [];
-  #connections: Set<MockWebSocket> = new Set();
+  readonly #clock: Clock;
+  #eventStore: EventStore = new EventStore();
   #info: RelayInformation = {};
-  #subscriptions: Map<MockWebSocket, Map<string, NostrFilter[]>> = new Map();
+  #subscriptions: SubscriptionRegistry = new SubscriptionRegistry();
   #reqHandler: REQHandler | null = null;
   #eventHandler: EVENTHandler | null = null;
   #countHandler: COUNTHandler | null = null;
-  #refused = false;
-  #authState: AuthState = new AuthState();
-  #pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
+  #authService: AuthService;
+  #inspector: RelayInspector = new RelayInspector();
   #logger: Logger | null = null;
-  #errors: string[] = [];
-  #authResults: Array<{ eventId: string; accepted: boolean; message: string }> =
-    [];
-  #deletedIds: Set<string> = new Set();
+  #runtime: RelayConnectionRuntime;
   #verifier: EventVerifier | null = null;
 
   constructor(url: string, options: MockRelayOptions = {}) {
     this.url = url;
     this.options = options;
+    this.#clock = options.clock ?? systemClock;
+    this.#authService = new AuthService({ random: options.random });
     this.#logger = createLogger(options.logging);
     if (options.verifier) {
       this.#verifier = options.verifier;
     }
+    if (options.authVerifier) {
+      this.#authService.setVerifier(options.authVerifier);
+    }
+    this.#runtime = new RelayConnectionRuntime({
+      url,
+      relayOptions: options,
+      authService: this.#authService,
+      logger: this.#logger,
+      clock: this.#clock,
+      random: options.random,
+      handlers: {
+        getMessageValidationLimits: () => this.#getMessageValidationLimits(),
+        recordReceived: (message, socket) => {
+          this.#inspector.recordReceived(this.#clock.now(), message, socket);
+        },
+        onConnectionClosed: (socket) => {
+          this.#subscriptions.deleteConnection(socket);
+        },
+        onEvent: (socket, event) => this.#handleEvent(socket, event),
+        onReq: (socket, subId, filters) =>
+          this.#handleReq(socket, subId, filters),
+        onClose: (socket, subId) => this.#handleClose(socket, subId),
+        onAuth: (socket, event) => this.#handleAuth(socket, event),
+        onCount: (socket, subId, filters) =>
+          this.#handleCount(socket, subId, filters),
+        rememberError: (message) => {
+          this.#inspector.rememberError(message);
+        },
+      },
+    });
   }
 
   // ===== NIP-11 リレー情報 =====
@@ -96,7 +127,7 @@ export class MockRelay {
    * NIP-11 リレー情報のシャロウコピーを返す
    */
   getInfo(): RelayInformation {
-    return { ...this.#info };
+    return cloneRelayInformation(this.#info);
   }
 
   // ===== ストア・ハンドラー =====
@@ -124,14 +155,7 @@ export class MockRelay {
    * ```
    */
   store(event: NostrEvent): boolean {
-    // NIP-09: kind:5 削除リクエストの処理
-    if (event.kind === 5) {
-      this.#handleDeletion(event);
-      this.#store.push(event);
-      return true;
-    }
-    const { stored } = this.#classifyAndStore(event);
-    return stored;
+    return this.#eventStore.store(event);
   }
 
   /**
@@ -172,7 +196,7 @@ export class MockRelay {
    * 以降の新規接続はすべてエラーで閉じられる。
    */
   refuse(): void {
-    this.#refused = true;
+    this.#runtime.refuse();
   }
 
   /**
@@ -182,9 +206,7 @@ export class MockRelay {
    * @param reason クローズ理由
    */
   disconnect(code = 1000, reason = ""): void {
-    for (const ws of [...this.#connections]) {
-      ws._forceClose(code, reason);
-    }
+    this.#runtime.disconnect(code, reason);
   }
 
   /**
@@ -194,11 +216,7 @@ export class MockRelay {
    * @param code WebSocketクローズコード (デフォルト: 1006)
    */
   disconnectAfter(ms: number, code = 1006): void {
-    const timer = setTimeout(() => {
-      this.#pendingTimers.delete(timer);
-      this.disconnect(code, "");
-    }, ms);
-    this.#pendingTimers.add(timer);
+    this.#runtime.disconnectAfter(ms, code);
   }
 
   /**
@@ -216,19 +234,14 @@ export class MockRelay {
    * 不正JSONのテスト等に使用する。
    */
   sendRaw(data: string): void {
-    for (const ws of this.#connections) {
-      ws._receiveMessage(data);
-    }
+    this.#runtime.sendRaw(data);
   }
 
   /**
    * NOTICEメッセージを全接続に送信する
    */
   sendNotice(message: string): void {
-    const notice: RelayMessage = ["NOTICE", message];
-    for (const ws of this.#connections) {
-      ws._receiveMessage(JSON.stringify(notice));
-    }
+    this.#runtime.sendNotice(message);
   }
 
   // ===== NIP-42 AUTH =====
@@ -245,12 +258,8 @@ export class MockRelay {
    * context から relayUrl や challenge を参照して独自の検証を実装できる。
    */
   requireAuth(validator: AuthValidator): void {
-    this.#authState.setValidator(validator);
-    // 既存接続にもチャレンジ送信
-    for (const ws of this.#connections) {
-      const msg = this.#authState.sendChallenge(ws);
-      ws._receiveMessage(JSON.stringify(msg));
-    }
+    this.#authService.setValidator(validator);
+    this.#runtime.issueAuthChallenges();
   }
 
   /**
@@ -261,6 +270,16 @@ export class MockRelay {
    */
   setVerifier(verifier: EventVerifier): void {
     this.#verifier = verifier;
+  }
+
+  /**
+   * AUTHイベント署名検証器を設定する
+   *
+   * 設定すると、クライアントから受信した AUTH メッセージの署名を検証する。
+   * 検証に失敗した場合は OK false を返し、認証状態は更新しない。
+   */
+  setAuthVerifier(verifier: EventVerifier): void {
+    this.#authService.setVerifier(verifier);
   }
 
   // ===== 検証ヘルパー =====
@@ -281,20 +300,12 @@ export class MockRelay {
    * ```
    */
   getSubscriptions(): ReadonlyMap<string, ReadonlyArray<NostrFilter>> {
-    const result = new Map<string, NostrFilter[]>();
-    for (const subscriptions of this.#subscriptions.values()) {
-      for (const [subId, filters] of subscriptions) {
-        if (!result.has(subId)) {
-          result.set(subId, [...filters]);
-        }
-      }
-    }
-    return result;
+    return this.#subscriptions.getView();
   }
 
   /** 全受信メッセージ（パース済み） */
   get received(): ClientMessage[] {
-    return this.#received.map((r) => r.message);
+    return this.#inspector.received;
   }
 
   /**
@@ -302,23 +313,17 @@ export class MockRelay {
    * @returns [subId, ...filters] または undefined
    */
   findREQ(subId: string): ["REQ", string, ...NostrFilter[]] | undefined {
-    const found = this.#received.find(
-      (r) => r.message[0] === "REQ" && r.message[1] === subId,
-    );
-    if (found && found.message[0] === "REQ") {
-      return found.message as ["REQ", string, ...NostrFilter[]];
-    }
-    return undefined;
+    return this.#inspector.findREQ(subId);
   }
 
   /** REQメッセージの受信数 */
   countREQs(): number {
-    return this.#received.filter((r) => r.message[0] === "REQ").length;
+    return this.#inspector.countREQs();
   }
 
   /** 特定サブスクリプションIDのREQが存在するか */
   hasREQ(subId: string): boolean {
-    return this.findREQ(subId) !== undefined;
+    return this.#inspector.hasREQ(subId);
   }
 
   /**
@@ -326,23 +331,17 @@ export class MockRelay {
    * @returns イベント または undefined
    */
   findEvent(eventId: string): NostrEvent | undefined {
-    const found = this.#received.find(
-      (r) => r.message[0] === "EVENT" && r.message[1].id === eventId,
-    );
-    if (found && found.message[0] === "EVENT") {
-      return found.message[1];
-    }
-    return undefined;
+    return this.#inspector.findEvent(eventId);
   }
 
   /** EVENTメッセージの受信数 */
   countEvents(): number {
-    return this.#received.filter((r) => r.message[0] === "EVENT").length;
+    return this.#inspector.countEvents();
   }
 
   /** 特定イベントIDのEVENTが存在するか */
   hasEvent(eventId: string): boolean {
-    return this.findEvent(eventId) !== undefined;
+    return this.#inspector.hasEvent(eventId);
   }
 
   /**
@@ -350,13 +349,7 @@ export class MockRelay {
    * @returns ["CLOSE", subId] または undefined
    */
   findCLOSE(subId: string): ["CLOSE", string] | undefined {
-    const found = this.#received.find(
-      (r) => r.message[0] === "CLOSE" && r.message[1] === subId,
-    );
-    if (found && found.message[0] === "CLOSE") {
-      return found.message as ["CLOSE", string];
-    }
-    return undefined;
+    return this.#inspector.findCLOSE(subId);
   }
 
   /**
@@ -366,45 +359,39 @@ export class MockRelay {
   findCOUNT(
     subId: string,
   ): ["COUNT", string, ...NostrFilter[]] | undefined {
-    const found = this.#received.find(
-      (r) => r.message[0] === "COUNT" && r.message[1] === subId,
-    );
-    if (found && found.message[0] === "COUNT") {
-      return found.message as ["COUNT", string, ...NostrFilter[]];
-    }
-    return undefined;
+    return this.#inspector.findCOUNT(subId);
   }
 
   /** COUNTメッセージの受信数 */
   countCOUNTs(): number {
-    return this.#received.filter((r) => r.message[0] === "COUNT").length;
+    return this.#inspector.countCOUNTs();
   }
 
   /** 特定サブスクリプションIDのCOUNTが存在するか */
   hasCOUNT(subId: string): boolean {
-    return this.findCOUNT(subId) !== undefined;
+    return this.#inspector.hasCOUNT(subId);
   }
 
   /** 削除済みイベントIDの一覧 */
   get deletedIds(): ReadonlySet<string> {
-    return this.#deletedIds;
+    return this.#eventStore.deletedIds;
   }
 
   /** 現在のアクティブ接続数 */
   get connectionCount(): number {
-    return this.#connections.size;
+    return this.#runtime.connectionCount;
   }
 
   /** 発生したエラーレスポンスのログ */
   get errors(): ReadonlyArray<string> {
-    return this.#errors;
+    return this.#inspector.errors;
   }
 
   /** AUTH認証結果のログ */
   get authResults(): ReadonlyArray<
     { eventId: string; accepted: boolean; message: string }
   > {
-    return this.#authResults;
+    return this.#inspector.authResults;
   }
 
   /** ロガーインスタンス（設定済みの場合） */
@@ -421,38 +408,17 @@ export class MockRelay {
    * 接続状態やハンドラーは保存されない。
    */
   snapshot(): RelaySnapshot {
+    const eventStoreSnapshot = this.#eventStore.snapshot();
     return {
-      timestamp: Date.now(),
-      store: this.#store.map((e) => ({
-        ...e,
-        tags: e.tags.map((t) => [...t]),
-      })),
-      received: this.#received.map((r) => {
-        const msg = r.message;
-        if (msg[0] === "EVENT") {
-          const event = { ...msg[1], tags: msg[1].tags.map((t) => [...t]) };
-          return ["EVENT", event] as ClientMessage;
-        }
-        if (msg[0] === "REQ" || msg[0] === "COUNT") {
-          const [type, subId, ...filters] = msg as [
-            "REQ" | "COUNT",
-            string,
-            ...NostrFilter[],
-          ];
-          return [
-            type,
-            subId,
-            ...filters.map((f) => structuredClone(f)),
-          ] as ClientMessage;
-        }
-        return [...msg] as ClientMessage;
-      }),
-      deletedIds: [...this.#deletedIds],
-      info: { ...this.#info },
+      timestamp: this.#clock.now(),
+      store: eventStoreSnapshot.store,
+      received: this.#inspector.snapshotReceivedMessages(),
+      deletedIds: eventStoreSnapshot.deletedIds,
+      info: cloneRelayInformation(this.#info),
       metadata: {
         subscriptionCount: this.getSubscriptions().size,
-        connectionCount: this.#connections.size,
-        eventCount: this.#store.length,
+        connectionCount: this.#runtime.connectionCount,
+        eventCount: this.#eventStore.size,
       },
     };
   }
@@ -464,35 +430,12 @@ export class MockRelay {
    * 接続やハンドラーは変更されない。
    */
   restore(snap: RelaySnapshot): void {
-    this.#store = snap.store.map((e) => ({
-      ...e,
-      tags: e.tags.map((t) => [...t]),
-    }));
-    this.#received = snap.received.map((msg) => ({
-      timestamp: snap.timestamp,
-      message: msg[0] === "EVENT"
-        ? ["EVENT", {
-          ...(msg as ["EVENT", NostrEvent])[1],
-          tags: (msg as ["EVENT", NostrEvent])[1].tags.map((t) => [...t]),
-        }] as ClientMessage
-        : (msg[0] === "REQ" || msg[0] === "COUNT")
-        ? (() => {
-          const [type, subId, ...filters] = msg as [
-            "REQ" | "COUNT",
-            string,
-            ...NostrFilter[],
-          ];
-          return [
-            type,
-            subId,
-            ...filters.map((f) => structuredClone(f)),
-          ] as ClientMessage;
-        })()
-        : [...msg] as ClientMessage,
-      socket: null,
-    }));
-    this.#deletedIds = new Set(snap.deletedIds ?? []);
-    this.#info = snap.info ? { ...snap.info } : {};
+    this.#eventStore.restore({
+      store: snap.store,
+      deletedIds: snap.deletedIds ?? [],
+    });
+    this.#inspector.restoreReceivedMessages(snap.received, snap.timestamp);
+    this.#info = snap.info ? cloneRelayInformation(snap.info) : {};
   }
 
   /**
@@ -511,9 +454,7 @@ export class MockRelay {
    * ```
    */
   clearOlderThan(timestamp: number): number {
-    const before = this.#store.length;
-    this.#store = this.#store.filter((e) => e.created_at >= timestamp);
-    return before - this.#store.length;
+    return this.#eventStore.clearOlderThan(timestamp);
   }
 
   /**
@@ -522,23 +463,16 @@ export class MockRelay {
    * ストア、受信ログ、サブスクリプション、ハンドラー、AUTH状態をクリアする。
    */
   reset(): void {
-    this.#store = [];
-    this.#received = [];
+    this.#eventStore.reset();
+    this.#inspector.reset();
     this.#subscriptions.clear();
     this.#reqHandler = null;
     this.#eventHandler = null;
     this.#countHandler = null;
-    this.#refused = false;
-    this.#authState.reset();
-    this.#errors = [];
-    this.#authResults = [];
-    this.#deletedIds.clear();
+    this.#authService.reset();
     this.#info = {};
     this.#verifier = null;
-    for (const timer of this.#pendingTimers) {
-      clearTimeout(timer);
-    }
-    this.#pendingTimers.clear();
+    this.#runtime.reset();
   }
 
   // ===== internal API =====
@@ -548,7 +482,7 @@ export class MockRelay {
    * @internal MockWebSocketから呼び出される
    */
   get _isRefused(): boolean {
-    return this.#refused;
+    return this.#runtime.isRefused;
   }
 
   /**
@@ -556,7 +490,7 @@ export class MockRelay {
    * @internal MockWebSocketから呼び出される
    */
   _registerConnection(ws: MockWebSocket): void {
-    this.#connections.add(ws);
+    this.#runtime.registerConnection(ws);
   }
 
   /**
@@ -564,10 +498,7 @@ export class MockRelay {
    * @internal MockWebSocketから呼び出される
    */
   _unregisterConnection(ws: MockWebSocket): void {
-    this.#connections.delete(ws);
-    this.#authState.removeConnection(ws);
-    // この接続のサブスクリプションをクリーンアップ
-    this.#subscriptions.delete(ws);
+    this.#runtime.unregisterConnection(ws);
   }
 
   /**
@@ -587,13 +518,12 @@ export class MockRelay {
    * ```
    */
   broadcast(event: NostrEvent): void {
-    for (const [ws, subscriptions] of this.#subscriptions) {
-      for (const [subId, filters] of subscriptions) {
-        if (matchFilters(event, filters)) {
-          const msg: RelayMessage = ["EVENT", subId, event];
-          ws._receiveMessage(JSON.stringify(msg));
-        }
-      }
+    for (
+      const { socket, subId } of this.#subscriptions.matchingSubscriptions(
+        event,
+      )
+    ) {
+      this.#runtime.sendMessage(socket, eventMessage(subId, event));
     }
   }
 
@@ -602,16 +532,7 @@ export class MockRelay {
    * @internal MockWebSocketから呼び出される
    */
   _handleOpen(ws: MockWebSocket): void {
-    // AUTH: requiresAuthオプションまたはバリデーター設定済みの場合、チャレンジ送信
-    // openイベント後にリスナー登録できるよう、macrotaskで遅延実行
-    if (this.options.requiresAuth || this.#authState.hasValidator) {
-      const timer = setTimeout(() => {
-        this.#pendingTimers.delete(timer);
-        const msg = this.#authState.sendChallenge(ws);
-        ws._receiveMessage(JSON.stringify(msg));
-      }, 0);
-      this.#pendingTimers.add(timer);
-    }
+    this.#runtime.handleOpen(ws);
   }
 
   /**
@@ -619,197 +540,7 @@ export class MockRelay {
    * @internal MockWebSocketから呼び出される
    */
   _handleMessage(ws: MockWebSocket, data: string): void {
-    let parsed: ClientMessage;
-    try {
-      const raw: unknown = JSON.parse(data);
-      // メッセージ構造の基本検証
-      if (!Array.isArray(raw) || raw.length < 1) {
-        this.#errors.push("error: invalid message format");
-        this.#log("receive", data, "error");
-        const notice: RelayMessage = [
-          "NOTICE",
-          "error: invalid message format",
-        ];
-        this.#sendWithLatency(ws, notice);
-        return;
-      }
-      const type = raw[0];
-      if (type === "EVENT") {
-        const ev = raw[1] as Record<string, unknown>;
-        if (
-          raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null ||
-          typeof ev.id !== "string" ||
-          typeof ev.pubkey !== "string" ||
-          typeof ev.created_at !== "number" ||
-          typeof ev.kind !== "number" ||
-          !Array.isArray(ev.tags) ||
-          typeof ev.content !== "string" ||
-          typeof ev.sig !== "string"
-        ) {
-          this.#errors.push("error: malformed EVENT message");
-          const notice: RelayMessage = [
-            "NOTICE",
-            "error: malformed EVENT message",
-          ];
-          this.#sendWithLatency(ws, notice);
-          return;
-        }
-      } else if (type === "REQ" || type === "COUNT") {
-        if (raw.length < 2 || typeof raw[1] !== "string") {
-          this.#errors.push(`error: malformed ${type} message`);
-          const notice: RelayMessage = [
-            "NOTICE",
-            `error: malformed ${type} message`,
-          ];
-          this.#sendWithLatency(ws, notice);
-          return;
-        }
-        if (raw.length < 3) {
-          this.#errors.push(`error: ${type} requires at least one filter`);
-          const notice: RelayMessage = [
-            "NOTICE",
-            `error: ${type} requires at least one filter`,
-          ];
-          this.#sendWithLatency(ws, notice);
-          return;
-        }
-        for (let i = 2; i < raw.length; i++) {
-          if (
-            typeof raw[i] !== "object" || raw[i] === null ||
-            Array.isArray(raw[i])
-          ) {
-            this.#errors.push(
-              `error: ${type} filter[${i - 2}] must be an object`,
-            );
-            const notice: RelayMessage = [
-              "NOTICE",
-              `error: ${type} filter[${i - 2}] must be an object`,
-            ];
-            this.#sendWithLatency(ws, notice);
-            return;
-          }
-        }
-      } else if (type === "CLOSE") {
-        if (raw.length < 2 || typeof raw[1] !== "string") {
-          this.#errors.push("error: malformed CLOSE message");
-          const notice: RelayMessage = [
-            "NOTICE",
-            "error: malformed CLOSE message",
-          ];
-          this.#sendWithLatency(ws, notice);
-          return;
-        }
-      } else if (type === "AUTH") {
-        if (raw.length < 2 || typeof raw[1] !== "object" || raw[1] === null) {
-          this.#errors.push("error: malformed AUTH message");
-          const notice: RelayMessage = [
-            "NOTICE",
-            "error: malformed AUTH message",
-          ];
-          this.#sendWithLatency(ws, notice);
-          return;
-        }
-      }
-      parsed = raw as ClientMessage;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      const msg = `error: invalid JSON (${detail})`;
-      this.#errors.push(msg);
-      this.#log("receive", data, "error");
-      const notice: RelayMessage = ["NOTICE", msg];
-      this.#sendWithLatency(ws, notice);
-      return;
-    }
-
-    this.#received.push({
-      timestamp: Date.now(),
-      message: parsed,
-      socket: ws,
-    });
-
-    this.#log("receive", parsed);
-
-    // ランダム切断チェック
-    if (this.#shouldRandomDisconnect()) {
-      ws._forceClose(1006, "Random disconnect");
-      return;
-    }
-
-    // エラー率チェック
-    if (this.#shouldError()) {
-      const msg = "error: simulated error";
-      const notice: RelayMessage = ["NOTICE", msg];
-      this.#errors.push(msg);
-      this.#sendWithLatency(ws, notice);
-      return;
-    }
-
-    // AUTH enforcement: 認証必須リレーで未認証の場合、REQ/EVENT を拒否
-    if (
-      this.#requiresAuthentication() && !this.#authState.isAuthenticated(ws)
-    ) {
-      if (parsed[0] === "EVENT") {
-        const msg = "auth-required: authentication required";
-        const ok: RelayMessage = ["OK", parsed[1].id, false, msg];
-        this.#errors.push(msg);
-        this.#sendWithLatency(ws, ok);
-        return;
-      }
-      if (parsed[0] === "REQ") {
-        const msg = "auth-required: authentication required";
-        const closed: RelayMessage = ["CLOSED", parsed[1], msg];
-        this.#errors.push(msg);
-        this.#sendWithLatency(ws, closed);
-        return;
-      }
-    }
-
-    switch (parsed[0]) {
-      case "EVENT":
-        this.#handleEvent(ws, parsed[1]).catch((err) => {
-          const msg = `error: ${
-            err instanceof Error ? err.message : String(err)
-          }`;
-          this.#errors.push(msg);
-        });
-        break;
-      case "REQ":
-        this.#handleReq(ws, parsed[1], parsed.slice(2) as NostrFilter[])
-          .catch((err) => {
-            const msg = `error: ${
-              err instanceof Error ? err.message : String(err)
-            }`;
-            this.#errors.push(msg);
-          });
-        break;
-      case "CLOSE":
-        this.#handleClose(ws, parsed[1]);
-        break;
-      case "AUTH":
-        this.#handleAuth(ws, parsed[1]).catch((err) => {
-          const msg = `error: ${
-            err instanceof Error ? err.message : String(err)
-          }`;
-          this.#errors.push(msg);
-        });
-        break;
-      case "COUNT":
-        this.#handleCount(ws, parsed[1], parsed.slice(2) as NostrFilter[])
-          .catch((err) => {
-            const msg = `error: ${
-              err instanceof Error ? err.message : String(err)
-            }`;
-            this.#errors.push(msg);
-          });
-        break;
-      default: {
-        const msg = `error: unsupported message type: ${String(parsed[0])}`;
-        this.#errors.push(msg);
-        const notice: RelayMessage = ["NOTICE", msg];
-        this.#sendWithLatency(ws, notice);
-        break;
-      }
-    }
+    this.#runtime.handleMessage(ws, data);
   }
 
   async #handleEvent(ws: MockWebSocket, event: NostrEvent): Promise<void> {
@@ -819,10 +550,7 @@ export class MockRelay {
     if (this.#verifier) {
       const valid = await this.#verifier.verifyEvent(event);
       if (!valid) {
-        const msg = "invalid: bad signature";
-        this.#errors.push(msg);
-        const ok: RelayMessage = ["OK", event.id, false, msg];
-        this.#sendWithLatency(ws, ok);
+        this.#runtime.sendErrorOk(ws, event.id, INVALID_BAD_SIGNATURE);
         return;
       }
     }
@@ -831,45 +559,36 @@ export class MockRelay {
       if (this.#eventHandler) {
         response = await this.#eventHandler(event);
       } else {
-        // 削除済みイベントの再投稿を拒否
-        if (this.#deletedIds.has(event.id)) {
-          response = ["OK", event.id, false, "blocked: event was deleted"];
-        } else if (event.kind === 5) {
-          // NIP-09: 削除リクエスト処理
-          this.#handleDeletion(event);
-          this.#store.push(event);
+        const result = this.#eventStore.publish(event);
+        if (result.status === "blocked") {
+          response = okMessage(event.id, false, BLOCKED_EVENT_WAS_DELETED);
+        } else if (
+          result.status === "stored" || result.status === "ephemeral"
+        ) {
           this.broadcast(event);
-          response = ["OK", event.id, true, ""];
+          response = okMessage(event.id, true, "");
         } else {
-          const { stored, ephemeral } = this.#classifyAndStore(event);
-          if (stored || ephemeral) {
-            this.broadcast(event);
-            response = ["OK", event.id, true, ""];
-          } else {
-            response = [
-              "OK",
-              event.id,
-              true,
-              "duplicate: already have a newer event",
-            ];
-          }
+          response = okMessage(
+            event.id,
+            true,
+            DUPLICATE_ALREADY_HAVE_NEWER_EVENT,
+          );
         }
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      response = [
-        "OK",
+      response = okMessage(
         event.id,
         false,
-        `error: internal error processing EVENT (${detail})`,
-      ];
+        internalProcessingError("EVENT", detail),
+      );
     }
 
     if (!response[2] && response[3]) {
-      this.#errors.push(response[3]);
+      this.#inspector.rememberError(response[3]);
     }
 
-    this.#sendWithLatency(ws, response);
+    this.#runtime.sendMessage(ws, response);
   }
 
   async #handleReq(
@@ -877,12 +596,7 @@ export class MockRelay {
     subId: string,
     filters: NostrFilter[],
   ): Promise<void> {
-    let wsSubscriptions = this.#subscriptions.get(ws);
-    if (!wsSubscriptions) {
-      wsSubscriptions = new Map();
-      this.#subscriptions.set(ws, wsSubscriptions);
-    }
-    wsSubscriptions.set(subId, filters);
+    this.#subscriptions.set(ws, subId, filters);
 
     try {
       let events: NostrEvent[];
@@ -890,116 +604,50 @@ export class MockRelay {
       if (this.#reqHandler) {
         events = await this.#reqHandler(subId, filters);
       } else {
-        // デフォルト: ストアからフィルタリング
-        events = [];
-        const seen = new Set<string>();
-        for (const filter of filters) {
-          const matched = filterEvents(this.#store, filter);
-          for (const event of matched) {
-            if (!seen.has(event.id)) {
-              seen.add(event.id);
-              events.push(event);
-            }
-          }
-        }
+        events = this.#eventStore.queryMany(filters);
       }
 
       // EVENT送信
       for (const event of events) {
-        const msg: RelayMessage = ["EVENT", subId, event];
-        this.#sendWithLatency(ws, msg);
+        this.#runtime.sendMessage(ws, eventMessage(subId, event));
       }
 
       // EOSE送信
-      const eose: RelayMessage = ["EOSE", subId];
-      this.#sendWithLatency(ws, eose);
+      this.#runtime.sendMessage(ws, eoseMessage(subId));
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      const msg = `error: internal error processing REQ (${detail})`;
-      this.#errors.push(msg);
-      const closed: RelayMessage = ["CLOSED", subId, msg];
-      this.#sendWithLatency(ws, closed);
+      this.#runtime.sendErrorClosed(
+        ws,
+        subId,
+        internalProcessingError("REQ", detail),
+      );
     }
   }
 
   #handleClose(ws: MockWebSocket, subId: string): void {
-    this.#subscriptions.get(ws)?.delete(subId);
+    this.#subscriptions.delete(ws, subId);
   }
 
   async #handleAuth(ws: MockWebSocket, authEvent: NostrEvent): Promise<void> {
     try {
-      const [accepted, message] = await this.#authState.handleAuthResponse(
+      const [accepted, message] = await this.#authService.handleAuthResponse(
         ws,
         authEvent,
         this.url,
       );
-      this.#authResults.push({ eventId: authEvent.id, accepted, message });
-      const ok: RelayMessage = ["OK", authEvent.id, accepted, message];
-      this.#sendWithLatency(ws, ok);
+      this.#inspector.rememberAuthResult({
+        eventId: authEvent.id,
+        accepted,
+        message,
+      });
+      this.#runtime.sendMessage(ws, okMessage(authEvent.id, accepted, message));
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      const msg = `error: internal error processing AUTH (${detail})`;
-      this.#errors.push(msg);
-      const ok: RelayMessage = ["OK", authEvent.id, false, msg];
-      this.#sendWithLatency(ws, ok);
-    }
-  }
-
-  #handleDeletion(deletionEvent: NostrEvent): void {
-    const idsToDelete = new Set<string>();
-
-    for (const tag of deletionEvent.tags) {
-      if (tag[0] === "e" && tag[1]) {
-        const targetId = tag[1];
-        const target = this.#store.find((e) => e.id === targetId);
-        if (
-          target && target.pubkey === deletionEvent.pubkey &&
-          target.created_at <= deletionEvent.created_at
-        ) {
-          idsToDelete.add(targetId);
-        }
-      }
-      if (tag[0] === "a" && tag[1]) {
-        // a-tag format: kind:pubkey:d-tag
-        const parts = tag[1].split(":");
-        if (parts.length >= 3) {
-          const aKind = parseInt(parts[0], 10);
-          if (isNaN(aKind)) continue;
-          const aPubkey = parts[1];
-          const aDtag = parts.slice(2).join(":");
-          // pubkey 一致チェック
-          if (aPubkey === deletionEvent.pubkey) {
-            const target = this.#store.find((e) => {
-              if (
-                e.kind === aKind && e.pubkey === aPubkey &&
-                e.created_at <= deletionEvent.created_at &&
-                isParameterizedReplaceable(e.kind)
-              ) {
-                const dValue = e.tags.find((t) => t[0] === "d")?.[1] ?? "";
-                return dValue === aDtag;
-              }
-              if (
-                e.kind === aKind && e.pubkey === aPubkey &&
-                e.created_at <= deletionEvent.created_at &&
-                isReplaceable(e.kind)
-              ) {
-                return true;
-              }
-              return false;
-            });
-            if (target) {
-              idsToDelete.add(target.id);
-            }
-          }
-        }
-      }
-    }
-
-    if (idsToDelete.size > 0) {
-      for (const id of idsToDelete) {
-        this.#deletedIds.add(id);
-      }
-      this.#store = this.#store.filter((e) => !idsToDelete.has(e.id));
+      this.#runtime.sendErrorOk(
+        ws,
+        authEvent.id,
+        internalProcessingError("AUTH", detail),
+      );
     }
   }
 
@@ -1014,152 +662,28 @@ export class MockRelay {
       if (this.#countHandler) {
         result = await this.#countHandler(subId, filters);
       } else {
-        // デフォルト: ストアに対してフィルタリングし、マッチ数を返す
-        const matchedIds = new Set<string>();
-        for (const filter of filters) {
-          const matched = filterEvents(this.#store, filter);
-          for (const event of matched) {
-            matchedIds.add(event.id);
-          }
-        }
-        result = { count: matchedIds.size };
+        result = { count: this.#eventStore.count(filters) };
       }
 
-      const msg: RelayMessage = ["COUNT", subId, result];
-      this.#sendWithLatency(ws, msg);
+      this.#runtime.sendMessage(ws, countMessage(subId, result));
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      const msg = `error: internal error processing COUNT (${detail})`;
-      this.#errors.push(msg);
-      const notice: RelayMessage = ["NOTICE", msg];
-      this.#sendWithLatency(ws, notice);
-    }
-  }
-
-  // ===== イベント種別判定・ストア =====
-
-  #replaceEvent(
-    event: NostrEvent,
-    predicate: (e: NostrEvent) => boolean,
-  ): { stored: boolean; ephemeral: boolean } {
-    const idx = this.#store.findIndex(predicate);
-    if (idx !== -1) {
-      const existing = this.#store[idx];
-      if (event.created_at < existing.created_at) {
-        return { stored: false, ephemeral: false };
-      }
-      if (
-        event.created_at === existing.created_at &&
-        event.id >= existing.id
-      ) {
-        return { stored: false, ephemeral: false };
-      }
-      this.#store.splice(idx, 1);
-    }
-    this.#store.push(event);
-    return { stored: true, ephemeral: false };
-  }
-
-  /**
-   * イベント種別に応じてストアに追加・置換する
-   *
-   * Ephemeral イベントはストアに追加しない（呼び出し側でブロードキャストする）。
-   * Replaceable/Parameterized Replaceable は同一キーの古いイベントを置換する。
-   *
-   * @returns stored: ストアに追加されたか、ephemeral: ephemeral イベントか
-   */
-  #classifyAndStore(
-    event: NostrEvent,
-  ): { stored: boolean; ephemeral: boolean } {
-    if (this.#deletedIds.has(event.id)) {
-      return { stored: false, ephemeral: false };
-    }
-
-    const kind = classifyEvent(event.kind);
-
-    if (kind === "ephemeral") {
-      return { stored: false, ephemeral: true };
-    }
-
-    if (kind === "replaceable") {
-      return this.#replaceEvent(
-        event,
-        (e) => e.kind === event.kind && e.pubkey === event.pubkey,
+      this.#runtime.sendErrorNotice(
+        ws,
+        internalProcessingError("COUNT", detail),
       );
     }
-
-    if (kind === "parameterized_replaceable") {
-      const newParamId = getParameterizedId(event);
-      return this.#replaceEvent(
-        event,
-        (e) => getParameterizedId(e) === newParamId,
-      );
-    }
-
-    // Regular
-    this.#store.push(event);
-    return { stored: true, ephemeral: false };
   }
 
-  // ===== 認証チェック =====
-
-  #requiresAuthentication(): boolean {
-    return this.options.requiresAuth === true || this.#authState.hasValidator;
-  }
-
-  // ===== レイテンシ・不安定性 =====
-
-  #getLatency(): number {
-    const latency = this.options.latency;
-    if (latency === undefined) return 0;
-    if (typeof latency === "number") return latency;
-    return latency.min + Math.random() * (latency.max - latency.min);
-  }
-
-  #shouldError(): boolean {
-    const rate = this.options.errorRate;
-    if (rate === undefined || rate <= 0) return false;
-    return Math.random() < rate;
-  }
-
-  #shouldRandomDisconnect(): boolean {
-    const rate = this.options.disconnectRate;
-    if (rate === undefined || rate <= 0) return false;
-    return Math.random() < rate;
-  }
-
-  #sendWithLatency(ws: MockWebSocket, message: RelayMessage): void {
-    const latency = this.#getLatency();
-    const json = JSON.stringify(message);
-    this.#log("send", message);
-    if (latency > 0) {
-      const timer = setTimeout(() => {
-        this.#pendingTimers.delete(timer);
-        ws._receiveMessage(json);
-      }, latency);
-      this.#pendingTimers.add(timer);
-    } else {
-      // 実際のWebSocketと同様に非同期でメッセージを配信する。
-      // send() 内で同期的にレスポンスを返すと、一部のクライアント
-      // ライブラリ（NDK等）が正しく処理できない。
-      queueMicrotask(() => ws._receiveMessage(json));
-    }
-  }
-
-  #log(
-    direction: "send" | "receive",
-    data: unknown,
-    level: LogLevel = "info",
-  ): void {
-    if (!this.#logger) return;
-    this.#logger.log(
-      {
-        timestamp: Date.now(),
-        relay: this.url,
-        direction,
-        data,
-      },
-      level,
-    );
+  #getMessageValidationLimits(): MessageValidationLimits {
+    const limitation = this.#info.limitation;
+    return {
+      maxMessageLength: limitation?.max_message_length,
+      maxFilterCount: DEFAULT_MESSAGE_VALIDATION_LIMITS.maxFilterCount,
+      maxSubIdLength: limitation?.max_subid_length,
+      maxLimitValue: limitation?.max_limit,
+      maxEventTags: limitation?.max_event_tags,
+      maxContentLength: limitation?.max_content_length,
+    };
   }
 }

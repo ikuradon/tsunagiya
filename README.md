@@ -52,9 +52,11 @@ Deno.test("fetch events from relay", async () => {
 
 - WebSocket 完全乗っ取り型モック
 - 複数リレー同時対応
+- Indexed EventStore + compiled filter fast path による高速な `REQ` / `COUNT`
 - NIP-01 フィルター自動マッチング + カスタムハンドラー
 - 不安定リレーのシミュレート（レイテンシ、エラー率、切断）
 - NIP-42 AUTH チャレンジ/レスポンス
+- ランタイム入力検証（message/filter/subId/tag/content limit）
 - 送信メッセージの記録・検証ヘルパー
 - NIP-01 イベント種別自動処理（Regular/Replaceable/Ephemeral/Addressable）
 - NIP-09 Event Deletion Request
@@ -76,6 +78,31 @@ Deno.test("fetch events from relay", async () => {
 - テストフレームワーク非依存
 - 外部依存ゼロ
 - E2Eテスト対応（nostr-tools, NDK, rx-nostr, nostr-fetch）
+- 決定論的 runtime 注入（`MockRelayOptions.clock/random`,
+  `EventBuilderRuntimeOptions`, `StreamOptions.random`）
+
+## 公開 API 互換性と内部刷新
+
+2026-03 の全面リファクタリングでは、公開 API
+を維持したまま内部を再設計しました。
+
+- `MockPool`、`MockRelay`、`AuthState`、`@ikuradon/tsunagiya/testing` の import
+  path はそのまま使えます
+- 内部は `EventStore`、`SubscriptionRegistry`、`AuthService`、
+  `DeliveryScheduler`、platform hook に分割されています
+- 大きいストアに対する `REQ` / `COUNT` は、索引付きストアと compiled filter
+  により従来より高速です
+- 入力検証は厳格化されています。 `max_message_length`、filter
+  数、`max_subid_length`、`max_limit`、 `max_event_tags`、`max_content_length`
+  を routing 前に拒否します
+
+内部実装の import path は安定 API ではありません。公開 export を使ってください。
+
+2026-03 の全面リファクタリング本体は 2026-03-29 にクローズしました。
+クローズアウトの判断と以後の運用ルールは
+`docs/superpowers/plans/2026-03-29-refactor-closeout.md` と
+`docs/superpowers/plans/2026-03-29-maintainer-operating-rules.md`
+に集約しています。
 
 ## MockPool
 
@@ -280,11 +307,13 @@ import {
   FilterBuilder,
   restore,
   snapshot,
+  startStream,
   streamEvents,
+  waitFor,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
-### EventBuilder
+EventBuilder の使用例:
 
 ```typescript
 // ビルダーパターンでイベント生成
@@ -295,6 +324,21 @@ const event = EventBuilder.kind1()
 
 // ランダム生成
 const random = EventBuilder.random({ kind: 1 });
+
+// deterministic runtime
+const fixedClock = { now: () => 1700000000000 };
+const fixedRandom = {
+  next: () => 0.25,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x11);
+  },
+};
+const deterministic = EventBuilder.kind1({
+  clock: fixedClock,
+  random: fixedRandom,
+})
+  .content("stable")
+  .build();
 
 // 壊れたイベント
 const broken = EventBuilder.kind1()
@@ -329,7 +373,7 @@ EventBuilder.zapRequest({
 });
 ```
 
-### FilterBuilder
+FilterBuilder の使用例:
 
 ```typescript
 FilterBuilder.timeline({ limit: 20 });
@@ -348,7 +392,7 @@ FilterBuilder.search("nostr");
 // => { search: "nostr" }
 ```
 
-### アサーションヘルパー
+アサーションヘルパー:
 
 ```typescript
 import {
@@ -368,25 +412,21 @@ assertClosed(relay, "sub1");
 assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 ```
 
-### 条件待ちヘルパー
+リアルタイムストリーム:
 
 ```typescript
-import { waitFor } from "@ikuradon/tsunagiya/testing";
-
-// 条件が満たされるまでポーリングで待機（固定 setTimeout の代替）
-await waitFor(() => received.length >= 3);
-await waitFor(() => relay.connectionCount === 0, { timeout: 3000 });
-```
-
-### リアルタイムストリーム
-
-```typescript
-import { startStream, streamEvents } from "@ikuradon/tsunagiya/testing";
+const fixedRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
 
 // 時間差でイベント配信
 const handle = streamEvents(relay, events, {
   interval: 100,
   jitter: 50,
+  random: fixedRandom,
 });
 handle.stop();
 
@@ -395,11 +435,27 @@ const stream = startStream(relay, {
   eventGenerator: () => EventBuilder.random({ kind: 1 }),
   interval: 1000,
   count: 10,
+  random: fixedRandom,
 });
 stream.stop();
 ```
 
-### スナップショット（テスト支援）
+条件待ちヘルパー:
+
+```typescript
+import { waitFor } from "@ikuradon/tsunagiya/testing";
+
+// 条件が満たされるまでポーリングで待機（固定 setTimeout の代替）
+await waitFor(() => received.length >= 3);
+
+// タイムアウト・ポーリング間隔のカスタマイズ
+await waitFor(() => relay.connectionCount === 0, {
+  timeout: 3000,
+  interval: 20,
+});
+```
+
+スナップショット:
 
 ```typescript
 import { restore, snapshot } from "@ikuradon/tsunagiya/testing";
@@ -416,6 +472,7 @@ npm パッケージとしてインストールすれば、Vitest でそのまま
 ```typescript
 import { afterEach, describe, expect, it } from "vitest";
 import { MockPool } from "@ikuradon/tsunagiya";
+import { waitFor } from "@ikuradon/tsunagiya/testing";
 
 describe("Nostr client", () => {
   let pool: MockPool;
@@ -447,7 +504,7 @@ describe("Nostr client", () => {
     ws.onmessage = (ev) => messages.push(ev.data as string);
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() => messages.some((m) => m.includes("abc123")));
 
     expect(messages.some((m) => m.includes("abc123"))).toBe(true);
     ws.close();
@@ -512,17 +569,19 @@ deno task test:all            # ユニットテスト + E2E テスト
 
 ## ドキュメント
 
-| ドキュメント                                                                        | 内容                       |
-| ----------------------------------------------------------------------------------- | -------------------------- |
-| [API リファレンス](https://ikuradon.github.io/tsunagiya/reference/api)              | 全クラス・関数・型の詳細   |
-| [チュートリアル](https://ikuradon.github.io/tsunagiya/guide/tutorial)               | ステップバイステップガイド |
-| [使用例集](https://ikuradon.github.io/tsunagiya/guide/examples)                     | 実践的な使用例（14例）     |
-| [テストパターン](https://ikuradon.github.io/tsunagiya/guide/test-patterns)          | よくあるテストシナリオ     |
-| [ベストプラクティス](https://ikuradon.github.io/tsunagiya/advanced/best-practices)  | テスト設計の指針           |
-| [トラブルシューティング](https://ikuradon.github.io/tsunagiya/help/troubleshooting) | よくあるエラーと解決方法   |
-| [FAQ](https://ikuradon.github.io/tsunagiya/help/faq)                                | よくある質問（17問）       |
-| [NIP 対応状況](https://ikuradon.github.io/tsunagiya/reference/nip-support)          | NIP ごとの対応・使用例     |
-| [パフォーマンス](https://ikuradon.github.io/tsunagiya/advanced/performance)         | 大量データの最適化         |
+| ドキュメント                                                                            | 内容                       |
+| --------------------------------------------------------------------------------------- | -------------------------- |
+| [API リファレンス](https://ikuradon.github.io/tsunagiya/reference/api)                  | 全クラス・関数・型の詳細   |
+| [アーキテクチャ](https://ikuradon.github.io/tsunagiya/reference/architecture)           | 内部構造とデータフロー     |
+| [チュートリアル](https://ikuradon.github.io/tsunagiya/guide/tutorial)                   | ステップバイステップガイド |
+| [使用例集](https://ikuradon.github.io/tsunagiya/guide/examples)                         | 実践的な使用例（14例）     |
+| [テストパターン](https://ikuradon.github.io/tsunagiya/guide/test-patterns)              | よくあるテストシナリオ     |
+| [内部リファクタ移行メモ](docs/superpowers/plans/2026-03-20-refactor-migration-notes.md) | maintainers 向けの変更要約 |
+| [ベストプラクティス](https://ikuradon.github.io/tsunagiya/advanced/best-practices)      | テスト設計の指針           |
+| [トラブルシューティング](https://ikuradon.github.io/tsunagiya/help/troubleshooting)     | よくあるエラーと解決方法   |
+| [FAQ](https://ikuradon.github.io/tsunagiya/help/faq)                                    | よくある質問（17問）       |
+| [NIP 対応状況](https://ikuradon.github.io/tsunagiya/reference/nip-support)              | NIP ごとの対応・使用例     |
+| [パフォーマンス](https://ikuradon.github.io/tsunagiya/advanced/performance)             | 大量データの最適化         |
 
 ## ライセンス
 

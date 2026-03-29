@@ -1,6 +1,29 @@
 import { assertEquals } from "@std/assert";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { FilterBuilder } from "../../src/testing/filter_builder.ts";
+import type { RandomSource } from "../../src/types.ts";
+
+function expectedHex(start: number, bytes: number): string {
+  return Array.from(
+    { length: bytes },
+    (_, i) => ((start + i) & 0xff).toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function makeSequentialRandom(nextValue = 0.25): RandomSource {
+  let nextByte = 0;
+  return {
+    next(): number {
+      return nextValue;
+    },
+    fill(bytes: Uint8Array): void {
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = nextByte & 0xff;
+        nextByte++;
+      }
+    },
+  };
+}
 
 // ===== NIP-17 Chat Message (kind:14) =====
 
@@ -132,6 +155,24 @@ Deno.test("EventBuilder.giftWrap() - wraps inner event in content", () => {
   );
   assertEquals(parsed.id, inner.id);
   assertEquals(parsed.content, "wrapped content");
+});
+
+Deno.test("EventBuilder.giftWrap() - accepts injected clock and random", () => {
+  const inner = EventBuilder.kind1().content("wrapped content").build();
+  const event = EventBuilder.giftWrap({
+    recipientPubkey: "pub1",
+    innerEvent: inner,
+  }, {
+    clock: {
+      now(): number {
+        return 1700000000000;
+      },
+    },
+    random: makeSequentialRandom(0.25),
+  }).build();
+
+  assertEquals(event.created_at, 1699956800);
+  assertEquals(event.pubkey, expectedHex(128, 32));
 });
 
 // ===== NIP-17 DM Relay List (kind:10050) =====

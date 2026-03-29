@@ -1,5 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
+import { DEFAULT_MESSAGE_VALIDATION_LIMITS } from "../src/relay/message_codec.ts";
+import { waitFor } from "../src/testing/wait.ts";
 import type { NostrEvent } from "../src/types.ts";
 
 function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -29,6 +31,32 @@ function collectMessages(ws: WebSocket): string[] {
     messages.push(ev.data as string);
   });
   return messages;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
+
+async function waitForElapsed(ms: number): Promise<void> {
+  const startedAt = Date.now();
+  await waitFor(() => Date.now() - startedAt >= ms, {
+    timeout: ms + 500,
+    interval: 5,
+  });
 }
 
 // ===== refuse =====
@@ -203,15 +231,12 @@ Deno.test("MockRelay - sendRaw() sends raw data", async () => {
 
     relay.sendRaw("this is not json");
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(messages.length, 1);
     assertEquals(messages[0], "this is not json");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -230,16 +255,181 @@ Deno.test("MockRelay - sendNotice() sends NOTICE message", async () => {
 
     relay.sendNotice("rate-limited");
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(messages.length, 1);
     const parsed = JSON.parse(messages[0]);
     assertEquals(parsed, ["NOTICE", "rate-limited"]);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects message exceeding max_message_length", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.message-limit.example.com");
+  relay.setInfo({
+    limitation: {
+      max_message_length: 64,
+    },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.message-limit.example.com");
+    const messages = collectMessages(ws);
+
+    const oversized = JSON.stringify([
+      "EVENT",
+      makeEvent({ content: "x".repeat(256) }),
+    ]);
+    ws.send(oversized);
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for oversized message");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("max_message_length"));
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects REQ exceeding filter count limit", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.filter-limit.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.filter-limit.example.com");
+    const messages = collectMessages(ws);
+
+    const filters = Array.from({
+      length: DEFAULT_MESSAGE_VALIDATION_LIMITS.maxFilterCount + 1,
+    }, () => ({ kinds: [1] }));
+    ws.send(JSON.stringify(["REQ", "too-many-filters", ...filters]));
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for too many filters");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("filter count limit"));
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects EVENT exceeding relay limitation max_event_tags", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.tag-limit.example.com");
+  relay.setInfo({
+    limitation: {
+      max_event_tags: 1,
+    },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.tag-limit.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify([
+      "EVENT",
+      makeEvent({
+        tags: [["p", "pub1"], ["e", "event1"]],
+      }),
+    ]));
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for too many tags");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("max_event_tags"));
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects EVENT exceeding relay limitation max_content_length", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.content-limit.example.com");
+  relay.setInfo({
+    limitation: {
+      max_content_length: 8,
+    },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.content-limit.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify([
+      "EVENT",
+      makeEvent({
+        content: "this content is too long",
+      }),
+    ]));
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for large content");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("max_content_length"));
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects REQ exceeding relay limitation max_subid_length", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.subid-limit.example.com");
+  relay.setInfo({
+    limitation: {
+      max_subid_length: 4,
+    },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.subid-limit.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "too-long", { kinds: [1] }]));
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for long subId");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("max_subid_length"));
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - rejects REQ exceeding relay limitation max_limit", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.max-limit.example.com");
+  relay.setInfo({
+    limitation: {
+      max_limit: 2,
+    },
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.max-limit.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], limit: 3 }]));
+    await waitForMessageCount(messages, 1);
+
+    assert(messages.length >= 1, "should receive NOTICE for large limit");
+    const parsed = JSON.parse(messages[0]);
+    assertEquals(parsed[0], "NOTICE");
+    assert(parsed[1].includes("max_limit"));
   } finally {
     pool.uninstall();
   }
@@ -264,13 +454,10 @@ Deno.test("MockRelay - connectionTimeout allows normal open when fast enough", a
 
     assertEquals(ws.readyState, WebSocket.OPEN);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
 
     // timeout タイマーが残っていても、readyState チェックで no-op になる
-    await new Promise<void>((resolve) => setTimeout(resolve, 60));
+    await waitForElapsed(60);
   } finally {
     pool.uninstall();
   }
@@ -289,21 +476,14 @@ Deno.test("MockRelay - latency delays responses", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     const messages = collectMessages(ws);
+    const startedAt = Date.now();
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitForMessageCount(messages, 2);
 
-    // すぐには来ない
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
-    assertEquals(messages.length, 0);
+    assertEquals(Date.now() - startedAt >= 50, true);
 
-    // 遅延後に届く
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
-    assertEquals(messages.length >= 1, true);
-
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -320,17 +500,14 @@ Deno.test("MockRelay - delays responses with latency range {min, max}", async ()
   try {
     const ws = await openWs("wss://relay.example.com");
     const messages = collectMessages(ws);
+    const startedAt = Date.now();
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitForMessageCount(messages, 2);
 
-    // 遅延後に届く
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
-    assertEquals(messages.length >= 1, true);
+    assertEquals(Date.now() - startedAt >= 30, true);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -382,7 +559,7 @@ Deno.test("MockRelay error handling - returns OK false when onEVENT throws", asy
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["EVENT", makeEvent()]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive at least one message");
     const parsed = JSON.parse(messages[0]);
@@ -397,6 +574,8 @@ Deno.test("MockRelay error handling - returns OK false when onEVENT throws", asy
     assert(
       relay.errors.some((e) => e.includes("internal error processing EVENT")),
     );
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -416,7 +595,7 @@ Deno.test("MockRelay error handling - returns CLOSED when onREQ throws", async (
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive at least one message");
     const parsed = JSON.parse(messages[0]);
@@ -449,7 +628,7 @@ Deno.test("MockRelay error handling - returns NOTICE when onCOUNT throws", async
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["COUNT", "c1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive at least one message");
     const parsed = JSON.parse(messages[0]);
@@ -477,8 +656,7 @@ Deno.test("MockRelay error handling - returns OK false when auth validator throw
     const ws = await openWs("wss://relay.example.com");
     const messages = collectMessages(ws);
 
-    // AUTH チャレンジを受信するのを待つ
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     // チャレンジを取得
     assert(messages.length >= 1, "should receive AUTH challenge");
@@ -494,7 +672,7 @@ Deno.test("MockRelay error handling - returns OK false when auth validator throw
       tags: [["challenge", challenge], ["relay", "wss://relay.example.com"]],
     });
     ws.send(JSON.stringify(["AUTH", authEvent]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive at least one message");
     const parsed = JSON.parse(messages[0]);
@@ -524,7 +702,7 @@ Deno.test("MockRelay error handling - returns NOTICE for unknown message type", 
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["UNKNOWN", "data"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive at least one message");
     const parsed = JSON.parse(messages[0]);

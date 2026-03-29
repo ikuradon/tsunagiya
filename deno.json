@@ -23,7 +23,7 @@
     "run:nostr-fetch": "deno run -A examples/nostr-fetch/client.ts",
     "coverage": "deno test --coverage=./.cov tests/",
     "coverage:report": "deno coverage ./.cov --lcov",
-    "check": "deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
+    "check": "deno run --allow-read=src scripts/guard_runtime_access.ts && deno check src/mod.ts src/testing/mod.ts && deno lint && deno fmt --check",
     "fmt": "deno fmt",
     "docs:dev": "cd docs && deno task dev",
     "docs:build": "cd docs && deno task build",

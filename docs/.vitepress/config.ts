@@ -10,6 +10,14 @@ export default withMermaid(defineConfig({
   markdown: {
     lineNumbers: true,
   },
+  vite: {
+    build: {
+      // The docs app bundle is slightly above Vite's default 500 kB warning
+      // floor after local search and Mermaid chunks are split out. Keep the
+      // warning meaningful without failing on the known baseline.
+      chunkSizeWarningLimit: 550,
+    },
+  },
   head: [
     ["link", {
       rel: "icon",

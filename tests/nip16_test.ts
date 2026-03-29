@@ -1,6 +1,41 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
+import { waitFor } from "../src/testing/wait.ts";
+
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+function collectMessages(ws: WebSocket): string[] {
+  const messages: string[] = [];
+  ws.addEventListener("message", (e) => {
+    messages.push(e.data as string);
+  });
+  return messages;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
 
 // ===== NIP-16: store() の種別対応 =====
 
@@ -25,23 +60,18 @@ Deno.test("NIP-16 store - replaceable event replaces same kind+pubkey", async ()
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify(["REQ", "sub1", { kinds: [10000] }]));
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
-      setTimeout(() => {
-        assertEquals(messages.length, 2); // EVENT + EOSE
-        const eventMsg = JSON.parse(messages[0]);
-        assertEquals(eventMsg[0], "EVENT");
-        assertEquals(eventMsg[2].id, newer.id);
-        resolve();
-      }, 50);
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [10000] }]));
+
+    await waitForMessageCount(messages, 2);
+
+    assertEquals(messages.length, 2); // EVENT + EOSE
+    const eventMsg = JSON.parse(messages[0]);
+    assertEquals(eventMsg[0], "EVENT");
+    assertEquals(eventMsg[2].id, newer.id);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -75,37 +105,31 @@ Deno.test("NIP-16 store - ephemeral event broadcasts to subscriptions", async ()
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify(["REQ", "sub1", { kinds: [20000] }]));
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [20000] }]));
 
-      setTimeout(() => {
-        // EOSE のみ（ストアにないので）
-        assertEquals(messages.length, 1);
-        const eose = JSON.parse(messages[0]);
-        assertEquals(eose[0], "EOSE");
+    await waitForMessageCount(messages, 1);
 
-        // サブスクリプション登録後に ephemeral イベントをブロードキャスト
-        const ephEvent = EventBuilder.kind(20000).content("live").build();
-        relay.store(ephEvent);
-        relay.broadcast(ephEvent);
+    // EOSE のみ（ストアにないので）
+    assertEquals(messages.length, 1);
+    const eose = JSON.parse(messages[0]);
+    assertEquals(eose[0], "EOSE");
 
-        setTimeout(() => {
-          // EOSE + EVENT の2つ
-          assertEquals(messages.length, 2);
-          const eventMsg = JSON.parse(messages[1]);
-          assertEquals(eventMsg[0], "EVENT");
-          assertEquals(eventMsg[2].content, "live");
-          resolve();
-        }, 50);
-      }, 50);
-    });
+    // サブスクリプション登録後に ephemeral イベントをブロードキャスト
+    const ephEvent = EventBuilder.kind(20000).content("live").build();
+    relay.store(ephEvent);
+    relay.broadcast(ephEvent);
+
+    await waitForMessageCount(messages, 2);
+
+    // EOSE + EVENT の2つ
+    assertEquals(messages.length, 2);
+    const eventMsg = JSON.parse(messages[1]);
+    assertEquals(eventMsg[0], "EVENT");
+    assertEquals(eventMsg[2].content, "live");
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -123,21 +147,16 @@ Deno.test("NIP-16 store - different pubkey replaceable events coexist", async ()
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify(["REQ", "sub1", { kinds: [10000] }]));
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
-      setTimeout(() => {
-        // 2 EVENT + EOSE = 3
-        assertEquals(messages.length, 3);
-        resolve();
-      }, 50);
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [10000] }]));
+
+    await waitForMessageCount(messages, 3);
+
+    // 2 EVENT + EOSE = 3
+    assertEquals(messages.length, 3);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -151,40 +170,30 @@ Deno.test("NIP-16 handleEvent - ephemeral returns OK but not stored", async () =
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      ws.addEventListener("open", () => {
-        const event = EventBuilder.kind(20000).content("ephemeral").build();
-        ws.send(JSON.stringify(["EVENT", event]));
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const event = EventBuilder.kind(20000).content("ephemeral").build();
+    ws.send(JSON.stringify(["EVENT", event]));
 
-      setTimeout(() => {
-        assertEquals(messages.length, 1);
-        const ok = JSON.parse(messages[0]);
-        assertEquals(ok[0], "OK");
-        assertEquals(ok[2], true);
+    await waitForMessageCount(messages, 1);
 
-        // ストアには追加されていない → REQ で取得できない
-        const ws2 = new WebSocket("wss://relay.example.com");
-        const msgs2: string[] = [];
-        ws2.addEventListener("open", () => {
-          ws2.send(JSON.stringify(["REQ", "sub1", { kinds: [20000] }]));
-        });
-        ws2.addEventListener("message", (e) => {
-          msgs2.push(e.data as string);
-        });
-        setTimeout(() => {
-          // EOSE のみ
-          assertEquals(msgs2.length, 1);
-          assertEquals(JSON.parse(msgs2[0])[0], "EOSE");
-          resolve();
-        }, 50);
-      }, 50);
-    });
+    assertEquals(messages.length, 1);
+    const ok = JSON.parse(messages[0]);
+    assertEquals(ok[0], "OK");
+    assertEquals(ok[2], true);
+
+    // ストアには追加されていない → REQ で取得できない
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(JSON.stringify(["REQ", "sub1", { kinds: [20000] }]));
+
+    await waitForMessageCount(msgs2, 1);
+
+    // EOSE のみ
+    assertEquals(msgs2.length, 1);
+    assertEquals(JSON.parse(msgs2[0])[0], "EOSE");
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -196,51 +205,40 @@ Deno.test("NIP-16 handleEvent - replaceable replaces via client EVENT", async ()
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      const pubkey = "aabb";
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const pubkey = "aabb";
 
-      ws.addEventListener("open", () => {
-        const old = EventBuilder.kind(10000).pubkey(pubkey).createdAt(100)
-          .content("old").build();
-        ws.send(JSON.stringify(["EVENT", old]));
-        setTimeout(() => {
-          const newer = EventBuilder.kind(10000).pubkey(pubkey).createdAt(200)
-            .content("new").build();
-          ws.send(JSON.stringify(["EVENT", newer]));
-        }, 10);
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
+    const old = EventBuilder.kind(10000).pubkey(pubkey).createdAt(100)
+      .content("old").build();
+    ws.send(JSON.stringify(["EVENT", old]));
+    await waitForMessageCount(messages, 1);
 
-      setTimeout(() => {
-        // 2 OK messages
-        assertEquals(messages.length, 2);
+    const newer = EventBuilder.kind(10000).pubkey(pubkey).createdAt(200)
+      .content("new").build();
+    ws.send(JSON.stringify(["EVENT", newer]));
+    await waitForMessageCount(messages, 2);
 
-        // Verify store only has the newer
-        const ws2 = new WebSocket("wss://relay.example.com");
-        const msgs2: string[] = [];
-        ws2.addEventListener("open", () => {
-          ws2.send(
-            JSON.stringify(["REQ", "sub1", {
-              kinds: [10000],
-              authors: [pubkey],
-            }]),
-          );
-        });
-        ws2.addEventListener("message", (e) => {
-          msgs2.push(e.data as string);
-        });
-        setTimeout(() => {
-          assertEquals(msgs2.length, 2); // EVENT + EOSE
-          const eventMsg = JSON.parse(msgs2[0]);
-          assertEquals(eventMsg[2].content, "new");
-          resolve();
-        }, 50);
-      }, 50);
-    });
+    // 2 OK messages
+    assertEquals(messages.length, 2);
+
+    // Verify store only has the newer
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(
+      JSON.stringify(["REQ", "sub1", {
+        kinds: [10000],
+        authors: [pubkey],
+      }]),
+    );
+
+    await waitForMessageCount(msgs2, 2);
+
+    assertEquals(msgs2.length, 2); // EVENT + EOSE
+    const eventMsg = JSON.parse(msgs2[0]);
+    assertEquals(eventMsg[2].content, "new");
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -256,22 +254,17 @@ Deno.test("NIP-16 handleEvent - onEVENT handler skips auto-processing", async ()
 
   pool.install();
   try {
-    await new Promise<void>((resolve) => {
-      const ws = new WebSocket("wss://relay.example.com");
-      const messages: string[] = [];
-      ws.addEventListener("open", () => {
-        const event = EventBuilder.kind(10000).content("test").build();
-        ws.send(JSON.stringify(["EVENT", event]));
-      });
-      ws.addEventListener("message", (e) => {
-        messages.push(e.data as string);
-      });
-      setTimeout(() => {
-        const ok = JSON.parse(messages[0]);
-        assertEquals(ok[3], "custom");
-        resolve();
-      }, 50);
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const event = EventBuilder.kind(10000).content("test").build();
+    ws.send(JSON.stringify(["EVENT", event]));
+
+    await waitForMessageCount(messages, 1);
+
+    const ok = JSON.parse(messages[0]);
+    assertEquals(ok[3], "custom");
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

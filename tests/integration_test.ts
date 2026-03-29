@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
+import { waitFor } from "../src/testing/wait.ts";
 import type { NostrEvent } from "../src/types.ts";
 
 function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
@@ -15,6 +16,32 @@ function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
   };
 }
 
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
+
+async function waitForMessageCount(
+  messages: unknown[][],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
 Deno.test("Integration - basic REQ/EVENT flow", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
@@ -25,11 +52,7 @@ Deno.test("Integration - basic REQ/EVENT flow", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     const received: unknown[][] = [];
     ws.onmessage = (ev: MessageEvent) => {
@@ -39,7 +62,7 @@ Deno.test("Integration - basic REQ/EVENT flow", async () => {
     // kind:1のイベントだけ取得
     ws.send(JSON.stringify(["REQ", "timeline", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(received, 3);
 
     // EVENT 2件 + EOSE
     assertEquals(received.length, 3);
@@ -54,10 +77,7 @@ Deno.test("Integration - basic REQ/EVENT flow", async () => {
       .map((m) => (m[2] as NostrEvent).kind);
     assertEquals(eventKinds, [1, 1]);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -69,11 +89,7 @@ Deno.test("Integration - publish and retrieve event", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     const received: unknown[][] = [];
     ws.onmessage = (ev: MessageEvent) => {
@@ -84,7 +100,7 @@ Deno.test("Integration - publish and retrieve event", async () => {
     const event = makeEvent({ id: "published1", content: "new post" });
     ws.send(JSON.stringify(["EVENT", event]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(received, 1);
 
     // OK応答を受信
     assertEquals(received.length, 1);
@@ -95,7 +111,7 @@ Deno.test("Integration - publish and retrieve event", async () => {
       JSON.stringify(["REQ", "verify", { ids: ["published1"] }]),
     );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(received, 3);
 
     // EVENT + EOSE
     assertEquals(received.length, 3);
@@ -107,10 +123,7 @@ Deno.test("Integration - publish and retrieve event", async () => {
     assertEquals(relay.hasEvent("published1"), true);
     assertEquals(relay.countEvents(), 1);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -126,17 +139,8 @@ Deno.test("Integration - multiple relays", async () => {
 
   pool.install();
   try {
-    const ws1 = new WebSocket("wss://relay1.example.com");
-    const ws2 = new WebSocket("wss://relay2.example.com");
-
-    await Promise.all([
-      new Promise<void>((resolve) => {
-        ws1.onopen = () => resolve();
-      }),
-      new Promise<void>((resolve) => {
-        ws2.onopen = () => resolve();
-      }),
-    ]);
+    const ws1 = await openWs("wss://relay1.example.com");
+    const ws2 = await openWs("wss://relay2.example.com");
 
     assertEquals(pool.connections.size, 2);
 
@@ -153,7 +157,10 @@ Deno.test("Integration - multiple relays", async () => {
     ws1.send(JSON.stringify(["REQ", "s1", { kinds: [1] }]));
     ws2.send(JSON.stringify(["REQ", "s2", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await Promise.all([
+      waitForMessageCount(messages1, 2),
+      waitForMessageCount(messages2, 2),
+    ]);
 
     // relay1のイベントはws1で受信
     assertEquals(messages1.length, 2); // EVENT + EOSE
@@ -163,9 +170,7 @@ Deno.test("Integration - multiple relays", async () => {
     assertEquals(messages2.length, 2); // EVENT + EOSE
     assertEquals((messages2[0][2] as NostrEvent).id, "from-r2");
 
-    ws1.close();
-    ws2.close();
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await Promise.all([closeWs(ws1), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -184,11 +189,7 @@ Deno.test("Integration - custom REQ handler override", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     const received: unknown[][] = [];
     ws.onmessage = (ev: MessageEvent) => {
@@ -197,16 +198,13 @@ Deno.test("Integration - custom REQ handler override", async () => {
 
     ws.send(JSON.stringify(["REQ", "mysub", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(received, 2);
 
     // ストアのイベントではなくカスタムハンドラーの結果
     assertEquals(received.length, 2); // EVENT + EOSE
     assertEquals((received[0][2] as NostrEvent).id, "custom-mysub");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -218,11 +216,7 @@ Deno.test("Integration - CLOSE unsubscribes", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-
-    await new Promise<void>((resolve) => {
-      ws.onopen = () => resolve();
-    });
+    const ws = await openWs("wss://relay.example.com");
 
     const received: unknown[][] = [];
     ws.onmessage = (ev: MessageEvent) => {
@@ -231,7 +225,7 @@ Deno.test("Integration - CLOSE unsubscribes", async () => {
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(received, 1);
 
     // EOSE受信
     assertEquals(received.length, 1); // EOSE only (no stored events)
@@ -240,16 +234,16 @@ Deno.test("Integration - CLOSE unsubscribes", async () => {
     // CLOSE送信
     ws.send(JSON.stringify(["CLOSE", "sub1"]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitFor(() => relay.findCLOSE("sub1") !== undefined, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // 検証
     assertEquals(relay.hasREQ("sub1"), true);
     assertEquals(relay.findCLOSE("sub1"), ["CLOSE", "sub1"]);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

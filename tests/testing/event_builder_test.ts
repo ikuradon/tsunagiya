@@ -6,7 +6,29 @@ import {
 } from "@std/assert";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
 import { matchFilter } from "../../src/filter.ts";
-import type { EventSigner } from "../../src/types.ts";
+import type { EventSigner, RandomSource } from "../../src/types.ts";
+
+function expectedHex(start: number, bytes: number): string {
+  return Array.from(
+    { length: bytes },
+    (_, i) => ((start + i) & 0xff).toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function makeSequentialRandom(): RandomSource {
+  let nextByte = 0;
+  return {
+    next(): number {
+      return 0.5;
+    },
+    fill(bytes: Uint8Array): void {
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = nextByte & 0xff;
+        nextByte++;
+      }
+    },
+  };
+}
 
 // ===== 基本ビルダー =====
 
@@ -53,6 +75,22 @@ Deno.test("EventBuilder.pubkey()/id() - sets pubkey and id fields", () => {
 Deno.test("EventBuilder.createdAt() - sets created_at timestamp", () => {
   const event = EventBuilder.kind1().createdAt(1700000000).build();
   assertEquals(event.created_at, 1700000000);
+});
+
+Deno.test("EventBuilder.kind1() - accepts injected clock and random", () => {
+  const event = EventBuilder.kind1({
+    clock: {
+      now(): number {
+        return 1700001234000;
+      },
+    },
+    random: makeSequentialRandom(),
+  }).build();
+
+  assertEquals(event.created_at, 1700001234);
+  assertEquals(event.id, expectedHex(0, 32));
+  assertEquals(event.pubkey, expectedHex(32, 32));
+  assertEquals(event.sig, expectedHex(64, 64));
 });
 
 Deno.test("EventBuilder.sign() - generates mock signature", () => {
@@ -138,6 +176,20 @@ Deno.test("EventBuilder - timeline() generates sequential events", () => {
   assertEquals(events[0].created_at, 1700000000);
   assertEquals(events[1].created_at, 1700000060);
   assertEquals(events[2].created_at, 1700000120);
+});
+
+Deno.test("EventBuilder.timeline() - uses injected clock when startTime is omitted", () => {
+  const events = EventBuilder.timeline(2, { interval: 10 }, {
+    clock: {
+      now(): number {
+        return 1700000000000;
+      },
+    },
+    random: makeSequentialRandom(),
+  });
+
+  assertEquals(events[0].created_at, 1700000000);
+  assertEquals(events[1].created_at, 1700000010);
 });
 
 // ===== thread =====

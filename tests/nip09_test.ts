@@ -1,6 +1,41 @@
 import { assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
+import { waitFor } from "../src/testing/wait.ts";
+
+async function openWs(url: string): Promise<WebSocket> {
+  const ws = new WebSocket(url);
+  await new Promise<void>((resolve) => {
+    ws.onopen = () => resolve();
+  });
+  return ws;
+}
+
+function collectMessages(ws: WebSocket): string[] {
+  const messages: string[] = [];
+  ws.addEventListener("message", (e) => {
+    messages.push(e.data as string);
+  });
+  return messages;
+}
+
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
 
 Deno.test("NIP-09 deletion - deletes event by e-tag", async () => {
   const pool = new MockPool();
@@ -13,20 +48,21 @@ Deno.test("NIP-09 deletion - deletes event by e-tag", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    const messages: string[] = [];
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
-    ws.addEventListener("message", (e) => {
-      messages.push(e.data as string);
-    });
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
     const ok = JSON.parse(messages[0]);
     assertEquals(ok[0], "OK");
@@ -34,19 +70,16 @@ Deno.test("NIP-09 deletion - deletes event by e-tag", async () => {
     assertEquals(relay.deletedIds.has(target.id), true);
 
     // Verify target is removed from store
-    const ws2 = new WebSocket("wss://relay.example.com");
-    const msgs2: string[] = [];
-    ws2.addEventListener("open", () => {
-      ws2.send(JSON.stringify(["REQ", "sub1", { ids: [target.id] }]));
-    });
-    ws2.addEventListener("message", (e) => {
-      msgs2.push(e.data as string);
-    });
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(JSON.stringify(["REQ", "sub1", { ids: [target.id] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(msgs2, 1);
 
     assertEquals(msgs2.length, 1); // EOSE only
     assertEquals(JSON.parse(msgs2[0])[0], "EOSE");
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -61,32 +94,28 @@ Deno.test("NIP-09 deletion - prevents deletion on pubkey mismatch", async () => 
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey("different_pubkey")
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey("different_pubkey")
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(relay.deletedIds.has(target.id), false);
 
     // Target should still be in store
-    const ws2 = new WebSocket("wss://relay.example.com");
-    const msgs2: string[] = [];
-    ws2.addEventListener("open", () => {
-      ws2.send(JSON.stringify(["REQ", "sub1", { ids: [target.id] }]));
-    });
-    ws2.addEventListener("message", (e) => {
-      msgs2.push(e.data as string);
-    });
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(JSON.stringify(["REQ", "sub1", { ids: [target.id] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(msgs2, 2);
 
     assertEquals(msgs2.length, 2); // EVENT + EOSE
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -102,30 +131,31 @@ Deno.test("NIP-09 deletion - rejects re-publish of deleted event", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    const messages: string[] = [];
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
-      setTimeout(() => {
-        ws.send(JSON.stringify(["EVENT", target]));
-      }, 10);
-    });
-    ws.addEventListener("message", (e) => {
-      messages.push(e.data as string);
-    });
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    ws.send(JSON.stringify(["EVENT", target]));
+    await waitForMessageCount(messages, 2);
 
     assertEquals(messages.length, 2);
     const rejectOk = JSON.parse(messages[1]);
     assertEquals(rejectOk[0], "OK");
     assertEquals(rejectOk[2], false);
     assertEquals(rejectOk[3], "blocked: event was deleted");
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -143,19 +173,27 @@ Deno.test("NIP-09 deletion - deletes multiple events with single kind:5", async 
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target1.id, target2.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
+    const deletion = EventBuilder.deletion([target1.id, target2.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
+
+    await waitFor(() => {
+      return messages.length >= 1 &&
+        relay.deletedIds.has(target1.id) &&
+        relay.deletedIds.has(target2.id);
+    }, {
+      timeout: 1000,
+      interval: 5,
     });
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
     assertEquals(relay.deletedIds.has(target1.id), true);
     assertEquals(relay.deletedIds.has(target2.id), true);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -173,20 +211,27 @@ Deno.test("NIP-09 deletion - deletes parameterized replaceable event by a-tag", 
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletionByAddress(
-        [`30000:${pubkey}:my-list`],
-      )
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const deletion = EventBuilder.deletionByAddress(
+      [`30000:${pubkey}:my-list`],
+    )
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
     assertEquals(relay.deletedIds.has(target.id), true);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -202,30 +247,25 @@ Deno.test("NIP-09 deletion - stores kind:5 event itself", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    const messages: string[] = [];
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
+    await waitForMessageCount(messages, 1);
 
-      setTimeout(() => {
-        ws.send(JSON.stringify(["REQ", "sub1", { kinds: [5] }]));
-      }, 10);
-    });
-    ws.addEventListener("message", (e) => {
-      messages.push(e.data as string);
-    });
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [5] }]));
+    await waitForMessageCount(messages, 3);
 
     // OK + EVENT(kind:5) + EOSE = 3
     assertEquals(messages.length, 3);
     const eventMsg = JSON.parse(messages[1]);
     assertEquals(eventMsg[0], "EVENT");
     assertEquals(eventMsg[2].kind, 5);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -247,19 +287,23 @@ Deno.test("NIP-09 deletion - clears deletedIds on reset", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => messages.length >= 1 && relay.deletedIds.size === 1, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     assertEquals(relay.deletedIds.size, 1);
     relay.reset();
     assertEquals(relay.deletedIds.size, 0);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -275,15 +319,20 @@ Deno.test("NIP-09 deletion - preserves deletedIds across snapshot/restore", asyn
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
     assertEquals(relay.deletedIds.has(target.id), true);
     const snap = relay.snapshot();
@@ -291,6 +340,8 @@ Deno.test("NIP-09 deletion - preserves deletedIds across snapshot/restore", asyn
     assertEquals(relay.deletedIds.size, 0);
     relay.restore(snap);
     assertEquals(relay.deletedIds.has(target.id), true);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -306,18 +357,25 @@ Deno.test("NIP-09 deletion - rejects store of deleted event IDs", async () => {
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
     const result = relay.store(target);
     assertEquals(result, false);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -335,34 +393,34 @@ Deno.test("NIP-09 deletion - broadcasts kind:5 to subscribers in real-time", asy
   pool.install();
   try {
     // 購読側: kinds:[5] で削除イベントを待つ
-    const ws1 = new WebSocket("wss://relay.example.com");
-    await new Promise<void>((resolve) => {
-      ws1.onopen = () => resolve();
-    });
-
-    const received: string[] = [];
-    ws1.addEventListener("message", (e) => {
-      received.push(e.data as string);
-    });
+    const ws1 = await openWs("wss://relay.example.com");
+    const received = collectMessages(ws1);
 
     // kinds:[5] で購読
     ws1.send(JSON.stringify(["REQ", "del-sub", { kinds: [5] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitForMessageCount(received, 1);
 
     // EOSE をクリア
     received.length = 0;
 
     // 送信側: 削除イベントを送信
-    const ws2 = new WebSocket("wss://relay.example.com");
-    await new Promise<void>((resolve) => {
-      ws2.onopen = () => resolve();
-    });
+    const ws2 = await openWs("wss://relay.example.com");
 
     const deletion = EventBuilder.deletion([target.id])
       .pubkey(pubkey)
       .build();
     ws2.send(JSON.stringify(["EVENT", deletion]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => {
+      return received
+        .map((d) => JSON.parse(d))
+        .some((m: unknown[]) =>
+          m[0] === "EVENT" && m[1] === "del-sub" &&
+          (m[2] as { kind: number }).kind === 5
+        );
+    }, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // 購読側に kind:5 イベントが配信されていることを確認
     const deletionEvents = received
@@ -373,9 +431,7 @@ Deno.test("NIP-09 deletion - broadcasts kind:5 to subscribers in real-time", asy
       );
     assertEquals(deletionEvents.length, 1);
 
-    ws1.close();
-    ws2.close();
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await Promise.all([closeWs(ws1), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -440,43 +496,35 @@ Deno.test("NIP-09 deletion - a-tag does not delete event newer than deletion req
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    const messages: string[] = [];
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletionByAddress(
-        [`30000:${pubkey}:my-list`],
-      )
-        .pubkey(pubkey)
-        .createdAt(now) // 削除リクエストはターゲットより古い
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
-    ws.addEventListener("message", (e) => {
-      messages.push(e.data as string);
-    });
+    const deletion = EventBuilder.deletionByAddress(
+      [`30000:${pubkey}:my-list`],
+    )
+      .pubkey(pubkey)
+      .createdAt(now) // 削除リクエストはターゲットより古い
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     // 削除リクエストは受理されるが、ターゲットは削除されない
     assertEquals(relay.deletedIds.has(target.id), false);
 
     // ターゲットがまだストアに存在することを確認
-    const ws2 = new WebSocket("wss://relay.example.com");
-    const msgs2: string[] = [];
-    ws2.addEventListener("open", () => {
-      ws2.send(
-        JSON.stringify(["REQ", "sub1", { kinds: [30000], authors: [pubkey] }]),
-      );
-    });
-    ws2.addEventListener("message", (e) => {
-      msgs2.push(e.data as string);
-    });
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(
+      JSON.stringify(["REQ", "sub1", { kinds: [30000], authors: [pubkey] }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(msgs2, 2);
 
     assertEquals(msgs2.length, 2); // EVENT + EOSE
     assertEquals(JSON.parse(msgs2[0])[0], "EVENT");
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -497,41 +545,33 @@ Deno.test("NIP-09 deletion - e-tag does not delete event newer than deletion req
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
-    const messages: string[] = [];
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .createdAt(now) // 削除リクエストはターゲットより古い
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
-    ws.addEventListener("message", (e) => {
-      messages.push(e.data as string);
-    });
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .createdAt(now) // 削除リクエストはターゲットより古い
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(messages, 1);
 
     // 削除リクエストは受理されるが、ターゲットは削除されない
     assertEquals(relay.deletedIds.has(target.id), false);
 
     // ターゲットがまだストアに存在することを確認
-    const ws2 = new WebSocket("wss://relay.example.com");
-    const msgs2: string[] = [];
-    ws2.addEventListener("open", () => {
-      ws2.send(
-        JSON.stringify(["REQ", "sub1", { ids: [target.id] }]),
-      );
-    });
-    ws2.addEventListener("message", (e) => {
-      msgs2.push(e.data as string);
-    });
+    const ws2 = await openWs("wss://relay.example.com");
+    const msgs2 = collectMessages(ws2);
+    ws2.send(
+      JSON.stringify(["REQ", "sub1", { ids: [target.id] }]),
+    );
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForMessageCount(msgs2, 2);
 
     assertEquals(msgs2.length, 2); // EVENT + EOSE
     assertEquals(JSON.parse(msgs2[0])[0], "EVENT");
+
+    await Promise.all([closeWs(ws), closeWs(ws2)]);
   } finally {
     pool.uninstall();
   }
@@ -552,20 +592,27 @@ Deno.test("NIP-09 deletion - e-tag deletes event with same created_at", async ()
 
   pool.install();
   try {
-    const ws = new WebSocket("wss://relay.example.com");
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
 
-    ws.addEventListener("open", () => {
-      const deletion = EventBuilder.deletion([target.id])
-        .pubkey(pubkey)
-        .createdAt(now) // 同じタイムスタンプ
-        .build();
-      ws.send(JSON.stringify(["EVENT", deletion]));
-    });
+    const deletion = EventBuilder.deletion([target.id])
+      .pubkey(pubkey)
+      .createdAt(now) // 同じタイムスタンプ
+      .build();
+    ws.send(JSON.stringify(["EVENT", deletion]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitFor(
+      () => messages.length >= 1 && relay.deletedIds.has(target.id),
+      {
+        timeout: 1000,
+        interval: 5,
+      },
+    );
 
     // created_at が等しい場合は削除される（<= 条件）
     assertEquals(relay.deletedIds.has(target.id), true);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

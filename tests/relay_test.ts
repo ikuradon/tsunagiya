@@ -1,7 +1,8 @@
 import { assert, assertEquals } from "@std/assert";
 import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
-import type { NostrEvent } from "../src/types.ts";
+import { waitFor } from "../src/testing/wait.ts";
+import type { LogEntry, NostrEvent, RandomSource } from "../src/types.ts";
 
 function makeEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
   return {
@@ -34,6 +35,49 @@ function collectMessages(ws: WebSocket): string[] {
   return messages;
 }
 
+async function waitForMessageCount(
+  messages: string[],
+  count: number,
+): Promise<void> {
+  await waitFor(() => messages.length >= count, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
+
+function makeConstantRandom(value: number): RandomSource {
+  return {
+    next(): number {
+      return value;
+    },
+    fill(bytes: Uint8Array): void {
+      bytes.fill(0);
+    },
+  };
+}
+
+function makeSequenceRandom(values: number[]): RandomSource {
+  let index = 0;
+  return {
+    next(): number {
+      const value = values[index];
+      index += 1;
+      return value ?? 1;
+    },
+    fill(bytes: Uint8Array): void {
+      bytes.fill(0);
+    },
+  };
+}
+
 Deno.test("MockRelay - returns matched events for REQ after store", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
@@ -49,7 +93,7 @@ Deno.test("MockRelay - returns matched events for REQ after store", async () => 
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 3);
 
     // kind:1が2件 + EOSE
     assertEquals(messages.length, 3);
@@ -62,10 +106,7 @@ Deno.test("MockRelay - returns matched events for REQ after store", async () => 
     assertEquals(eose[0], "EOSE");
     assertEquals(eose[1], "sub1");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -89,16 +130,13 @@ Deno.test("MockRelay - overrides default REQ behavior with onREQ handler", async
 
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
 
     assertEquals(messages.length, 2); // EVENT + EOSE
     const eventMsg = JSON.parse(messages[0]);
     assertEquals(eventMsg[2].id, "custom");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -120,16 +158,13 @@ Deno.test("MockRelay - invokes custom onEVENT handler", async () => {
     const event = makeEvent({ id: "sent1" });
     ws.send(JSON.stringify(["EVENT", event]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(messages.length, 1);
     const okMsg = JSON.parse(messages[0]);
     assertEquals(okMsg, ["OK", "sent1", true, "custom: accepted"]);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -147,7 +182,7 @@ Deno.test("MockRelay - stores event and returns OK with default handler", async 
     const event = makeEvent({ id: "published" });
     ws.send(JSON.stringify(["EVENT", event]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(messages.length, 1);
     const okMsg = JSON.parse(messages[0]);
@@ -156,17 +191,14 @@ Deno.test("MockRelay - stores event and returns OK with default handler", async 
     // ストアに追加されているか確認（REQで取得）
     ws.send(JSON.stringify(["REQ", "check", { ids: ["published"] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 3);
 
     // EVENT + EOSE
     assertEquals(messages.length, 3);
     const eventMsg = JSON.parse(messages[1]);
     assertEquals(eventMsg[2].id, "published");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -192,7 +224,10 @@ Deno.test("MockRelay - provides verification helpers for REQ, EVENT, and CLOSE",
     // CLOSE送信
     ws.send(JSON.stringify(["CLOSE", "sub1"]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitFor(() => relay.received.length === 4, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // REQ検証
     assertEquals(relay.countREQs(), 2);
@@ -220,10 +255,43 @@ Deno.test("MockRelay - provides verification helpers for REQ, EVENT, and CLOSE",
     // received
     assertEquals(relay.received.length, 4);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - getSubscriptions returns defensive copies of filters", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    collectMessages(ws);
+
+    ws.send(JSON.stringify([
+      "REQ",
+      "sub-copy",
+      { kinds: [1], "#p": ["pub1"] },
+    ]));
+
+    await waitFor(() => relay.getSubscriptions().has("sub-copy"), {
+      timeout: 1000,
+      interval: 5,
     });
+
+    const subscriptions = relay.getSubscriptions();
+    const filters = subscriptions.get("sub-copy");
+    filters?.[0].kinds?.push(9999);
+    filters?.[0]["#p"]?.push("pub2");
+
+    const freshSubscriptions = relay.getSubscriptions();
+    assertEquals(freshSubscriptions.get("sub-copy"), [
+      { kinds: [1], "#p": ["pub1"] },
+    ]);
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -266,7 +334,7 @@ Deno.test("MockRelay - resets handlers to default on reset", async () => {
 
     // REQ should use default handler (return from store)
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
 
     const eventMsg = JSON.parse(messages[0]);
     assertEquals(eventMsg[0], "EVENT");
@@ -275,15 +343,12 @@ Deno.test("MockRelay - resets handlers to default on reset", async () => {
     // EVENT should use default handler (store + OK)
     const newEvent = makeEvent({ id: "new-event", kind: 1 });
     ws.send(JSON.stringify(["EVENT", newEvent]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 3);
 
     const okMsg = JSON.parse(messages[messages.length - 1]);
     assertEquals(okMsg, ["OK", "new-event", true, ""]);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -309,7 +374,10 @@ Deno.test("MockRelay - isolates subId across connections", async () => {
     ws1.send(JSON.stringify(["REQ", "same-sub", { kinds: [1] }]));
     ws2.send(JSON.stringify(["REQ", "same-sub", { kinds: [1] }]));
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await Promise.all([
+      waitForMessageCount(messages1, 2),
+      waitForMessageCount(messages2, 2),
+    ]);
 
     // 両方が EVENT + EOSE を受信
     assertEquals(messages1.length, 2, "ws1 should receive EVENT + EOSE");
@@ -320,22 +388,28 @@ Deno.test("MockRelay - isolates subId across connections", async () => {
 
     // ws1 の購読を閉じても ws2 はブロードキャストを受信する
     ws1.send(JSON.stringify(["CLOSE", "same-sub"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitFor(() => relay.findCLOSE("same-sub") !== undefined, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // 新しいイベントを publish
     relay.store(makeEvent({ id: "e2", kind: 1, content: "new" }));
     const ws3 = await openWs("wss://relay.example.com");
     ws3.send(JSON.stringify(["EVENT", makeEvent({ id: "e2", kind: 1 })]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => {
+      const ws2Events = messages2.filter((m) => JSON.parse(m)[0] === "EVENT");
+      return ws2Events.length >= 2;
+    }, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // ws2 はまだ購読が残っているので新イベントのブロードキャストを受信
     const ws2Events = messages2.filter((m) => JSON.parse(m)[0] === "EVENT");
     assert(ws2Events.length >= 2, "ws2 should still receive broadcast events");
 
-    ws1.close();
-    ws2.close();
-    ws3.close();
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await Promise.all([closeWs(ws1), closeWs(ws2), closeWs(ws3)]);
   } finally {
     pool.uninstall();
   }
@@ -354,7 +428,7 @@ Deno.test("MockRelay - handles malformed EVENT message without crash", async () 
 
     // EVENT without event object
     ws.send(JSON.stringify(["EVENT"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     // 接続がまだ有効で NOTICE が返る
     assertEquals(ws.readyState, WebSocket.OPEN);
@@ -362,10 +436,7 @@ Deno.test("MockRelay - handles malformed EVENT message without crash", async () 
     const notice = JSON.parse(messages[0]);
     assertEquals(notice[0], "NOTICE");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -382,7 +453,7 @@ Deno.test("MockRelay - handles malformed REQ and CLOSE messages without crash", 
 
     // REQ without subId
     ws.send(JSON.stringify(["REQ"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 1);
 
     assertEquals(ws.readyState, WebSocket.OPEN);
     assert(messages.length >= 1, "should receive NOTICE for malformed REQ");
@@ -390,23 +461,20 @@ Deno.test("MockRelay - handles malformed REQ and CLOSE messages without crash", 
 
     // CLOSE without subId
     ws.send(JSON.stringify(["CLOSE"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
     assertEquals(ws.readyState, WebSocket.OPEN);
 
     // empty array
     ws.send(JSON.stringify([]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 3);
     assertEquals(ws.readyState, WebSocket.OPEN);
 
     // non-array JSON
     ws.send(JSON.stringify("not-array"));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 4);
     assertEquals(ws.readyState, WebSocket.OPEN);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -439,7 +507,7 @@ Deno.test("MockRelay - rejects REQ and COUNT with invalid filter types", async (
       const messages = collectMessages(ws);
 
       ws.send(JSON.stringify(msg));
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await waitForMessageCount(messages, 1);
 
       assertEquals(
         ws.readyState,
@@ -453,10 +521,7 @@ Deno.test("MockRelay - rejects REQ and COUNT with invalid filter types", async (
       const notice = JSON.parse(messages[0]);
       assertEquals(notice[0], "NOTICE");
 
-      ws.close();
-      await new Promise<void>((resolve) => {
-        ws.onclose = () => resolve();
-      });
+      await closeWs(ws);
     }
   } finally {
     pool.uninstall();
@@ -543,7 +608,7 @@ Deno.test("MockRelay - rejects EVENT with missing or invalid fields", async () =
       const messages = collectMessages(ws);
 
       ws.send(JSON.stringify(msg));
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await waitForMessageCount(messages, 1);
 
       assertEquals(
         ws.readyState,
@@ -558,10 +623,7 @@ Deno.test("MockRelay - rejects EVENT with missing or invalid fields", async () =
       assertEquals(notice[0], "NOTICE");
       assertEquals(notice[1], "error: malformed EVENT message");
 
-      ws.close();
-      await new Promise<void>((resolve) => {
-        ws.onclose = () => resolve();
-      });
+      await closeWs(ws);
     }
   } finally {
     pool.uninstall();
@@ -592,7 +654,11 @@ Deno.test("MockRelay - manages multiple connections and handles partial disconne
     ws1.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
     ws2.send(JSON.stringify(["REQ", "sub2", { kinds: [1] }]));
     ws3.send(JSON.stringify(["REQ", "sub3", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await Promise.all([
+      waitForMessageCount(messages1, 2),
+      waitForMessageCount(messages2, 2),
+      waitForMessageCount(messages3, 2),
+    ]);
 
     // 全接続がイベントを受信
     assertEquals(messages1.length, 2); // EVENT + EOSE
@@ -600,8 +666,7 @@ Deno.test("MockRelay - manages multiple connections and handles partial disconne
     assertEquals(messages3.length, 2);
 
     // ws2 を切断
-    ws2.close();
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await closeWs(ws2);
 
     assertEquals(relay.connectionCount, 2);
 
@@ -609,7 +674,14 @@ Deno.test("MockRelay - manages multiple connections and handles partial disconne
     const newEvent = makeEvent({ id: "e2", kind: 1, content: "new" });
     relay.store(newEvent);
     relay.broadcast(newEvent);
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => {
+      const ws1Events = messages1.filter((m) => JSON.parse(m)[0] === "EVENT");
+      const ws3Events = messages3.filter((m) => JSON.parse(m)[0] === "EVENT");
+      return ws1Events.length >= 2 && ws3Events.length >= 2;
+    }, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // ws1, ws3 はブロードキャストを受信、ws2 は受信しない
     const ws1Events = messages1.filter((m) => JSON.parse(m)[0] === "EVENT");
@@ -622,15 +694,16 @@ Deno.test("MockRelay - manages multiple connections and handles partial disconne
 
     // 残りの接続でREQが正常動作
     ws1.send(JSON.stringify(["REQ", "sub1-new", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitFor(() => messages1.length >= 6, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     // e1 + e2 の2件 + EOSE
     const ws1NewMsgs = messages1.slice(messages1.length - 3);
     assert(ws1NewMsgs.length >= 2, "ws1 should still receive REQ results");
 
-    ws1.close();
-    ws3.close();
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await Promise.all([closeWs(ws1), closeWs(ws3)]);
 
     assertEquals(relay.connectionCount, 0);
   } finally {
@@ -662,7 +735,10 @@ Deno.test("MockRelay - getSubscriptions", async (t) => {
         JSON.stringify(["REQ", "sub2", { kinds: [0] }, { authors: ["pub1"] }]),
       );
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await waitFor(() => relay.getSubscriptions().size === 2, {
+        timeout: 1000,
+        interval: 5,
+      });
 
       const subs = relay.getSubscriptions();
       assertEquals(subs.size, 2);
@@ -676,10 +752,7 @@ Deno.test("MockRelay - getSubscriptions", async (t) => {
       const sub2Filters = subs.get("sub2")!;
       assertEquals(sub2Filters.length, 2);
 
-      ws.close();
-      await new Promise<void>((resolve) => {
-        ws.onclose = () => resolve();
-      });
+      await closeWs(ws);
     } finally {
       pool.uninstall();
     }
@@ -697,23 +770,26 @@ Deno.test("MockRelay - getSubscriptions", async (t) => {
       ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
       ws.send(JSON.stringify(["REQ", "sub2", { kinds: [0] }]));
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await waitFor(() => relay.getSubscriptions().size === 2, {
+        timeout: 1000,
+        interval: 5,
+      });
 
       assertEquals(relay.getSubscriptions().size, 2);
 
       ws.send(JSON.stringify(["CLOSE", "sub1"]));
 
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await waitFor(() => relay.getSubscriptions().size === 1, {
+        timeout: 1000,
+        interval: 5,
+      });
 
       const subs = relay.getSubscriptions();
       assertEquals(subs.size, 1);
       assertEquals(subs.has("sub1"), false);
       assertEquals(subs.has("sub2"), true);
 
-      ws.close();
-      await new Promise<void>((resolve) => {
-        ws.onclose = () => resolve();
-      });
+      await closeWs(ws);
     } finally {
       pool.uninstall();
     }
@@ -756,7 +832,7 @@ Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["REQ", "check", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
 
     const eventMsgs = messages
       .map((m) => JSON.parse(m))
@@ -766,10 +842,7 @@ Deno.test("NIP-09 deletion - processes kind:5 deletion via store", async () => {
     assertEquals(eventIds.includes("target-event"), false);
     assertEquals(eventIds.includes("other-event"), true);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -823,7 +896,14 @@ Deno.test("MockRelay - setVerifier accepts valid events", async () => {
 
     const event = makeEvent({ id: "verified-ok" });
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() =>
+      messages.some((m) => {
+        const parsed = JSON.parse(m);
+        return parsed[0] === "OK" && parsed[1] === "verified-ok";
+      }), {
+      timeout: 1000,
+      interval: 5,
+    });
 
     const ok = messages.find((m) => {
       const parsed = JSON.parse(m);
@@ -832,7 +912,7 @@ Deno.test("MockRelay - setVerifier accepts valid events", async () => {
     assert(ok);
     const parsed = JSON.parse(ok);
     assertEquals(parsed[2], true);
-    ws.close();
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -852,7 +932,14 @@ Deno.test("MockRelay - setVerifier rejects invalid events", async () => {
 
     const event = makeEvent({ id: "bad-sig" });
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() =>
+      messages.some((m) => {
+        const parsed = JSON.parse(m);
+        return parsed[0] === "OK" && parsed[1] === "bad-sig";
+      }), {
+      timeout: 1000,
+      interval: 5,
+    });
 
     const ok = messages.find((m) => {
       const parsed = JSON.parse(m);
@@ -862,7 +949,7 @@ Deno.test("MockRelay - setVerifier rejects invalid events", async () => {
     const parsed = JSON.parse(ok);
     assertEquals(parsed[2], false);
     assert(parsed[3].includes("invalid"));
-    ws.close();
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -881,7 +968,14 @@ Deno.test("MockRelay - verifier via MockRelayOptions", async () => {
 
     const event = makeEvent({ id: "opts-bad-sig" });
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(() =>
+      messages.some((m) => {
+        const parsed = JSON.parse(m);
+        return parsed[0] === "OK" && parsed[1] === "opts-bad-sig";
+      }), {
+      timeout: 1000,
+      interval: 5,
+    });
 
     const ok = messages.find((m) => {
       const parsed = JSON.parse(m);
@@ -890,7 +984,7 @@ Deno.test("MockRelay - verifier via MockRelayOptions", async () => {
     assert(ok);
     const parsed = JSON.parse(ok);
     assertEquals(parsed[2], false);
-    ws.close();
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -907,6 +1001,40 @@ Deno.test("MockRelay - logger getter returns non-null when logging is true", () 
   assert(relay.logger !== null, "logger should be non-null when logging: true");
 });
 
+Deno.test("MockRelay - logger uses injected clock for log timestamps", async () => {
+  const pool = new MockPool();
+  const entries: LogEntry[] = [];
+  pool.relay("wss://relay.logger-clock.example.com", {
+    clock: {
+      now(): number {
+        return 1234567890;
+      },
+    },
+    logging: (entry) => entries.push(entry),
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.logger-clock.example.com");
+    collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitFor(() => entries.length >= 2, {
+      timeout: 1000,
+      interval: 5,
+    });
+
+    assertEquals(
+      entries.every((entry) => entry.timestamp === 1234567890),
+      true,
+    );
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("MockRelay - snapshot/restore with REQ/COUNT restores received", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.snapshot-test.example.com");
@@ -919,7 +1047,10 @@ Deno.test("MockRelay - snapshot/restore with REQ/COUNT restores received", async
     ws.send(JSON.stringify(["REQ", "snap-sub1", { kinds: [1] }]));
     ws.send(JSON.stringify(["COUNT", "snap-count1", { kinds: [1] }]));
 
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitFor(() => relay.received.length === 2, {
+      timeout: 1000,
+      interval: 5,
+    });
 
     assertEquals(relay.received.length, 2);
     assertEquals(relay.hasREQ("snap-sub1"), true);
@@ -937,10 +1068,7 @@ Deno.test("MockRelay - snapshot/restore with REQ/COUNT restores received", async
     assertEquals(relay.hasREQ("snap-sub1"), true);
     assertEquals(relay.hasCOUNT("snap-count1"), true);
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -964,9 +1092,200 @@ Deno.test("MockRelay - reset clears pendingTimers without error", async () => {
     // エラーが起きないことを確認（タイマーのclearが正常に行われる）
     await new Promise<void>((r) => setTimeout(r, 50));
 
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - close before delayed REQ delivery drops scheduled messages", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.delay-close.example.com", {
+    latency: 80,
+  });
+  relay.store(makeEvent({ id: "delayed-event" }));
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.delay-close.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "delay-sub", { kinds: [1] }]));
+
+    const closed = new Promise<void>((resolve) => {
+      ws.addEventListener("close", () => resolve(), { once: true });
+    });
     ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
+    await closed;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+
+    assertEquals(messages.length, 0);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - delayed REQ preserves EVENT before EOSE order", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.delay-order.example.com", {
+    latency: 40,
+  });
+  relay.store(makeEvent({ id: "delay-order-event" }));
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.delay-order.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "delay-order-sub", { kinds: [1] }]));
+
+    await waitForMessageCount(messages, 2);
+
+    const first = JSON.parse(messages[0]);
+    const second = JSON.parse(messages[1]);
+    assertEquals(first[0], "EVENT");
+    assertEquals(first[1], "delay-order-sub");
+    assertEquals(first[2].id, "delay-order-event");
+    assertEquals(second, ["EOSE", "delay-order-sub"]);
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - random disconnect does not block delayed broadcast to other subscribers", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.random-broadcast.example.com", {
+    latency: 50,
+    disconnectRate: 0.5,
+    random: makeSequenceRandom([0, 1]),
+  });
+
+  pool.install();
+  try {
+    const ws1 = await openWs("wss://relay.random-broadcast.example.com");
+    const ws2 = await openWs("wss://relay.random-broadcast.example.com");
+    const ws1Messages = collectMessages(ws1);
+    const ws2Messages = collectMessages(ws2);
+
+    const ws1Closed = new Promise<void>((resolve) => {
+      ws1.addEventListener("close", () => resolve(), { once: true });
+    });
+
+    ws1.send(JSON.stringify(["REQ", "rand-sub-1", { kinds: [1] }]));
+    await ws1Closed;
+
+    ws2.send(JSON.stringify(["REQ", "rand-sub-2", { kinds: [1] }]));
+    await waitForMessageCount(ws2Messages, 1);
+
+    relay.broadcast(makeEvent({ id: "broadcast-after-random-disconnect" }));
+    await waitForMessageCount(ws2Messages, 2);
+
+    assertEquals(ws1Messages.length, 0);
+    const ws2Event = JSON.parse(ws2Messages[1]);
+    assertEquals(ws2Event[0], "EVENT");
+    assertEquals(ws2Event[2].id, "broadcast-after-random-disconnect");
+
+    await closeWs(ws2);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - random disconnect drops pending delayed broadcast for that socket", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.random-drop.example.com", {
+    latency: 50,
+    disconnectRate: 0.5,
+    random: makeSequenceRandom([1, 0]),
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.random-drop.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "rand-live", { kinds: [1] }]));
+    await waitForMessageCount(messages, 1);
+
+    relay.broadcast(makeEvent({ id: "broadcast-before-random-disconnect" }));
+
+    const closed = new Promise<void>((resolve) => {
+      ws.addEventListener("close", () => resolve(), { once: true });
+    });
+    ws.send(JSON.stringify(["REQ", "rand-disconnect", { kinds: [1] }]));
+    await closed;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+    assertEquals(messages.length, 1);
+    const first = JSON.parse(messages[0]);
+    assertEquals(first[0], "EOSE");
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - handles rapid REQ EVENT COUNT on one connection", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.concurrent.example.com");
+  relay.store(makeEvent({ id: "stored-concurrent", kind: 1 }));
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.concurrent.example.com");
+    const messages = collectMessages(ws);
+
+    const liveEvent = makeEvent({
+      id: "live-concurrent",
+      kind: 1,
+      created_at: 1700000001,
+    });
+
+    ws.send(JSON.stringify(["REQ", "combo-sub", { kinds: [1] }]));
+    ws.send(JSON.stringify(["EVENT", liveEvent]));
+    ws.send(JSON.stringify(["COUNT", "combo-count", { kinds: [1] }]));
+
+    await waitFor(() => {
+      const parsed = messages.map((message) => JSON.parse(message));
+      const eventIds = parsed
+        .filter((message: unknown[]) => message[0] === "EVENT")
+        .map((message: unknown[]) => (message[2] as NostrEvent).id);
+      return (
+        eventIds.includes("stored-concurrent") &&
+        eventIds.includes("live-concurrent") &&
+        parsed.some((message: unknown[]) =>
+          message[0] === "EOSE" && message[1] === "combo-sub"
+        ) &&
+        parsed.some((message: unknown[]) =>
+          message[0] === "OK" && message[1] === "live-concurrent" &&
+          message[2] === true
+        ) &&
+        parsed.some((message: unknown[]) =>
+          message[0] === "COUNT" && message[1] === "combo-count"
+        )
+      );
+    }, {
+      timeout: 1000,
+      interval: 5,
+    });
+
+    const countMessage = messages
+      .map((message) => JSON.parse(message))
+      .find((message: unknown[]) =>
+        message[0] === "COUNT" && message[1] === "combo-count"
+      );
+
+    assert(countMessage);
+    assertEquals(relay.hasREQ("combo-sub"), true);
+    assertEquals(relay.hasCOUNT("combo-count"), true);
+    assertEquals((countMessage[2] as { count: number }).count >= 1, true);
+
+    ws.close();
+    await new Promise<void>((resolve) => {
+      ws.onclose = () => resolve();
     });
   } finally {
     pool.uninstall();
@@ -983,7 +1302,7 @@ Deno.test("MockRelay - malformed AUTH message returns NOTICE", async () => {
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["AUTH", "not_an_object"]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive NOTICE for malformed AUTH");
     const notice = JSON.parse(messages[0]);
@@ -993,10 +1312,7 @@ Deno.test("MockRelay - malformed AUTH message returns NOTICE", async () => {
       "NOTICE should mention malformed",
     );
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1012,7 +1328,7 @@ Deno.test("MockRelay - invalid JSON returns error NOTICE", async () => {
     const messages = collectMessages(ws);
 
     ws.send("{invalid json");
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive NOTICE for invalid JSON");
     const notice = JSON.parse(messages[0]);
@@ -1022,10 +1338,7 @@ Deno.test("MockRelay - invalid JSON returns error NOTICE", async () => {
       "NOTICE should mention invalid JSON",
     );
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1041,16 +1354,41 @@ Deno.test("MockRelay - errorRate: 1.0 returns error NOTICE for REQ", async () =>
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["REQ", "err-sub", { kinds: [1] }]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive NOTICE when errorRate is 1.0");
     const notice = JSON.parse(messages[0]);
     assertEquals(notice[0], "NOTICE");
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("MockRelay - injected random source drives errorRate deterministically", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.error-seeded.example.com", {
+    errorRate: 0.5,
+    random: makeConstantRandom(0.25),
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.error-seeded.example.com");
+    const messages = collectMessages(ws);
+
+    ws.send(JSON.stringify(["REQ", "err-sub", { kinds: [1] }]));
+    await waitForMessageCount(messages, 1);
+
+    assert(
+      messages.length >= 1,
+      "should receive NOTICE when random < errorRate",
+    );
+    const notice = JSON.parse(messages[0]);
+    assertEquals(notice[0], "NOTICE");
+
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1079,6 +1417,29 @@ Deno.test("MockRelay - disconnectRate: 1.0 disconnects on REQ", async () => {
   }
 });
 
+Deno.test("MockRelay - injected random source drives disconnectRate deterministically", async () => {
+  const pool = new MockPool();
+  pool.relay("wss://relay.disconnect-seeded.example.com", {
+    disconnectRate: 0.5,
+    random: makeConstantRandom(0.25),
+  });
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.disconnect-seeded.example.com");
+    collectMessages(ws);
+
+    const closed = await new Promise<CloseEvent>((resolve) => {
+      ws.onclose = (ev) => resolve(ev);
+      ws.send(JSON.stringify(["REQ", "dc-sub", { kinds: [1] }]));
+    });
+
+    assertEquals(closed.code, 1006);
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("MockRelay - unsupported message type returns NOTICE", async () => {
   const pool = new MockPool();
   pool.relay("wss://relay.unsupported-msg.example.com");
@@ -1089,7 +1450,7 @@ Deno.test("MockRelay - unsupported message type returns NOTICE", async () => {
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["UNKNOWN"]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive NOTICE for unsupported type");
     const notice = JSON.parse(messages[0]);
@@ -1099,10 +1460,7 @@ Deno.test("MockRelay - unsupported message type returns NOTICE", async () => {
       "NOTICE should mention unsupported message type",
     );
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1137,7 +1495,7 @@ Deno.test("MockRelay - deleted event re-post is rejected with blocked", async ()
 
     // 削除済みイベントを再投稿
     ws.send(JSON.stringify(["EVENT", target]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive OK for re-posted event");
     const ok = JSON.parse(messages[0]);
@@ -1149,10 +1507,7 @@ Deno.test("MockRelay - deleted event re-post is rejected with blocked", async ()
       "OK message should include blocked",
     );
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1172,17 +1527,14 @@ Deno.test("MockRelay - onREQ handler throws returns CLOSED", async () => {
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["REQ", "throwing-sub", { kinds: [1] }]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive CLOSED when onREQ throws");
     const closed = JSON.parse(messages[0]);
     assertEquals(closed[0], "CLOSED");
     assertEquals(closed[1], "throwing-sub");
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1203,7 +1555,7 @@ Deno.test("MockRelay - onEVENT handler throws returns OK false", async () => {
 
     const event = makeEvent({ id: "throw-event" });
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive OK false when onEVENT throws");
     const ok = JSON.parse(messages[0]);
@@ -1211,10 +1563,7 @@ Deno.test("MockRelay - onEVENT handler throws returns OK false", async () => {
     assertEquals(ok[1], "throw-event");
     assertEquals(ok[2], false);
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1234,16 +1583,13 @@ Deno.test("MockRelay - onCOUNT handler throws returns NOTICE", async () => {
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["COUNT", "throw-count-sub", { kinds: [1] }]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 1);
 
     assert(messages.length >= 1, "should receive NOTICE when onCOUNT throws");
     const notice = JSON.parse(messages[0]);
     assertEquals(notice[0], "NOTICE");
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -1283,7 +1629,7 @@ Deno.test("MockRelay - replaceable event with same timestamp and larger id is sk
     const messages = collectMessages(ws);
 
     ws.send(JSON.stringify(["REQ", "rep-sub", { kinds: [0] }]));
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await waitForMessageCount(messages, 2);
 
     const eventMsgs = messages
       .map((m) => JSON.parse(m))
@@ -1295,10 +1641,7 @@ Deno.test("MockRelay - replaceable event with same timestamp and larger id is sk
       ...existing,
     });
 
-    ws.close();
-    await new Promise<void>((r) => {
-      ws.onclose = () => r();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

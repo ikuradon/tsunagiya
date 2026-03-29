@@ -28,10 +28,22 @@ new MockPool();
 ```typescript
 const relay = pool.relay("wss://relay.example.com");
 
+const fixedClock = { now: () => 1700000000000 };
+const fixedRandom = {
+  next: () => 0.25,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x11);
+  },
+};
+
 // with options
-const relay = pool.relay("wss://relay.example.com", {
-  latency: 100,
+const relayWithOptions = pool.relay("wss://relay.example.com", {
+  latency: { min: 50, max: 150 },
   errorRate: 0.1,
+  verifier,
+  authVerifier,
+  clock: fixedClock,
+  random: fixedRandom,
 });
 ```
 

@@ -76,6 +76,28 @@ Deno.test("NIP-11 info - returns a defensive copy from getInfo", () => {
   assertEquals(relay.getInfo().name, "Original");
 });
 
+Deno.test("NIP-11 info - returns a deep defensive copy from getInfo", () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  relay.setInfo({
+    supported_nips: [1, 11],
+    limitation: {
+      max_subscriptions: 20,
+    },
+  });
+
+  const copy = relay.getInfo();
+  copy.supported_nips?.push(42);
+  if (copy.limitation) {
+    copy.limitation.max_subscriptions = 999;
+  }
+
+  const fresh = relay.getInfo();
+  assertEquals(fresh.supported_nips, [1, 11]);
+  assertEquals(fresh.limitation?.max_subscriptions, 20);
+});
+
 Deno.test("NIP-11 info - includes info in snapshot", () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");

@@ -3,6 +3,7 @@ import { MockPool } from "../src/pool.ts";
 import { EventBuilder } from "../src/testing/event_builder.ts";
 import { startStream, streamEvents } from "../src/testing/stream.ts";
 import { restore, snapshot } from "../src/testing/snapshot.ts";
+import { waitFor } from "../src/testing/wait.ts";
 import type { LogEntry } from "../src/types.ts";
 
 async function openWs(url: string): Promise<WebSocket> {
@@ -21,6 +22,37 @@ function collectMessages(ws: WebSocket): unknown[][] {
   return messages;
 }
 
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  await waitFor(condition, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function waitForMessageCount(
+  messages: unknown[][],
+  count: number,
+): Promise<void> {
+  await waitForCondition(() => messages.length >= count);
+}
+
+async function waitForEventCount(
+  messages: unknown[][],
+  count: number,
+): Promise<void> {
+  await waitForCondition(() => {
+    return messages.filter((m) => m[0] === "EVENT").length >= count;
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
+}
+
 Deno.test("Integration stream/snapshot - stream + filter matching", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
@@ -28,28 +60,25 @@ Deno.test("Integration stream/snapshot - stream + filter matching", async () => 
   pool.install();
   try {
     const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
     // kind:1のみサブスクライブ
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
-
-    const messages = collectMessages(ws);
+    await waitForCondition(() => relay.hasREQ("sub1"));
 
     // kind:1とkind:0が混在するイベントをストリーム
     const kind1Events = EventBuilder.bulk(2, { kind: 1 });
     const kind0Event = EventBuilder.random({ kind: 0 });
     const allEvents = [kind1Events[0], kind0Event, kind1Events[1]];
 
-    streamEvents(relay, allEvents, { interval: 20 });
-    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    const handle = streamEvents(relay, allEvents, { interval: 20 });
+    await waitForEventCount(messages, 2);
+    handle.stop();
 
     // kind:1のみ受信
     const eventMsgs = messages.filter((m) => m[0] === "EVENT");
     assertEquals(eventMsgs.length, 2);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -79,16 +108,13 @@ Deno.test("Integration stream/snapshot - snapshot restore + query", async () => 
     const ws = await openWs("wss://relay.example.com");
     const messages = collectMessages(ws);
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForMessageCount(messages, 2);
 
     const eventMsgs = messages.filter((m) => m[0] === "EVENT");
     assertEquals(eventMsgs.length, 1);
     assertEquals((eventMsgs[0][2] as { id: string }).id, "ev1");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -109,7 +135,11 @@ Deno.test("Integration stream/snapshot - logging captures send/receive", async (
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => {
+      const receives = logs.filter((l) => l.direction === "receive");
+      const sends = logs.filter((l) => l.direction === "send");
+      return receives.length >= 1 && sends.length >= 2;
+    });
 
     // receive (REQ) と send (EVENT, EOSE) がログされている
     const receives = logs.filter((l) => l.direction === "receive");
@@ -118,10 +148,7 @@ Deno.test("Integration stream/snapshot - logging captures send/receive", async (
     assertEquals(receives.length >= 1, true);
     assertEquals(sends.length >= 2, true); // EVENT + EOSE
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -140,13 +167,14 @@ Deno.test("Integration stream/snapshot - stream + snapshot combined", async () =
   pool.install();
   try {
     const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.hasREQ("sub1"));
 
     // ストリームで3件追加
     const events = EventBuilder.bulk(3, { kind: 1 });
     const handle = streamEvents(relay, events, { interval: 20 });
-    await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    await waitForEventCount(messages, 4);
     handle.stop();
 
     // ストアに4件(initial + 3)
@@ -159,10 +187,7 @@ Deno.test("Integration stream/snapshot - stream + snapshot combined", async () =
     assertEquals(snapAfterRestore.store.length, 1);
     assertEquals(snapAfterRestore.store[0].id, "initial");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -175,8 +200,9 @@ Deno.test("Integration stream/snapshot - startStream with snapshot save/restore"
   pool.install();
   try {
     const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.hasREQ("sub1"));
 
     // ストリーム開始前にスナップショット
     const snap = snapshot(relay);
@@ -187,7 +213,8 @@ Deno.test("Integration stream/snapshot - startStream with snapshot save/restore"
       count: 5,
     });
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    await waitForCondition(() => handle.stopped);
+    await waitForEventCount(messages, 5);
     assertEquals(handle.stopped, true);
 
     // ストリーム後のストア
@@ -199,10 +226,7 @@ Deno.test("Integration stream/snapshot - startStream with snapshot save/restore"
     const afterRestore = snapshot(relay);
     assertEquals(afterRestore.store.length, 0);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

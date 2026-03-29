@@ -7,6 +7,10 @@
  */
 
 import type { NostrEvent, NostrFilter } from "./types.ts";
+import {
+  collectMatchingEvents,
+  compileFilter,
+} from "./relay/filter_compiler.ts";
 
 /**
  * イベントが単一フィルターにマッチするか判定する
@@ -19,67 +23,7 @@ import type { NostrEvent, NostrFilter } from "./types.ts";
  * @returns マッチすれば true
  */
 export function matchFilter(event: NostrEvent, filter: NostrFilter): boolean {
-  // ids: プレフィックスマッチ
-  if (filter.ids !== undefined && filter.ids.length > 0) {
-    if (!filter.ids.some((prefix) => event.id.startsWith(prefix))) {
-      return false;
-    }
-  }
-
-  // authors: プレフィックスマッチ
-  if (filter.authors !== undefined && filter.authors.length > 0) {
-    if (!filter.authors.some((prefix) => event.pubkey.startsWith(prefix))) {
-      return false;
-    }
-  }
-
-  // kinds: 完全一致
-  if (filter.kinds !== undefined && filter.kinds.length > 0) {
-    if (!filter.kinds.includes(event.kind)) {
-      return false;
-    }
-  }
-
-  // since: created_at >= since
-  if (filter.since !== undefined) {
-    if (event.created_at < filter.since) {
-      return false;
-    }
-  }
-
-  // until: created_at <= until
-  if (filter.until !== undefined) {
-    if (event.created_at > filter.until) {
-      return false;
-    }
-  }
-
-  // NIP-50: search (content の部分一致、大文字小文字非区別)
-  if (filter.search !== undefined) {
-    if (
-      !event.content.toLowerCase().includes(filter.search.toLowerCase())
-    ) {
-      return false;
-    }
-  }
-
-  // タグフィルター (#e, #p 等)
-  for (const key of Object.keys(filter)) {
-    if (key.startsWith("#") && key.length >= 2) {
-      const tagName = key.slice(1);
-      const values = filter[key as `#${string}`];
-      if (values !== undefined && values.length > 0) {
-        const eventTagValues = event.tags
-          .filter((tag) => tag[0] === tagName)
-          .map((tag) => tag[1]);
-        if (!values.some((v) => eventTagValues.includes(v))) {
-          return false;
-        }
-      }
-    }
-  }
-
-  return true;
+  return compileFilter(filter).matches(event);
 }
 
 /**
@@ -111,12 +55,5 @@ export function filterEvents(
   events: NostrEvent[],
   filter: NostrFilter,
 ): NostrEvent[] {
-  const matched = events
-    .filter((event) => matchFilter(event, filter))
-    .sort((a, b) => b.created_at - a.created_at);
-
-  if (filter.limit !== undefined && filter.limit >= 0) {
-    return matched.slice(0, filter.limit);
-  }
-  return matched;
+  return collectMatchingEvents(events, compileFilter(filter));
 }

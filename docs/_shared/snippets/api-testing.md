@@ -12,6 +12,7 @@ import {
   snapshot,
   startStream,
   streamEvents,
+  waitFor,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
@@ -38,6 +39,21 @@ EventBuilder 拡張ヘルパー:
 // 既存イベントの複製・修正
 const original = EventBuilder.kind1().content("hello").build();
 const modified = EventBuilder.from(original).content("world").build();
+
+// runtime 注入で deterministic に生成
+const fixedClock = { now: () => 1700000000000 };
+const fixedRandom = {
+  next: () => 0.25,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x11);
+  },
+};
+const deterministic = EventBuilder.kind1({
+  clock: fixedClock,
+  random: fixedRandom,
+})
+  .content("stable")
+  .build();
 
 // フィルターにマッチするイベントを自動生成
 const filter = { kinds: [1], authors: ["abc123"] };
@@ -210,12 +226,27 @@ assertClosed(relay, "sub1");
 assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 ```
 
+条件待ちヘルパー:
+
+```typescript
+await waitFor(() => relay.connectionCount === 0);
+await waitFor(() => received.length >= 3, { timeout: 3000, interval: 20 });
+```
+
 ストリーム関数:
 
 ```typescript
+const fixedRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
+
 const handle = streamEvents(relay, events, {
   interval: 100, // 送信間隔 (ms)
   jitter: 50, // ジッター幅 (±ms)
+  random: fixedRandom,
 });
 handle.stop();
 
@@ -223,6 +254,7 @@ const stream = startStream(relay, {
   eventGenerator: () => EventBuilder.random({ kind: 1 }),
   interval: 1000,
   count: 10,
+  random: fixedRandom,
 });
 stream.stop();
 ```

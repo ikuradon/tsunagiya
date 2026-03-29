@@ -37,7 +37,7 @@ outline: deep
 
 ## ベンチマーク結果
 
-tsunagiya v0.3.0 での参考値（環境依存）。
+tsunagiya v0.4.x での参考値（環境依存）。
 
 ### イベントストア登録
 

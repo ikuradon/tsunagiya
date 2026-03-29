@@ -4,140 +4,199 @@ outline: deep
 
 # Contributing
 
-This guide describes how to set up a development environment and the workflow
-for contributing to tsunagiya.
+This guide explains the development workflow for tsunagiya.
 
 ---
 
 ## 1. Development Environment Setup
 
-### Requirements
-
-- **Deno v2.x**
-
-Check your installed version:
+**Deno v2.x** is required.
 
 ```bash
 deno --version
 ```
 
-### Verify the Setup
-
-After cloning the repository, run the following to confirm everything is
-working:
+After cloning the repository, run the quality gate first.
 
 ```bash
 deno task check
 ```
 
-This runs type checking, lint, and format verification in one step.
+`deno task check` includes type checking, lint, format verification, and the
+runtime guard in `scripts/guard_runtime_access.ts`.
 
 ---
 
 ## 2. Available Commands
 
+| Command                | Description                                      |
+| ---------------------- | ------------------------------------------------ |
+| `deno task test`       | Run unit tests                                   |
+| `deno task test:all`   | Run all tests including `examples/`              |
+| `deno task check`      | Runtime guard + type check + lint + format check |
+| `deno task fmt`        | Format code                                      |
+| `deno task docs:build` | Verify the documentation build                   |
+| `deno task build:npm`  | Verify the npm package build                     |
+
 ```bash
-deno task test          # Run tests
-deno task check         # Type check + lint + format check
-deno task fmt           # Format code
-deno publish --dry-run  # JSR publish preview
+deno task fmt
+deno task test
+deno task check
+deno task test:all   # when touching examples or AUTH/E2E flows
+deno task docs:build # when touching docs, README, or shared snippets
 ```
 
 ---
 
 ## 3. Directory Structure
 
-```
+```text
 src/
-├── mod.ts              # Main entry point
-├── pool.ts             # MockPool
-├── relay.ts            # MockRelay
-├── websocket.ts        # MockWebSocket
-├── filter.ts           # Filter matching
-├── auth.ts             # NIP-42 AUTH
-├── types.ts            # Type definitions
-├── logger.ts           # Logging
-└── testing/
-    ├── mod.ts          # Test helpers entry point
-    ├── event_builder.ts
-    ├── filter_builder.ts
-    ├── assertions.ts
-    ├── stream.ts
-    └── snapshot.ts
+├── mod.ts                   # Public entry point
+├── pool.ts                  # MockPool facade
+├── relay.ts                 # MockRelay facade / orchestration
+├── platform/                # WebSocket/fetch hook
+├── relay/                   # EventStore, AuthService, DeliveryScheduler, etc.
+├── internal/                # clone/runtime/url/validation/search
+├── types/                   # Internal type modules
+└── testing/                 # EventBuilder / FilterBuilder / stream / wait
 
 tests/
-├── pool_test.ts
-├── relay_test.ts
-├── websocket_test.ts
-├── filter_test.ts
-├── auth_test.ts
-├── integration_test.ts
-└── testing/
-    ├── event_builder_test.ts
-    ├── filter_builder_test.ts
-    ├── assertions_test.ts
-    ├── stream_test.ts
-    └── snapshot_test.ts
+├── *_test.ts                # relay/pool/auth/filter/search/perf regressions
+└── testing/                 # helper tests
+
+docs/
+├── _shared/                 # Source of truth for snippets and tables
+├── reference/               # API / architecture / NIP docs
+├── guide/                   # getting-started / tutorial / contributing
+└── superpowers/plans/       # decision memos / closeout / perf notes
 ```
+
+The canonical ownership map lives in
+[`2026-03-29-maintainer-operating-rules.md`](/superpowers/plans/2026-03-29-maintainer-operating-rules).
 
 ---
 
 ## 4. Development Workflow
 
-Follow this workflow for every change:
+Use this path for normal changes.
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B[deno task fmt]
+    A[Code change] --> B[deno task fmt]
     B --> C[deno task test]
-    C --> D{Tests pass?}
-    D -- No --> E[Fix issues]
-    E --> B
-    D -- Yes --> F[deno task check]
-    F --> G{Checks pass?}
-    G -- No --> H[Fix issues]
-    H --> B
-    G -- Yes --> I([Commit])
+    C --> D[deno task check]
+    D --> E{Touched examples, docs, or perf?}
+    E -- Yes --> F[deno task test:all]
+    F --> G[deno task docs:build]
+    E -- No --> H[commit]
+    G --> H[commit]
 ```
 
-1. `deno task fmt` — Auto-format code (**always run this first**)
-2. `deno task test` — Run tests
-3. `deno task check` — Quality check (type check + lint + format)
-4. If any errors occur, fix them and re-run from `deno task fmt`
-5. Commit after all checks pass
-
-> **Important:** Always run `deno task fmt` first to prevent format errors from
-> polluting later check output.
-
----
-
-## 5. Coding Conventions
-
-- **Zero external dependencies** — Use the Deno standard library only
-- **Node.js compatibility** — Keep the library usable in Node.js environments
-- **TypeScript strict mode** — All code must pass strict type checking
-- **`any` is forbidden** — Use `unknown` instead
-- **Always call `pool.uninstall()` in tests** — Wrap in a `finally` block to
-  guarantee cleanup even on test failure
-- **Error messages in English**
-- **JSDoc comments** — Can be written in Japanese; required for all public APIs
+1. `deno task fmt`
+2. `deno task test`
+3. `deno task check`
+4. Run `deno task test:all` if you touched `examples/`, AUTH ordering, or E2E
+   compatibility
+5. Run `deno task docs:build` if you touched `docs/`, `README.md`, or
+   `docs/_shared/**`
+6. Commit only after the relevant checks pass
 
 ---
 
-## 6. E2E Testing
+## 5. Required CI Paths
 
-### Deno
+GitHub Actions always runs these lanes.
+
+- `guard-runtime-access`: `scripts/guard_runtime_access.ts`
+- `test-deno`: `deno task check`, `deno task test`, and coverage
+- `docs-check`: docs lint/format plus `deno task docs:build`
+- `e2e-*`: Deno / Node / Bun compatibility for example clients
+
+Locally, `deno task check` is the canonical guard entry point. In CI, the guard
+also runs in a dedicated job.
+
+---
+
+## 6. Docs / README Sync Rule
+
+The source of truth for docs content is `docs/_shared/snippets/**` and
+`docs/_shared/tables/**`. README is only a summary and should not become a copy
+of shared snippets.
+
+When updating docs:
+
+1. Edit `docs/_shared/**` first
+2. Verify the include targets under `docs/reference/**` and `docs/guide/**`
+3. Update README only when the public summary changed
+4. Run `deno task docs:build`
+5. Update release readiness if the user-facing explanation changed
+
+---
+
+## 7. Performance Baseline Update Rule
+
+Performance work must land with both code and measurement notes.
+
+Required rules:
+
+- Smoke tests belong in `tests/performance_test.ts`
+- Threshold baselines belong in `tests/performance_baseline_test.ts`
+- Any new fast path needs at least one baseline
+- Do not tighten thresholds from a single run
+- Record measurements in a dated note under `docs/superpowers/plans/`
+
+Minimum note template:
+
+```md
+# YYYY-MM-DD <Area> Notes
+
+## Goal
+
+## Implementation
+
+## Measurement Conditions
+
+- dataset:
+- filter/query:
+- run count:
+
+## Observations
+
+- median:
+- p95:
+- memory proxy:
+
+## Threshold Decision
+
+- old threshold:
+- new threshold:
+- reason:
+
+## Next Decision
+```
+
+---
+
+## 8. Coding Conventions
+
+- Public API changes must flow through `src/mod.ts` / `src/testing/mod.ts`
+- Avoid `any`; use `unknown` when needed
+- Keep error messages in English
+- Always guarantee `pool.uninstall()` in tests via `finally`
+- Do not add direct `Date.now()` / `Math.random()` / `crypto.getRandomValues()`
+  calls to relay core or testing helpers
+- Add new ownership or sync rules to the maintainer document before scaling them
+  out
+
+---
+
+## 9. E2E Testing
 
 ```bash
-deno task test      # Run unit tests (excludes examples/)
-deno task test:all  # Run all tests (unit + E2E)
+deno task test      # tests/ only
+deno task test:all  # tests/ + examples/
 ```
 
-`deno task test` runs unit tests under `tests/`. `deno task test:all` runs all
-tests including E2E tests under `examples/`.
-
-### Node.js Compatibility
-
-Because tsunagiya works by replacing `globalThis.WebSocket`, a WebSocket
-polyfill (e.g. the `ws` package) is required when running in a Node.js
-environment. Testing via IPC (inter-process communication) is not verified.
+Because tsunagiya replaces `globalThis.WebSocket`, a WebSocket polyfill such as
+`ws` is required in Node.js environments.

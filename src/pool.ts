@@ -8,68 +8,12 @@
  */
 
 import type { MockRelayOptions } from "./types.ts";
+import { normalizeUrl } from "./internal/url.ts";
+import {
+  installPoolHooks,
+  type PoolHookInstallation,
+} from "./platform/pool_hooks.ts";
 import { MockRelay } from "./relay.ts";
-import { MockWebSocket } from "./websocket.ts";
-
-/** URLを正規化する（末尾スラッシュを除去） */
-function normalizeUrl(url: string): string {
-  return url.replace(/\/+$/, "");
-}
-
-/** HTTP/HTTPS URLをWS/WSSに変換する */
-function httpToWsUrl(httpUrl: string): string {
-  return httpUrl.replace(/^https:\/\//, "wss://").replace(
-    /^http:\/\//,
-    "ws://",
-  );
-}
-
-/** ヘッダー値を case-insensitive で取得する */
-function getHeaderValue(
-  headers: HeadersInit | undefined,
-  name: string,
-): string | null {
-  if (!headers) return null;
-  if (headers instanceof Headers) {
-    return headers.get(name);
-  }
-  if (Array.isArray(headers)) {
-    for (const entry of headers) {
-      if (
-        Array.isArray(entry) && entry.length >= 2 &&
-        typeof entry[0] === "string" && typeof entry[1] === "string" &&
-        entry[0].toLowerCase() === name.toLowerCase()
-      ) {
-        return entry[1];
-      }
-    }
-    return null;
-  }
-  // Record<string, string>
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name.toLowerCase()) {
-      return value;
-    }
-  }
-  return null;
-}
-
-/** NIP-11リクエストかどうか判定する（Accept: application/nostr+json） */
-function isNip11Request(
-  request: RequestInfo | URL,
-  init?: RequestInit,
-): boolean {
-  // init.headers があればそちらを優先（fetch の仕様: init が request をオーバーライド）
-  if (init?.headers) {
-    const accept = getHeaderValue(init.headers, "accept") ?? "";
-    return accept.toLowerCase().includes("application/nostr+json");
-  }
-  if (request instanceof Request) {
-    const accept = request.headers.get("Accept") ?? "";
-    return accept.toLowerCase().includes("application/nostr+json");
-  }
-  return false;
-}
 
 /**
  * 複数のMockRelayを管理するコンテナ
@@ -92,12 +36,8 @@ function isNip11Request(
  * ```
  */
 export class MockPool {
-  static #currentInstance: MockPool | null = null;
-
   #relays: Map<string, MockRelay> = new Map();
-  #originalWebSocket: typeof globalThis.WebSocket | null = null;
-  #originalFetch: typeof globalThis.fetch | null = null;
-  #installed = false;
+  #installation: PoolHookInstallation | null = null;
 
   /**
    * MockRelayを登録・取得する
@@ -126,55 +66,10 @@ export class MockPool {
    * @throws {Error} 既にinstall済みの場合
    */
   install(): void {
-    if (this.#installed) {
+    if (this.#installation) {
       throw new Error("MockPool is already installed");
     }
-    if (MockPool.#currentInstance && MockPool.#currentInstance !== this) {
-      throw new Error("Another MockPool instance is already installed");
-    }
-
-    this.#originalWebSocket = globalThis.WebSocket;
-
-    MockWebSocket._resolveRelay = (url: string) => {
-      return this.#relays.get(normalizeUrl(url));
-    };
-
-    // deno-lint-ignore no-explicit-any
-    (globalThis as any).WebSocket = MockWebSocket;
-
-    // NIP-11: fetch インターセプト
-    this.#originalFetch = globalThis.fetch;
-    const relays = this.#relays;
-    const originalFetch = this.#originalFetch;
-
-    // deno-lint-ignore no-explicit-any
-    (globalThis as any).fetch = (
-      request: RequestInfo | URL,
-      init?: RequestInit,
-    ): Promise<Response> => {
-      if (isNip11Request(request, init)) {
-        const rawUrl = request instanceof Request
-          ? request.url
-          : request instanceof URL
-          ? request.toString()
-          : request;
-        const wsUrl = normalizeUrl(httpToWsUrl(rawUrl));
-        const relay = relays.get(wsUrl);
-        if (relay) {
-          const info = relay.getInfo();
-          return Promise.resolve(
-            new Response(JSON.stringify(info), {
-              status: 200,
-              headers: { "Content-Type": "application/nostr+json" },
-            }),
-          );
-        }
-      }
-      return originalFetch(request as RequestInfo, init);
-    };
-
-    MockPool.#currentInstance = this;
-    this.#installed = true;
+    this.#installation = installPoolHooks((url) => this.#relays.get(url));
   }
 
   /**
@@ -183,25 +78,12 @@ export class MockPool {
    * @throws {Error} install されていない場合
    */
   uninstall(): void {
-    if (!this.#installed) {
+    if (!this.#installation) {
       throw new Error("MockPool is not installed");
     }
 
-    if (this.#originalWebSocket) {
-      // deno-lint-ignore no-explicit-any
-      (globalThis as any).WebSocket = this.#originalWebSocket;
-    }
-
-    if (this.#originalFetch) {
-      // deno-lint-ignore no-explicit-any
-      (globalThis as any).fetch = this.#originalFetch;
-    }
-
-    MockWebSocket._resolveRelay = null;
-    this.#originalWebSocket = null;
-    this.#originalFetch = null;
-    MockPool.#currentInstance = null;
-    this.#installed = false;
+    this.#installation.uninstall();
+    this.#installation = null;
   }
 
   /**
@@ -233,7 +115,7 @@ export class MockPool {
 
   /** install済みかどうか */
   get installed(): boolean {
-    return this.#installed;
+    return this.#installation?.installed ?? false;
   }
 
   /**
@@ -251,7 +133,7 @@ export class MockPool {
    * ```
    */
   [Symbol.dispose](): void {
-    if (this.#installed) {
+    if (this.#installation) {
       this.uninstall();
     }
   }
@@ -271,7 +153,7 @@ export class MockPool {
    * ```
    */
   [Symbol.asyncDispose](): Promise<void> {
-    if (this.#installed) {
+    if (this.#installation) {
       this.uninstall();
     }
     return Promise.resolve();

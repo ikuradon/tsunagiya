@@ -12,6 +12,7 @@ import {
   snapshot,
   startStream,
   streamEvents,
+  waitFor,
 } from "@ikuradon/tsunagiya/testing";
 ```
 
@@ -38,6 +39,21 @@ EventBuilder extended helpers:
 // clone and modify existing event
 const original = EventBuilder.kind1().content("hello").build();
 const modified = EventBuilder.from(original).content("world").build();
+
+// inject runtime dependencies for deterministic output
+const fixedClock = { now: () => 1700000000000 };
+const fixedRandom = {
+  next: () => 0.25,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x11);
+  },
+};
+const deterministic = EventBuilder.kind1({
+  clock: fixedClock,
+  random: fixedRandom,
+})
+  .content("stable")
+  .build();
 
 // auto-generate event matching a filter
 const filter = { kinds: [1], authors: ["abc123"] };
@@ -210,12 +226,27 @@ assertClosed(relay, "sub1");
 assertReceived(relay, (messages) => messages.some((m) => m[0] === "REQ"));
 ```
 
+Condition waiting helper:
+
+```typescript
+await waitFor(() => relay.connectionCount === 0);
+await waitFor(() => received.length >= 3, { timeout: 3000, interval: 20 });
+```
+
 Stream functions:
 
 ```typescript
+const fixedRandom = {
+  next: () => 0.5,
+  fill(bytes: Uint8Array) {
+    bytes.fill(0x22);
+  },
+};
+
 const handle = streamEvents(relay, events, {
   interval: 100, // send interval (ms)
   jitter: 50, // jitter range (±ms)
+  random: fixedRandom,
 });
 handle.stop();
 
@@ -223,6 +254,7 @@ const stream = startStream(relay, {
   eventGenerator: () => EventBuilder.random({ kind: 1 }),
   interval: 1000,
   count: 10,
+  random: fixedRandom,
 });
 stream.stop();
 ```

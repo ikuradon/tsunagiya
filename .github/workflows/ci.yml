@@ -17,6 +17,19 @@ jobs:
   # ====================
   # CI jobs (always run)
   # ====================
+  guard-runtime-access:
+    name: Runtime access guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
+        with:
+          deno-version: v2.x
+      - name: Check direct runtime access
+        run: deno run --allow-read=src scripts/guard_runtime_access.ts
+
   test-deno:
     name: Test on Deno
     runs-on: ubuntu-latest
@@ -168,7 +181,7 @@ jobs:
           fi
 
   docs-check:
-    name: Docs lint/format check
+    name: Docs build / lint / format check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -188,6 +201,8 @@ jobs:
         run: deno fmt --check docs/.vitepress/
       - name: Lint docs
         run: deno lint docs/.vitepress/
+      - name: Build docs
+        run: deno task docs:build
 
   # =======================================
   # Publish (v* tags only, after all CI)
@@ -198,6 +213,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       [
+        guard-runtime-access,
         test-deno,
         publish-check,
         npm-build-check,
@@ -238,6 +254,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       [
+        guard-runtime-access,
         test-deno,
         publish-check,
         npm-build-check,
@@ -279,7 +296,7 @@ jobs:
   deploy-docs-build:
     name: Build documentation
     if: github.ref == 'refs/heads/main'
-    needs: [test-deno, docs-check]
+    needs: [guard-runtime-access, test-deno, docs-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read

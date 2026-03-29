@@ -9,6 +9,7 @@ import {
   assertReceivedREQ,
 } from "../../src/testing/assertions.ts";
 import { EventBuilder } from "../../src/testing/event_builder.ts";
+import { waitFor } from "../../src/testing/wait.ts";
 
 async function openWs(url: string): Promise<WebSocket> {
   const ws = new WebSocket(url);
@@ -16,6 +17,21 @@ async function openWs(url: string): Promise<WebSocket> {
     ws.onopen = () => resolve();
   });
   return ws;
+}
+
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  await waitFor(condition, {
+    timeout: 1000,
+    interval: 5,
+  });
+}
+
+async function closeWs(ws: WebSocket): Promise<void> {
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve(), { once: true });
+  });
+  ws.close();
+  await closed;
 }
 
 Deno.test("assertReceivedREQ - passes when matching REQ found", async () => {
@@ -26,15 +42,12 @@ Deno.test("assertReceivedREQ - passes when matching REQ found", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     // should not throw
     assertReceivedREQ(relay, { kinds: [1] });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -48,7 +61,7 @@ Deno.test("assertReceivedREQ - throws when no matching REQ", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertThrows(
       () => assertReceivedREQ(relay, { kinds: [0] }),
@@ -56,10 +69,7 @@ Deno.test("assertReceivedREQ - throws when no matching REQ", async () => {
       "Expected REQ",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -74,14 +84,11 @@ Deno.test("assertEventPublished - passes when event found", async () => {
     const ws = await openWs("wss://relay.example.com");
     const event = EventBuilder.kind1().id("pub-event").build();
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.hasEvent("pub-event"));
 
     assertEventPublished(relay, "pub-event");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -115,15 +122,12 @@ Deno.test("assertNoErrors - passes when no errors", async () => {
     const ws = await openWs("wss://relay.example.com");
     const event = EventBuilder.kind1().id("ok-event").build();
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.hasEvent("ok-event"));
 
     // should not throw
     assertNoErrors(relay);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -143,7 +147,7 @@ Deno.test("assertNoErrors - throws when EVENT rejected", async () => {
     const ws = await openWs("wss://relay.example.com");
     const event = EventBuilder.kind1().id("spam-event").build();
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.errors.length > 0);
 
     assertThrows(
       () => assertNoErrors(relay),
@@ -151,10 +155,7 @@ Deno.test("assertNoErrors - throws when EVENT rejected", async () => {
       "Expected no errors",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -167,11 +168,12 @@ Deno.test("assertNoErrors - throws on auth-required rejection", async () => {
   pool.install();
   try {
     const ws = await openWs("wss://auth.relay.test");
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
     // 認証せずにREQを送信
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() =>
+      pool.relay("wss://auth.relay.test").errors.length > 0
+    );
 
     const relay = pool.relay("wss://auth.relay.test");
     assertThrows(
@@ -180,10 +182,7 @@ Deno.test("assertNoErrors - throws on auth-required rejection", async () => {
       "Expected no errors",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -213,14 +212,11 @@ Deno.test("assertAuthCompleted - passes when AUTH received", async () => {
       .tag("relay", "wss://relay.example.com")
       .build();
     ws.send(JSON.stringify(["AUTH", authEvent]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.authResults.length > 0);
 
     assertAuthCompleted(relay);
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -262,7 +258,7 @@ Deno.test("assertAuthCompleted - throws when AUTH sent but validation fails", as
       .tag("relay", "wss://relay.example.com")
       .build();
     ws.send(JSON.stringify(["AUTH", authEvent]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.authResults.length > 0);
 
     // AUTH は送信されたが認証失敗 → assertAuthCompleted はスローする
     assertThrows(
@@ -271,10 +267,7 @@ Deno.test("assertAuthCompleted - throws when AUTH sent but validation fails", as
       "no successful authentication found",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -288,14 +281,11 @@ Deno.test("assertClosed - passes when CLOSE found", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["CLOSE", "sub1"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.findCLOSE("sub1") !== undefined);
 
     assertClosed(relay, "sub1");
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -320,16 +310,13 @@ Deno.test("assertReceived - custom predicate passes", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceived(relay, (messages) => {
       return messages.some((m) => m[0] === "REQ" && m[1] === "sub1");
     });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -355,7 +342,7 @@ Deno.test("assertReceivedREQ - matches since filter", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], since: 1000 }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { kinds: [1], since: 1000 });
   } finally {
@@ -370,7 +357,7 @@ Deno.test("assertReceivedREQ - throws on until mismatch", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], until: 100 }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertThrows(
       () => assertReceivedREQ(relay, { until: 999 }),
@@ -388,7 +375,7 @@ Deno.test("assertReceivedREQ - matches limit filter", async () => {
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1], limit: 50 }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { limit: 50 });
   } finally {
@@ -405,7 +392,7 @@ Deno.test("assertReceivedREQ - throws on search mismatch", async () => {
     ws.send(
       JSON.stringify(["REQ", "sub1", { kinds: [1], search: "hello" }]),
     );
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertThrows(
       () => assertReceivedREQ(relay, { search: "goodbye" }),
@@ -428,14 +415,11 @@ Deno.test("assertReceivedREQ - matches tag filters", async () => {
     ws.send(
       JSON.stringify(["REQ", "sub1", { kinds: [1], "#p": ["pubkey123"] }]),
     );
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { "#p": ["pubkey123"] });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -451,14 +435,11 @@ Deno.test("assertReceivedREQ - matches authors filter", async () => {
   try {
     const ws = await openWs("wss://relay2.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { authors: ["pk1"] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { authors: ["pk1"] });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -472,14 +453,11 @@ Deno.test("assertReceivedREQ - matches ids filter", async () => {
   try {
     const ws = await openWs("wss://relay3.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { ids: ["eventid1"] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { ids: ["eventid1"] });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -493,14 +471,11 @@ Deno.test("assertReceivedREQ - matches since filter field", async () => {
   try {
     const ws = await openWs("wss://relay4.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { since: 1700000000 }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { since: 1700000000 });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -514,14 +489,11 @@ Deno.test("assertReceivedREQ - matches limit filter field", async () => {
   try {
     const ws = await openWs("wss://relay5.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { limit: 10 }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { limit: 10 });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -551,7 +523,7 @@ Deno.test("assertEventPublished - throws when other events exist but not the tar
     const ws = await openWs("wss://relay.example.com");
     const event = EventBuilder.kind1().id("other-event").build();
     ws.send(JSON.stringify(["EVENT", event]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.hasEvent("other-event"));
 
     assertThrows(
       () => assertEventPublished(relay, "missing-event"),
@@ -559,10 +531,7 @@ Deno.test("assertEventPublished - throws when other events exist but not the tar
       "Expected EVENT",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -578,7 +547,7 @@ Deno.test("assertClosed - throws when different subscription closed", async () =
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["CLOSE", "sub1"]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.findCLOSE("sub1") !== undefined);
 
     assertThrows(
       () => assertClosed(relay, "sub2"),
@@ -586,10 +555,7 @@ Deno.test("assertClosed - throws when different subscription closed", async () =
       'Expected CLOSE for subscription "sub2"',
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -605,7 +571,7 @@ Deno.test("assertReceived - throws when predicate fails with messages present", 
   try {
     const ws = await openWs("wss://relay.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertThrows(
       () =>
@@ -616,10 +582,7 @@ Deno.test("assertReceived - throws when predicate fails with messages present", 
       "Custom assertion failed",
     );
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }
@@ -633,14 +596,11 @@ Deno.test("assertReceivedREQ - matches #e tag filter", async () => {
   try {
     const ws = await openWs("wss://relay6.example.com");
     ws.send(JSON.stringify(["REQ", "sub1", { "#e": ["eventref1"] }]));
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    await waitForCondition(() => relay.countREQs() === 1);
 
     assertReceivedREQ(relay, { "#e": ["eventref1"] });
 
-    ws.close();
-    await new Promise<void>((resolve) => {
-      ws.onclose = () => resolve();
-    });
+    await closeWs(ws);
   } finally {
     pool.uninstall();
   }

@@ -37,7 +37,7 @@ tests (disabled by default).
 
 ## Benchmark Results
 
-Reference values from tsunagiya v0.3.0 (environment-dependent).
+Reference values from tsunagiya v0.4.x (environment-dependent).
 
 ### Event Store Registration
 

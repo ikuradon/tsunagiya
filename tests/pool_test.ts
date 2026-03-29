@@ -95,6 +95,8 @@ Deno.test("MockPool - throws when another instance is already installed", () => 
       Error,
       "Another MockPool instance is already installed",
     );
+    assertEquals(pool1.installed, true);
+    assertEquals(pool2.installed, false);
   } finally {
     pool1.uninstall();
   }

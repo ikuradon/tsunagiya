@@ -4,11 +4,11 @@ outline: deep
 
 # NIP 対応状況
 
-繋ぎ屋 v0.3.0 の NIP（Nostr Implementation Possibilities）対応状況です。
+繋ぎ屋 v0.4.0 の NIP（Nostr Implementation Possibilities）対応状況です。
 
 ---
 
-## サポート済み NIP（v0.3.0）
+## サポート済み NIP（v0.4.0）
 
 <!--@include: ../_shared/tables/nip-support.md-->
 
@@ -58,11 +58,11 @@ outline: deep
 
 ---
 
-## 実装予定 NIP（v0.3.0 以降）
+## 実装予定 NIP（v0.4.0 以降）
 
 | NIP    | 内容          | 予定バージョン | 概要                     |
 | ------ | ------------- | -------------- | ------------------------ |
-| NIP-94 | File Metadata | v0.3.0         | kind:1063 のテンプレート |
+| NIP-94 | File Metadata | v0.4.x         | kind:1063 のテンプレート |
 
 ---
 
