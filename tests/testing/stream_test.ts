@@ -478,6 +478,117 @@ Deno.test("streamEvents - ephemeral events are broadcast but not stored", async 
   }
 });
 
+// ===== ブランチカバレッジ補完テスト =====
+
+Deno.test("streamEvents - empty events array delivers nothing", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitForCondition(() => relay.hasREQ("sub1"));
+
+    // 空配列を渡すと scheduleNext は index >= events.length で即時 return する
+    const handle = streamEvents(relay, [], { interval: 10 });
+
+    // 少し待って何も配信されないことを確認
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    assertEquals(handle.stopped, false);
+    handle.stop();
+    assertEquals(handle.stopped, true);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 0);
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("startStream - stop before first event fires", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitForCondition(() => relay.hasREQ("sub1"));
+
+    let generatorCalled = false;
+
+    // interval: 100ms で開始し、即座に stop() する
+    const handle = startStream(relay, {
+      eventGenerator: () => {
+        generatorCalled = true;
+        return EventBuilder.random({ kind: 1 });
+      },
+      interval: 100,
+    });
+
+    // 即座に stop() — タイマー発火前に stopped=true になるはず
+    handle.stop();
+    assertEquals(handle.stopped, true);
+
+    // タイマーが発火しないよう十分待つ
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+
+    // ジェネレーターが呼ばれていないことを確認
+    assertEquals(generatorCalled, false);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 0);
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
+Deno.test("startStream - count: 0 generates no events", async () => {
+  const pool = new MockPool();
+  const relay = pool.relay("wss://relay.example.com");
+
+  pool.install();
+  try {
+    const ws = await openWs("wss://relay.example.com");
+    const messages = collectMessages(ws);
+    ws.send(JSON.stringify(["REQ", "sub1", { kinds: [1] }]));
+    await waitForCondition(() => relay.hasREQ("sub1"));
+
+    let generatorCalled = false;
+
+    // count: 0 を渡すと scheduleNext は count >= maxCount で即時 stopped=true になる
+    const handle = startStream(relay, {
+      eventGenerator: () => {
+        generatorCalled = true;
+        return EventBuilder.random({ kind: 1 });
+      },
+      interval: 20,
+      count: 0,
+    });
+
+    // stopped になるまで待つ
+    await waitForCondition(() => handle.stopped);
+
+    assertEquals(handle.stopped, true);
+    assertEquals(generatorCalled, false);
+
+    const eventMsgs = messages.filter((m) => m[0] === "EVENT");
+    assertEquals(eventMsgs.length, 0);
+
+    await closeWs(ws);
+  } finally {
+    pool.uninstall();
+  }
+});
+
 Deno.test("streamEvents - delivers kind:5 EVENT only once", async () => {
   const pool = new MockPool();
   const relay = pool.relay("wss://relay.example.com");
