@@ -23,27 +23,23 @@ import type {
 } from "./types.ts";
 import { cloneRelayInformation } from "./internal/clone.ts";
 import { systemClock } from "./internal/runtime.ts";
-import { AuthService } from "./relay/auth_service.ts";
-import { RelayConnectionRuntime } from "./relay/connection_runtime.ts";
 import {
+  AuthService,
   BLOCKED_EVENT_WAS_DELETED,
-  DUPLICATE_ALREADY_HAVE_NEWER_EVENT,
-  internalProcessingError,
-  INVALID_BAD_SIGNATURE,
-} from "./relay/error_messages.ts";
-import { EventStore } from "./relay/event_store.ts";
-import { RelayInspector } from "./relay/relay_inspector.ts";
-import {
-  DEFAULT_MESSAGE_VALIDATION_LIMITS,
-  type MessageValidationLimits,
-} from "./relay/message_codec.ts";
-import {
   countMessage,
+  DEFAULT_MESSAGE_VALIDATION_LIMITS,
+  DUPLICATE_ALREADY_HAVE_NEWER_EVENT,
   eoseMessage,
   eventMessage,
+  EventStore,
+  internalProcessingError,
+  INVALID_BAD_SIGNATURE,
+  type MessageValidationLimits,
   okMessage,
-} from "./relay/response_builders.ts";
-import { SubscriptionRegistry } from "./relay/subscription_registry.ts";
+  RelayConnectionRuntime,
+  RelayInspector,
+  SubscriptionRegistry,
+} from "./relay/mod.ts";
 import { createLogger, type Logger } from "./logger.ts";
 import type { MockWebSocket } from "./websocket.ts";
 
