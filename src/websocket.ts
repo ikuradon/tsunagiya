@@ -117,7 +117,9 @@ export class MockWebSocket extends EventTarget {
   }
 
   #scheduleOpen(): void {
-    const delay = this.#relay?.options.connectionDelay ?? 0;
+    const legacyDelay = this.#relay?.options.connectionDelay ?? 0;
+    const networkDelay = this.#relay?.options.network?.connectDelay ?? 0;
+    const delay = Math.max(legacyDelay, networkDelay);
     const doOpen = () => {
       this.#openTimer = undefined;
       if (this.#readyState !== WebSocketReadyState.CONNECTING) return;

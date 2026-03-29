@@ -75,6 +75,7 @@ export class RelayConnectionRuntime {
   readonly #deliveryScheduler: DeliveryScheduler = new DeliveryScheduler();
   readonly #connections: Set<MockWebSocket> = new Set();
   #refused = false;
+  #disconnectCooldownUntil = 0;
 
   constructor(options: RelayConnectionRuntimeOptions) {
     this.#url = options.url;
@@ -100,6 +101,7 @@ export class RelayConnectionRuntime {
 
   reset(): void {
     this.#refused = false;
+    this.#disconnectCooldownUntil = 0;
     this.#deliveryScheduler.clear();
   }
 
@@ -108,6 +110,12 @@ export class RelayConnectionRuntime {
   }
 
   registerConnection(socket: MockWebSocket): void {
+    if (this.#disconnectCooldownUntil > this.#clock.now()) {
+      queueMicrotask(() =>
+        socket._forceClose(1001, "Relay temporarily unavailable")
+      );
+      return;
+    }
     this.#connections.add(socket);
   }
 
@@ -144,8 +152,24 @@ export class RelayConnectionRuntime {
   }
 
   sendMessage(socket: MockWebSocket, message: RelayMessage): void {
-    const latency = this.#getLatency();
     this.#log("send", message);
+
+    const network = this.#relayOptions.network;
+    if (network && (network.messageDelay || network.jitter)) {
+      this.#deliveryScheduler.deliverWithJitter(
+        socket,
+        JSON.stringify(message),
+        {
+          baseDelay: (network.messageDelay ?? 0) + this.#getLatency(),
+          jitter: network.jitter ?? 0,
+          random: this.#random,
+          outOfOrderRate: network.outOfOrderRate ?? 0,
+        },
+      );
+      return;
+    }
+
+    const latency = this.#getLatency();
     this.#deliveryScheduler.deliver(socket, JSON.stringify(message), latency);
   }
 
@@ -211,6 +235,13 @@ export class RelayConnectionRuntime {
 
     if (this.#shouldRandomDisconnect()) {
       socket._forceClose(1006, "Random disconnect");
+      return;
+    }
+
+    if (this.#shouldTransientDisconnect()) {
+      this.#disconnectCooldownUntil = this.#clock.now() +
+        (this.#relayOptions.network?.transientDisconnect?.duration ?? 0);
+      socket._forceClose(1001, "Transient disconnect");
       return;
     }
 
@@ -315,6 +346,12 @@ export class RelayConnectionRuntime {
     const rate = this.#relayOptions.disconnectRate;
     if (rate === undefined || rate <= 0) return false;
     return this.#random.next() < rate;
+  }
+
+  #shouldTransientDisconnect(): boolean {
+    const td = this.#relayOptions.network?.transientDisconnect;
+    if (!td || td.probability <= 0) return false;
+    return this.#random.next() < td.probability;
   }
 
   #log(
