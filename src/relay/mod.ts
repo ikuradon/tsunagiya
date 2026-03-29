@@ -11,7 +11,10 @@ export type { AuthServiceOptions } from "./auth_service.ts";
 export { RelayConnectionRuntime } from "./connection_runtime.ts";
 export type { RelayConnectionRuntimeOptions } from "./connection_runtime.ts";
 export { DeliveryScheduler } from "./delivery_scheduler.ts";
-export type { DeliverySchedulerProfile } from "./delivery_scheduler.ts";
+export type {
+  DeliverySchedulerProfile,
+  JitterOptions,
+} from "./delivery_scheduler.ts";
 export {
   AUTH_REQUIRED_AUTHENTICATION_REQUIRED,
   AUTH_REQUIRED_CHALLENGE_MISMATCH,

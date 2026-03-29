@@ -8,6 +8,7 @@
  */
 
 import { wallClockNow } from "../internal/runtime.ts";
+import type { RandomSource } from "../types.ts";
 import type { MockWebSocket } from "../websocket.ts";
 
 interface ScheduledTaskEntry {
@@ -23,6 +24,8 @@ interface ScheduledDeliveryEntry {
   sequence: number;
   socket: MockWebSocket;
   payload: string;
+  outOfOrderRate: number;
+  random: RandomSource | null;
 }
 
 type ScheduledEntry = ScheduledTaskEntry | ScheduledDeliveryEntry;
@@ -33,6 +36,13 @@ export interface DeliverySchedulerProfile {
   delayedDeliveryCount: number;
   activeTimerCount: number;
   peakActiveTimerCount: number;
+}
+
+export interface JitterOptions {
+  baseDelay: number;
+  jitter: number;
+  random: RandomSource;
+  outOfOrderRate?: number;
 }
 
 export class DeliveryScheduler {
@@ -53,7 +63,7 @@ export class DeliveryScheduler {
     if (delayMs > 0) {
       this.#delayedDeliveryCount += 1;
       this.#enqueue(
-        { kind: "delivery", socket, payload },
+        { kind: "delivery", socket, payload, outOfOrderRate: 0, random: null },
         delayMs,
       );
       return;
@@ -61,6 +71,43 @@ export class DeliveryScheduler {
 
     this.#immediateDeliveryCount += 1;
     queueMicrotask(() => socket._receiveMessage(payload));
+  }
+
+  deliverWithJitter(
+    socket: MockWebSocket,
+    payload: string,
+    options: JitterOptions,
+  ): void {
+    const jitterOffset = options.jitter > 0
+      ? Math.round((options.random.next() * 2 - 1) * options.jitter)
+      : 0;
+    const delay = Math.max(0, options.baseDelay + jitterOffset);
+
+    if (delay <= 0) {
+      this.#immediateDeliveryCount += 1;
+      queueMicrotask(() => socket._receiveMessage(payload));
+      return;
+    }
+
+    this.#delayedDeliveryCount += 1;
+    const dueAt = wallClockNow() + delay;
+    this.#entries.push({
+      kind: "delivery",
+      dueAt,
+      sequence: this.#nextSequence++,
+      socket,
+      payload,
+      outOfOrderRate: options.outOfOrderRate ?? 0,
+      random: options.random,
+    } as ScheduledEntry);
+
+    if (this.#timer === undefined) {
+      this.#scheduleNextTimer();
+      return;
+    }
+    if (this.#nextDueAt === undefined || dueAt < this.#nextDueAt) {
+      this.#rescheduleNextTimer();
+    }
   }
 
   cancelSocket(socket: MockWebSocket): void {
@@ -142,6 +189,8 @@ export class DeliveryScheduler {
       return a.sequence - b.sequence;
     });
 
+    this.#shuffleDeliveries(dueEntries);
+
     for (const entry of dueEntries) {
       if (entry.kind === "task") {
         entry.task();
@@ -195,5 +244,33 @@ export class DeliveryScheduler {
       this.#timer = undefined;
     }
     this.#nextDueAt = undefined;
+  }
+
+  #shuffleDeliveries(entries: ScheduledEntry[]): void {
+    const deliveryIndices: number[] = [];
+    let random: RandomSource | null = null;
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (
+        entry.kind === "delivery" &&
+        (entry as ScheduledDeliveryEntry).outOfOrderRate > 0
+      ) {
+        deliveryIndices.push(i);
+        if (!random) {
+          random = (entry as ScheduledDeliveryEntry).random;
+        }
+      }
+    }
+
+    if (deliveryIndices.length < 2 || !random) return;
+
+    // Fisher-Yates shuffle
+    for (let i = deliveryIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(random.next() * (i + 1));
+      const idxA = deliveryIndices[i];
+      const idxB = deliveryIndices[j];
+      [entries[idxA], entries[idxB]] = [entries[idxB], entries[idxA]];
+    }
   }
 }
